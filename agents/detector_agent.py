@@ -4,11 +4,13 @@ import threading
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 import os
+import json
 from datetime import datetime, timedelta
 
 # Import application components
 from utils.text_processor import TextProcessor
 from utils.vector_store import VectorStore
+from utils.ai_processor import AIProcessor
 from models import DetectedNarrative, NarrativeInstance, BeliefNode, BeliefEdge, SystemLog
 from app import db
 
@@ -26,13 +28,14 @@ class DetectorAgent:
         """
         self.text_processor = text_processor
         self.vector_store = vector_store
+        self.ai_processor = AIProcessor()
         self.running = False
         self.thread = None
         self.refresh_interval = int(os.environ.get('DETECTOR_REFRESH_INTERVAL', 300))  # 5 min default
         self.detection_threshold = float(os.environ.get('DETECTION_THRESHOLD', 0.75))
         self.similarity_threshold = float(os.environ.get('SIMILARITY_THRESHOLD', 0.85))
         
-        # Simple misinformation indicators (in a production system, use ML models)
+        # Simple misinformation indicators (used as fallback if AI services unavailable)
         self.misinfo_indicators = [
             "fake news",
             "conspiracy",
@@ -189,9 +192,33 @@ class DetectorAgent:
     def _calculate_misinfo_score(self, content: str, lang: str) -> float:
         """Calculate a misinformation score for the content.
         
-        In a production system, this would use ML models. Here we use simple
-        rule-based detection for demonstration purposes.
+        Uses AI services when available, falls back to rule-based approach if not.
         """
+        # Check if AI processing is available (either OpenAI or Anthropic)
+        if self.ai_processor.openai_available or self.ai_processor.anthropic_available:
+            try:
+                # Use AI to analyze content
+                analysis_result = self.ai_processor.analyze_content(content, analysis_type='misinfo_detection')
+                
+                # Check if analysis contains expected fields
+                if 'misinfo_score' in analysis_result and 'confidence' in analysis_result:
+                    # Store indicators and type in the instance metadata if needed later
+                    if 'indicators' in analysis_result:
+                        self.last_indicators = analysis_result.get('indicators', [])
+                    if 'type' in analysis_result:
+                        self.last_misinfo_type = analysis_result.get('type', 'Unknown')
+                    
+                    # Return the AI-generated score
+                    logger.info(f"AI analysis detected misinformation score: {analysis_result['misinfo_score']}")
+                    return float(analysis_result['misinfo_score'])
+                else:
+                    logger.warning("AI analysis result did not contain expected fields, falling back to rule-based detection")
+            except Exception as e:
+                logger.error(f"Error during AI misinformation analysis: {e}")
+                logger.info("Falling back to rule-based detection")
+        
+        # Fallback to rule-based detection if AI fails or is unavailable
+        logger.debug("Using rule-based misinformation detection")
         content_lower = content.lower()
         
         # Choose appropriate indicators based on language
@@ -202,11 +229,10 @@ class DetectorAgent:
         # Count matches with misinformation indicators
         indicator_count = sum(1 for indicator in indicators if indicator in content_lower)
         
-        # Normalize score to 0-1 range (more sophisticated in production)
+        # Normalize score to 0-1 range
         base_score = min(1.0, indicator_count / 5)  # Max out at 5 indicators
         
         # Adjust score based on other heuristics
-        
         # Length penalty (very short content is less likely to be substantial misinfo)
         length_factor = min(1.0, len(content) / 500)  # Cap at content length of 500
         
