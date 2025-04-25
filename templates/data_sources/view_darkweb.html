@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}View Dark Web Source: {{ source.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Dark Web Source: {{ source.name }}</h1>
+            <p class="text-muted">
+                Created at: {{ source.created_at.strftime('%Y-%m-%d %H:%M:%S') if source.created_at }}
+                {% if source.last_ingestion %}
+                | Last ingestion: {{ source.last_ingestion.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('data_sources.edit', source_id=source.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            <a href="{{ url_for('data_sources.test', source_id=source.id) }}" class="btn btn-info">
+                <i class="fas fa-vial"></i> Test
+            </a>
+            <form action="{{ url_for('data_sources.toggle_active', source_id=source.id) }}" method="post" class="d-inline">
+                <button type="submit" class="btn {% if source.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                    <i class="fas {% if source.is_active %}fa-pause{% else %}fa-play{% endif %}"></i>
+                    {% if source.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+            </form>
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Dark Web Configuration</h5>
+                </div>
+                <div class="card-body">
+                    {% set config = source.config|from_json %}
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Sensitive Content Warning:</strong> This source monitors dark web content which may include illegal or harmful material.
+                        Access to this information is strictly for research and monitoring purposes.
+                    </div>
+
+                    <div class="mb-3">
+                        <h6>Monitored Sites</h6>
+                        {% if config.sites %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>URL</th>
+                                        <th>Type</th>
+                                        <th>Max Pages</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for site in config.sites %}
+                                    <tr>
+                                        <td>
+                                            <span class="text-truncate d-inline-block" style="max-width: 300px;">{{ site.url }}</span>
+                                        </td>
+                                        <td><span class="badge bg-secondary">{{ site.type }}</span></td>
+                                        <td>{{ site.max_pages }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="accordion mt-3" id="siteDetailsAccordion">
+                            {% for site in config.sites %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="false" aria-controls="collapse{{ loop.index }}">
+                                        Site #{{ loop.index }} - {{ site.type|capitalize }} Details
+                                    </button>
+                                </h2>
+                                <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#siteDetailsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <p><strong>URL:</strong> {{ site.url }}</p>
+                                                <p><strong>Type:</strong> {{ site.type }}</p>
+                                                <p><strong>Max Pages:</strong> {{ site.max_pages }}</p>
+                                            </div>
+                                            <div class="col-md-6">
+                                                {% if site.content_selector %}
+                                                <p><strong>Content Selector:</strong> <code>{{ site.content_selector }}</code></p>
+                                                {% endif %}
+                                                {% if site.link_selector %}
+                                                <p><strong>Link Selector:</strong> <code>{{ site.link_selector }}</code></p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+
+                                        {% if site.exclude_patterns %}
+                                        <div class="mt-2">
+                                            <p><strong>Exclude Patterns:</strong></p>
+                                            <ul class="list-group">
+                                                {% for pattern in site.exclude_patterns %}
+                                                <li class="list-group-item">{{ pattern }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+
+                                        {% if site.type == 'forum' %}
+                                        <div class="mt-2">
+                                            <h6>Forum Specific Settings</h6>
+                                            <p>
+                                                {% if site.thread_selector %}
+                                                <strong>Thread Selector:</strong> <code>{{ site.thread_selector }}</code><br>
+                                                {% endif %}
+                                                {% if site.thread_link_attr %}
+                                                <strong>Thread Link Attribute:</strong> <code>{{ site.thread_link_attr }}</code>
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                        {% elif site.type == 'market' %}
+                                        <div class="mt-2">
+                                            <h6>Market Specific Settings</h6>
+                                            <p>
+                                                {% if site.listing_selector %}
+                                                <strong>Listing Selector:</strong> <code>{{ site.listing_selector }}</code><br>
+                                                {% endif %}
+                                                {% if site.price_selector %}
+                                                <strong>Price Selector:</strong> <code>{{ site.price_selector }}</code>
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted">No monitored sites configured.</p>
+                        {% endif %}
+                    </div>
+
+                    {% if config.description %}
+                    <div class="mb-3">
+                        <h6>Description</h6>
+                        <p class="mb-0">{{ config.description }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Status</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1">
+                        <strong>Status:</strong>
+                        {% if source.is_active %}
+                        <span class="badge bg-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-warning">Inactive</span>
+                        {% endif %}
+                    </p>
+                    <hr>
+                    <p class="mb-1">
+                        <strong>Requirements:</strong>
+                    </p>
+                    <ul class="mb-0">
+                        <li>Tor process running with control port</li>
+                        <li>Network connectivity to .onion domains</li>
+                        <li>Proper site CSS selectors configured</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Security Warning</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger mb-0">
+                        <i class="fas fa-shield-alt"></i> <strong>Security Notice</strong>
+                        <p class="mb-0 mt-2">
+                            Dark Web monitoring poses significant security risks. This feature should be used with extreme caution
+                            and only by trained personnel with proper authorization. Always use isolated systems and ensure legal
+                            compliance when monitoring Dark Web content.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the Dark Web source "<strong>{{ source.name }}</strong>"?
+                This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('data_sources.delete', source_id=source.id) }}" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{
+  "media_monitoring": [
+    {
+      "name": "GDELT Project",
+      "url": "http://data.gdeltproject.org/blog/feed.xml",
+      "category": "media-monitoring",
+      "description": "Monitors global broadcast, print, and web news in over 100 languages"
+    },
+    {
+      "name": "Media Cloud",
+      "url": "https://mediacloud.org/feed/",
+      "category": "media-monitoring",
+      "description": "Open source platform for media analysis"
+    },
+    {
+      "name": "CrowdTangle",
+      "url": "https://help.crowdtangle.com/en/articles/3874552-crowdtangle-s-api",
+      "category": "media-monitoring",
+      "description": "Monitors social media trends and popular content"
+    }
+  ],
+  "scientific_datasets": [
+    {
+      "name": "Kaggle Datasets",
+      "url": "https://www.kaggle.com/datasets.rss",
+      "category": "data-science",
+      "description": "Public datasets for analysis and machine learning"
+    },
+    {
+      "name": "Data.gov Dataset Updates",
+      "url": "https://catalog.data.gov/dataset.rss",
+      "category": "government-data",
+      "description": "Updated government datasets from Data.gov"
+    },
+    {
+      "name": "Harvard Dataverse",
+      "url": "https://dataverse.harvard.edu/dataverse/harvard.rss",
+      "category": "academic-data",
+      "description": "Research data repository from Harvard University"
+    },
+    {
+      "name": "Zenodo",
+      "url": "https://zenodo.org/rss",
+      "category": "academic-data",
+      "description": "Open access research data repository"
+    }
+  ],
+  "specialized_databases": [
+    {
+      "name": "CovidTracking Project Archive",
+      "url": "https://covidtracking.com/rss.xml",
+      "category": "health-data",
+      "description": "Historical COVID-19 data tracking and analysis"
+    },
+    {
+      "name": "COVID19DataHub",
+      "url": "https://covid19datahub.io/articles/index.xml",
+      "category": "health-data",
+      "description": "Unified COVID-19 dataset from multiple sources"
+    },
+    {
+      "name": "ACLED (Armed Conflict Location & Event Data)",
+      "url": "https://acleddata.com/blog/feed/",
+      "category": "conflict-data",
+      "description": "Real-time conflict data and analysis"
+    },
+    {
+      "name": "Global Terrorism Database",
+      "url": "https://www.start.umd.edu/gtd/rss.xml",
+      "category": "security-data",
+      "description": "Information on terrorist attacks worldwide"
+    }
+  ],
+  "elections_monitoring": [
+    {
+      "name": "Election Data & Science Lab",
+      "url": "https://electionlab.mit.edu/feed",
+      "category": "election-data",
+      "description": "MIT's Election Data and Science Lab"
+    },
+    {
+      "name": "International IDEA",
+      "url": "https://www.idea.int/rss.xml",
+      "category": "election-data",
+      "description": "Global organization supporting democratic processes"
+    },
+    {
+      "name": "IFES (International Foundation for Electoral Systems)",
+      "url": "https://www.ifes.org/rss.xml",
+      "category": "election-data",
+      "description": "International support for elections and democracy"
+    }
+  ]
+}

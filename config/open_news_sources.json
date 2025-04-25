@@ -1,0 +1,82 @@
+{
+  "general_news": [
+    {
+      "name": "Reuters World News",
+      "url": "https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best",
+      "category": "world"
+    },
+    {
+      "name": "Associated Press",
+      "url": "https://feeds.ap.org/rss/world",
+      "category": "world"
+    },
+    {
+      "name": "NPR News",
+      "url": "https://feeds.npr.org/1001/rss.xml",
+      "category": "world"
+    },
+    {
+      "name": "BBC World",
+      "url": "http://feeds.bbci.co.uk/news/world/rss.xml",
+      "category": "world"
+    }
+  ],
+  "science_tech": [
+    {
+      "name": "Science Daily",
+      "url": "https://www.sciencedaily.com/rss/all.xml",
+      "category": "science"
+    },
+    {
+      "name": "Nature News",
+      "url": "https://www.nature.com/nature.rss",
+      "category": "science"
+    },
+    {
+      "name": "MIT Technology Review",
+      "url": "https://www.technologyreview.com/feed/",
+      "category": "technology"
+    }
+  ],
+  "fact_checking": [
+    {
+      "name": "Snopes",
+      "url": "https://www.snopes.com/feed/",
+      "category": "fact-check"
+    },
+    {
+      "name": "PolitiFact",
+      "url": "https://www.politifact.com/rss/",
+      "category": "fact-check"
+    },
+    {
+      "name": "Full Fact",
+      "url": "https://fullfact.org/feed/",
+      "category": "fact-check"
+    }
+  ],
+  "health": [
+    {
+      "name": "WHO News",
+      "url": "https://www.who.int/feeds/entity/news/en/rss2_archive.xml",
+      "category": "health"
+    },
+    {
+      "name": "CDC",
+      "url": "https://tools.cdc.gov/api/v2/resources/media/316422.rss",
+      "category": "health"
+    }
+  ],
+  "open_data": [
+    {
+      "name": "Data.gov",
+      "url": "https://www.data.gov/feed/",
+      "category": "open-data"
+    },
+    {
+      "name": "EU Open Data Portal",
+      "url": "https://data.europa.eu/en/rss.xml",
+      "category": "open-data"
+    }
+  ]
+}

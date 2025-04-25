@@ -1,0 +1,70 @@
+{
+  "international": [
+    {
+      "name": "Snopes",
+      "url": "https://www.snopes.com/feed/",
+      "category": "fact-check"
+    },
+    {
+      "name": "PolitiFact",
+      "url": "https://www.politifact.com/rss/",
+      "category": "fact-check"
+    },
+    {
+      "name": "Full Fact (UK)",
+      "url": "https://fullfact.org/feed/",
+      "category": "fact-check"
+    },
+    {
+      "name": "FactCheck.org",
+      "url": "https://www.factcheck.org/feed/",
+      "category": "fact-check"
+    },
+    {
+      "name": "AP Fact Check",
+      "url": "https://apnews.com/hub/ap-fact-check/rss",
+      "category": "fact-check"
+    }
+  ],
+  "health": [
+    {
+      "name": "Health Feedback",
+      "url": "https://healthfeedback.org/feed/",
+      "category": "health-fact-check"
+    },
+    {
+      "name": "WHO Myth Busters",
+      "url": "https://www.who.int/rss-feeds/news-feed",
+      "category": "health-fact-check"
+    },
+    {
+      "name": "CDC COVID Updates",
+      "url": "https://tools.cdc.gov/api/v2/resources/media/132608.rss",
+      "category": "health-fact-check"
+    }
+  ],
+  "science": [
+    {
+      "name": "Climate Feedback",
+      "url": "https://climatefeedback.org/feed/",
+      "category": "science-fact-check"
+    },
+    {
+      "name": "Science Feedback",
+      "url": "https://sciencefeedback.co/feed/",
+      "category": "science-fact-check"
+    }
+  ],
+  "media": [
+    {
+      "name": "Media Bias Fact Check",
+      "url": "https://mediabiasfactcheck.com/feed/",
+      "category": "media-fact-check"
+    },
+    {
+      "name": "NewsGuard Ratings",
+      "url": "https://www.newsguardtech.com/feed/",
+      "category": "media-fact-check"
+    }
+  ]
+}

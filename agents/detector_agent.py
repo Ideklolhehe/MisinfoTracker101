@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from utils.text_processor import TextProcessor
 from utils.vector_store import VectorStore
 from utils.ai_processor import AIProcessor
+from utils.app_context import ensure_app_context
 from models import DetectedNarrative, NarrativeInstance, BeliefNode, BeliefEdge, SystemLog
 from app import db
 
@@ -115,6 +116,7 @@ class DetectorAgent:
                 self._log_error("detection_loop", str(e))
                 time.sleep(30)  # Short sleep on error
     
+    @ensure_app_context
     def _process_recent_content(self):
         """Process recent content from the database."""
         # Get unprocessed content from last hour
@@ -137,6 +139,7 @@ class DetectorAgent:
             logger.error(f"Error processing recent content: {e}")
             self._log_error("process_recent_content", str(e))
             
+    @ensure_app_context
     def process_content(self, content: str, content_id: Optional[str] = None, 
                        source: Optional[str] = None, metadata: Optional[str] = None) -> Dict[str, Any]:
         """Process a piece of content to detect misinformation.
@@ -245,6 +248,7 @@ class DetectorAgent:
         
         return combined_score
     
+    @ensure_app_context
     def _link_to_narrative(self, content: str, content_id: str, confidence: float, 
                           lang: str, metadata: Optional[str]) -> Optional[int]:
         """Link detected misinformation to existing narratives or create new ones."""
@@ -355,6 +359,7 @@ class DetectorAgent:
             self._log_error("link_to_narrative", str(e))
             return None
     
+    @ensure_app_context
     def _log_error(self, operation: str, message: str):
         """Log an error to the database."""
         try:

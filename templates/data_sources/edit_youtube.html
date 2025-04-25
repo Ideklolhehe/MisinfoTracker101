@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Edit YouTube Source: {{ source.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Edit YouTube Source: {{ source.name }}</h1>
+            <p class="text-muted">
+                Created at: {{ source.created_at.strftime('%Y-%m-%d %H:%M:%S') if source.created_at }}
+                {% if source.last_ingestion %}
+                | Last ingestion: {{ source.last_ingestion.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('data_sources.view', source_id=source.id) }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Source
+            </a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">YouTube Source Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('data_sources.edit', source_id=source.id) }}" method="post">
+                        <!-- Basic Information -->
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Source Name</label>
+                            <input type="text" class="form-control" id="name" name="name" value="{{ source.name }}" required>
+                            <div class="form-text">A descriptive name for this YouTube source</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="2">{{ description }}</textarea>
+                            <div class="form-text">Optional description of the purpose of this source</div>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="is_active" name="is_active" {{ 'checked' if source.is_active else '' }}>
+                            <label class="form-check-label" for="is_active">Active</label>
+                            <div class="form-text">If checked, this source will be actively monitored</div>
+                        </div>
+
+                        <hr>
+
+                        {% set config = source.config|from_json %}
+
+                        <!-- YouTube Configuration -->
+                        <div class="mb-3">
+                            <label class="form-label">Monitoring Type</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="monitor_type" id="monitor_type_channel" value="channel" {{ 'checked' if config.monitor_type == 'channel' or not config.monitor_type }}>
+                                <label class="form-check-label" for="monitor_type_channel">
+                                    Channel Monitoring
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="monitor_type" id="monitor_type_search" value="search" {{ 'checked' if config.monitor_type == 'search' }}>
+                                <label class="form-check-label" for="monitor_type_search">
+                                    Search Query Monitoring
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="monitor_type" id="monitor_type_video" value="video" {{ 'checked' if config.monitor_type == 'video' }}>
+                                <label class="form-check-label" for="monitor_type_video">
+                                    Specific Video Monitoring
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="monitor_type" id="monitor_type_playlist" value="playlist" {{ 'checked' if config.monitor_type == 'playlist' }}>
+                                <label class="form-check-label" for="monitor_type_playlist">
+                                    Playlist Monitoring
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Channel IDs -->
+                        <div class="mb-3 monitoring-section" id="channel_section" style="{{ '' if config.monitor_type == 'channel' or not config.monitor_type else 'display: none;' }}">
+                            <label for="channel_ids" class="form-label">Channel IDs</label>
+                            <textarea class="form-control" id="channel_ids" name="channel_ids" rows="4">{{ '\n'.join(config.channel_ids) if config.channel_ids else '' }}</textarea>
+                            <div class="form-text">Enter one YouTube channel ID per line. These are typically 24-character strings that start with "UC". You can find channel IDs in the URL or through YouTube Data API.</div>
+                        </div>
+
+                        <!-- Search Queries -->
+                        <div class="mb-3 monitoring-section" id="search_section" style="{{ '' if config.monitor_type == 'search' else 'display: none;' }}">
+                            <label for="search_queries" class="form-label">Search Queries</label>
+                            <textarea class="form-control" id="search_queries" name="search_queries" rows="4">{{ '\n'.join(config.search_queries) if config.search_queries else '' }}</textarea>
+                            <div class="form-text">Enter one search query per line. Each query will be used to search for videos on YouTube.</div>
+                        </div>
+
+                        <!-- Video IDs -->
+                        <div class="mb-3 monitoring-section" id="video_section" style="{{ '' if config.monitor_type == 'video' else 'display: none;' }}">
+                            <label for="video_ids" class="form-label">Video IDs</label>
+                            <textarea class="form-control" id="video_ids" name="video_ids" rows="4">{{ '\n'.join(config.video_ids) if config.video_ids else '' }}</textarea>
+                            <div class="form-text">Enter one YouTube video ID per line. These are typically 11-character strings found in the YouTube URL after "v=".</div>
+                        </div>
+
+                        <!-- Playlist IDs -->
+                        <div class="mb-3 monitoring-section" id="playlist_section" style="{{ '' if config.monitor_type == 'playlist' else 'display: none;' }}">
+                            <label for="playlist_ids" class="form-label">Playlist IDs</label>
+                            <textarea class="form-control" id="playlist_ids" name="playlist_ids" rows="4">{{ '\n'.join(config.playlist_ids) if config.playlist_ids else '' }}</textarea>
+                            <div class="form-text">Enter one YouTube playlist ID per line. These are found in the YouTube URL after "list=".</div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Additional Settings -->
+                        <h5 class="mb-3">Additional Settings</h5>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="max_videos" class="form-label">Max Videos</label>
+                                    <input type="number" class="form-control" id="max_videos" name="max_videos" value="{{ config.max_videos|default(10) }}" min="1" max="50">
+                                    <div class="form-text">Maximum number of videos to fetch per channel/search/playlist</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="days_back" class="form-label">Days Lookback</label>
+                                    <input type="number" class="form-control" id="days_back" name="days_back" value="{{ config.days_back|default(7) }}" min="1" max="30">
+                                    <div class="form-text">How many days back to check for videos</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="include_comments" name="include_comments" {{ 'checked' if config.include_comments else '' }}>
+                            <label class="form-check-label" for="include_comments">Include Comments</label>
+                            <div class="form-text">If checked, video comments will be monitored as well</div>
+                        </div>
+
+                        <div class="mb-3" id="comments_section" style="{{ '' if config.include_comments else 'display: none;' }}">
+                            <label for="max_comments" class="form-label">Max Comments</label>
+                            <input type="number" class="form-control" id="max_comments" name="max_comments" value="{{ config.max_comments|default(50) }}" min="1" max="100">
+                            <div class="form-text">Maximum number of comments to fetch per video</div>
+                        </div>
+
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle"></i> <strong>Note:</strong>
+                            YouTube API has quota limits. High values for max videos/comments and frequent monitoring may exhaust your quota.
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                            <a href="{{ url_for('data_sources.view', source_id=source.id) }}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">YouTube API Requirements</h5>
+                </div>
+                <div class="card-body">
+                    <p>To use YouTube sources, you need to configure:</p>
+                    <ol>
+                        <li>A Google API project</li>
+                        <li>Enable the YouTube Data API v3</li>
+                        <li>Create an API key and add it to the system configuration</li>
+                    </ol>
+                    <p class="mb-0">
+                        <strong>Note:</strong> YouTube Data API v3 has quota limits. Each API operation consumes
+                        a certain amount of quota points. Monitor your usage to avoid hitting limits.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show/hide monitoring sections based on radio button selection
+        const monitorTypeRadios = document.querySelectorAll('input[name="monitor_type"]');
+        const monitoringSections = document.querySelectorAll('.monitoring-section');
+        
+        function updateMonitoringSection() {
+            monitoringSections.forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            const selectedType = document.querySelector('input[name="monitor_type"]:checked').value;
+            document.getElementById(selectedType + '_section').style.display = 'block';
+        }
+        
+        monitorTypeRadios.forEach(radio => {
+            radio.addEventListener('change', updateMonitoringSection);
+        });
+        
+        // Show/hide comments section based on checkbox
+        const includeCommentsCheckbox = document.getElementById('include_comments');
+        const commentsSection = document.getElementById('comments_section');
+        
+        includeCommentsCheckbox.addEventListener('change', function() {
+            commentsSection.style.display = this.checked ? 'block' : 'none';
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}Add Dark Web Source{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Add Dark Web Source</h1>
+            <p class="text-muted">Configure a new Dark Web data source for monitoring .onion sites, forums, or markets.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('data_sources.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Sources
+            </a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong>
+        Dark Web monitoring involves accessing potentially sensitive, harmful, or illegal content. Use this feature only
+        for legitimate research and monitoring purposes, with proper security precautions and legal authorization.
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Dark Web Source Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('data_sources.add') }}" method="post" id="darkwebForm">
+                        <!-- Basic Information -->
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Source Name</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                            <div class="form-text">A descriptive name for this Dark Web source</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                            <div class="form-text">Optional description of the purpose of this source</div>
+                        </div>
+
+                        <input type="hidden" name="type" value="darkweb">
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="is_active" name="is_active" checked>
+                            <label class="form-check-label" for="is_active">Active</label>
+                            <div class="form-text">If checked, this source will be actively monitored</div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Dark Web Sites Configuration -->
+                        <h5 class="mb-3">Monitored Sites</h5>
+                        
+                        <div id="sites-container">
+                            <!-- Site template will be duplicated here -->
+                        </div>
+
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-outline-secondary" id="addSiteBtn">
+                                <i class="fas fa-plus"></i> Add Site
+                            </button>
+                        </div>
+
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle"></i> <strong>Note:</strong>
+                            Dark Web sites may be unavailable or change frequently. Configure multiple sites when possible.
+                            Proper CSS selectors are essential for accurate content extraction.
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Add Source
+                            </button>
+                            <a href="{{ url_for('data_sources.index') }}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Requirements</h5>
+                </div>
+                <div class="card-body">
+                    <p>To use Dark Web sources, you need:</p>
+                    <ol>
+                        <li>Tor process running on the server</li>
+                        <li>Tor control port accessible</li>
+                        <li>Access to .onion domains</li>
+                        <li>Proper network configuration</li>
+                    </ol>
+                    <p class="mb-0">
+                        <strong>Caution:</strong> Dark Web monitoring requires significant security
+                        measures. Only use on isolated systems with proper protections.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Help</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Site Types</h6>
+                    <ul>
+                        <li><strong>Generic:</strong> Standard websites without specific structure</li>
+                        <li><strong>Forum:</strong> Forum-style sites with threads and comments</li>
+                        <li><strong>Market:</strong> Marketplace sites with listings and prices</li>
+                    </ul>
+
+                    <h6>CSS Selectors</h6>
+                    <p>Use valid CSS selectors to target specific content. Examples:</p>
+                    <ul>
+                        <li><code>.post-content</code> - Selects elements with class "post-content"</li>
+                        <li><code>#main-thread</code> - Selects element with ID "main-thread"</li>
+                        <li><code>div.thread a</code> - Selects all links inside div elements with class "thread"</li>
+                    </ul>
+
+                    <h6>Exclude Patterns</h6>
+                    <p>Enter patterns (one per line) to exclude certain URLs from scraping.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Site Template (Hidden) -->
+<div class="card mb-3 site-card d-none" id="site-template">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-3">
+            <h6>Site Configuration</h6>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-site-btn">
+                <i class="fas fa-times"></i> Remove
+            </button>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <label class="form-label">Site URL</label>
+                <input type="text" class="form-control" name="site_urls[]" placeholder="http://example.onion" required>
+                <div class="form-text">Full URL including http:// or https://</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Site Type</label>
+                <select class="form-select site-type-select" name="site_types[]">
+                    <option value="generic">Generic</option>
+                    <option value="forum">Forum</option>
+                    <option value="market">Market</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label class="form-label">Max Pages</label>
+                <input type="number" class="form-control" name="site_max_pages[]" value="5" min="1" max="20">
+                <div class="form-text">Maximum pages to crawl</div>
+            </div>
+            <div class="col-md-8">
+                <label class="form-label">Content Selector</label>
+                <input type="text" class="form-control" name="site_content_selectors[]" placeholder=".content, .post-body">
+                <div class="form-text">CSS selector for main content</div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <label class="form-label">Link Selector</label>
+                <input type="text" class="form-control" name="site_link_selectors[]" placeholder="a.next-page, .pagination a">
+                <div class="form-text">CSS selector for navigation links</div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Exclude Patterns</label>
+            <textarea class="form-control" name="site_exclude_patterns[]" rows="2" placeholder="logout
+profile
+private"></textarea>
+            <div class="form-text">URL patterns to exclude (one per line)</div>
+        </div>
+
+        <!-- Type-specific configurations -->
+        <div class="type-specific-config forum-config" style="display: none;">
+            <h6 class="mt-3">Forum Configuration</h6>
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label class="form-label">Thread Selector</label>
+                    <input type="text" class="form-control" name="site_thread_selectors[]" placeholder=".thread-item, .topic">
+                    <div class="form-text">CSS selector for thread items</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Thread Link Attribute</label>
+                    <input type="text" class="form-control" name="site_thread_link_attrs[]" placeholder="href">
+                    <div class="form-text">Link attribute for threads</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="type-specific-config market-config" style="display: none;">
+            <h6 class="mt-3">Market Configuration</h6>
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label class="form-label">Listing Selector</label>
+                    <input type="text" class="form-control" name="site_listing_selectors[]" placeholder=".product, .listing">
+                    <div class="form-text">CSS selector for product listings</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Price Selector</label>
+                    <input type="text" class="form-control" name="site_price_selectors[]" placeholder=".price, .btc-value">
+                    <div class="form-text">CSS selector for prices</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sitesContainer = document.getElementById('sites-container');
+        const siteTemplate = document.getElementById('site-template');
+        const addSiteBtn = document.getElementById('addSiteBtn');
+        let siteCounter = 0;
+
+        // Add a site configuration
+        function addSite() {
+            // Clone the template
+            const newSite = siteTemplate.cloneNode(true);
+            newSite.classList.remove('d-none');
+            newSite.id = `site-${siteCounter}`;
+            
+            // Set up event listeners
+            const removeBtn = newSite.querySelector('.remove-site-btn');
+            removeBtn.addEventListener('click', function() {
+                newSite.remove();
+                // If no sites remain, add one back
+                if (sitesContainer.children.length === 0) {
+                    addSite();
+                }
+            });
+            
+            // Set up site type change handler
+            const typeSelect = newSite.querySelector('.site-type-select');
+            typeSelect.addEventListener('change', function() {
+                updateTypeSpecificConfig(newSite, this.value);
+            });
+            
+            // Add to container
+            sitesContainer.appendChild(newSite);
+            siteCounter++;
+        }
+        
+        // Update site-specific configuration visibility
+        function updateTypeSpecificConfig(siteElement, siteType) {
+            // Hide all type-specific configs
+            const configs = siteElement.querySelectorAll('.type-specific-config');
+            configs.forEach(config => config.style.display = 'none');
+            
+            // Show selected type-specific config
+            if (siteType === 'forum') {
+                siteElement.querySelector('.forum-config').style.display = 'block';
+            } else if (siteType === 'market') {
+                siteElement.querySelector('.market-config').style.display = 'block';
+            }
+        }
+        
+        // Add first site on load
+        addSite();
+        
+        // Add button handler
+        addSiteBtn.addEventListener('click', addSite);
+        
+        // Form validation
+        document.getElementById('darkwebForm').addEventListener('submit', function(e) {
+            // Make sure at least one site is configured
+            if (sitesContainer.children.length === 0) {
+                e.preventDefault();
+                alert('At least one Dark Web site must be configured.');
+                addSite();
+                return false;
+            }
+            
+            // Make sure each site has a URL
+            let valid = true;
+            sitesContainer.querySelectorAll('input[name="site_urls[]"]').forEach(urlInput => {
+                if (!urlInput.value.trim()) {
+                    valid = false;
+                    urlInput.classList.add('is-invalid');
+                } else {
+                    urlInput.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!valid) {
+                e.preventDefault();
+                alert('Please enter a URL for each site.');
+                return false;
+            }
+            
+            return true;
+        });
+    });
+</script>
+{% endblock %}
