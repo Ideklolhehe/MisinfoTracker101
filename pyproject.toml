@@ -17,4 +17,8 @@ dependencies = [
     "scikit-learn>=1.6.1",
     "faiss-cpu>=1.10.0",
     "networkx>=3.4.2",
+    "es-core-news-sm",
 ]
+
+[tool.uv.sources]
+es-core-news-sm = { url = "https://github.com/explosion/spacy-models/releases/download/es_core_news_sm-3.8.0/es_core_news_sm-3.8.0-py3-none-any.whl" }
