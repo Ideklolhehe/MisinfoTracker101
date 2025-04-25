@@ -1,0 +1,211 @@
+{% extends "layout.html" %}
+
+{% block title %}CIVILIAN - Counter Messaging{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Counter Messaging</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                <i data-feather="printer"></i> Print
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary">
+                <i data-feather="download"></i> Export
+            </button>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<!-- Filter Form -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Filters</h5>
+    </div>
+    <div class="card-body">
+        <form id="filter-form" action="{{ url_for('dashboard.counter_messaging') }}" method="get">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-6">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
+                        <option value="draft" {% if status == 'draft' %}selected{% endif %}>Draft</option>
+                        <option value="approved" {% if status == 'approved' %}selected{% endif %}>Approved</option>
+                        <option value="deployed" {% if status == 'deployed' %}selected{% endif %}>Deployed</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" class="form-control" id="search" name="search" value="{{ search }}" placeholder="Search in message content...">
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                <a href="{{ url_for('dashboard.counter_messaging') }}" class="btn btn-outline-secondary">Reset</a>
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Counter Messages -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Counter Messages ({{ total_messages }})</h5>
+    </div>
+    <div class="card-body">
+        {% if messages.items %}
+            {% for message in messages.items %}
+                <div class="card mb-4 {% if message.status == 'draft' %}counter-message draft{% elif message.status == 'approved' %}counter-message approved{% else %}counter-message{% endif %}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            {% if narratives and message.id in narratives %}
+                                <a href="{{ url_for('dashboard.narrative_detail', narrative_id=message.narrative_id) }}" class="text-white">
+                                    {{ narratives[message.id].title }}
+                                </a>
+                            {% else %}
+                                <span>Unknown Narrative</span>
+                            {% endif %}
+                        </div>
+                        <span class="badge {% if message.status == 'draft' %}bg-secondary{% elif message.status == 'approved' %}bg-success{% elif message.status == 'deployed' %}bg-primary{% endif %}">
+                            {{ message.status|capitalize }}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ message.content }}</p>
+                        <div class="d-flex align-items-center mt-3">
+                            <span class="badge bg-info me-2">{{ message.strategy|replace('_', ' ')|capitalize }}</span>
+                            <small class="text-muted">Created: {{ message.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between align-items-center">
+                        {% if narratives and message.id in narratives %}
+                            <a href="{{ url_for('dashboard.narrative_detail', narrative_id=message.narrative_id) }}" class="btn btn-sm btn-outline-info">
+                                <i data-feather="activity"></i> View Narrative
+                            </a>
+                        {% else %}
+                            <span></span>
+                        {% endif %}
+                        
+                        {% if message.status == 'draft' %}
+                            <button class="btn btn-sm btn-primary approve-counter-btn" data-message-id="{{ message.id }}">
+                                Approve for Deployment
+                            </button>
+                        {% elif message.status == 'approved' %}
+                            <button class="btn btn-sm btn-success" disabled>
+                                Approved
+                            </button>
+                        {% elif message.status == 'deployed' %}
+                            <button class="btn btn-sm btn-info" disabled>
+                                Deployed
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+            
+            <!-- Pagination -->
+            {% if messages.pages > 1 %}
+                <nav aria-label="Counter messages pagination">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if messages.page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('dashboard.counter_messaging', page=messages.prev_num, status=status, search=search) if messages.has_prev else '#' }}">Previous</a>
+                        </li>
+                        
+                        {% for page_num in messages.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == messages.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('dashboard.counter_messaging', page=page_num, status=status, search=search) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <li class="page-item {% if messages.page == messages.pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('dashboard.counter_messaging', page=messages.next_num, status=status, search=search) if messages.has_next else '#' }}">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-info">
+                No counter messages found matching the selected filters.
+                <a href="{{ url_for('dashboard.counter_messaging') }}" class="alert-link">Clear filters</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Strategies Guide -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">Counter-Messaging Strategies</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0">Factual Correction</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Directly addresses false claims with accurate information from credible sources. Most effective for clear factual misinformation.</p>
+                        <div class="d-flex align-items-center mt-3">
+                            <span class="badge bg-success me-2">Effectiveness</span>
+                            <div class="progress flex-grow-1" style="height: 8px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 75%" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0">Prebunking</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Preemptive exposure to weakened forms of misinformation with explanations of why it's misleading. Builds resistance before exposure.</p>
+                        <div class="d-flex align-items-center mt-3">
+                            <span class="badge bg-success me-2">Effectiveness</span>
+                            <div class="progress flex-grow-1" style="height: 8px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 90%" aria-valuenow="90" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0">Alternative Narrative</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Presents a compelling alternative explanation or context, filling the gap left when misinformation is debunked.</p>
+                        <div class="d-flex align-items-center mt-3">
+                            <span class="badge bg-success me-2">Effectiveness</span>
+                            <div class="progress flex-grow-1" style="height: 8px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 80%" aria-valuenow="80" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-3">
+            <i data-feather="info" class="me-2"></i>
+            <strong>Human Oversight:</strong> All counter-messages require human review and approval before deployment to ensure ethical guidelines are maintained.
+        </div>
+    </div>
+</div>
+{% endblock %}

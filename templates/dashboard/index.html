@@ -1,0 +1,306 @@
+{% extends "layout.html" %}
+
+{% block title %}CIVILIAN - Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary">Export</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary">Share</button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle">
+            <i data-feather="calendar"></i>
+            Last 7 days
+        </button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<!-- Dashboard Stats -->
+<div class="row" id="dashboard-stats">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title text-uppercase mb-1">Total Narratives</div>
+                        <div class="stat-value text-info" id="total-narratives-count">{{ total_narratives }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i data-feather="activity" class="text-info" style="width: 32px; height: 32px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title text-uppercase mb-1">Active Narratives</div>
+                        <div class="stat-value text-warning" id="active-narratives-count">{{ active_narratives }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i data-feather="alert-triangle" class="text-warning" style="width: 32px; height: 32px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title text-uppercase mb-1">Content Instances</div>
+                        <div class="stat-value text-success" id="total-instances-count">{{ total_instances }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i data-feather="file-text" class="text-success" style="width: 32px; height: 32px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title text-uppercase mb-1">Pending Messages</div>
+                        <div class="stat-value text-danger" id="pending-messages-count">
+                            {% if pending_messages %}
+                                {{ pending_messages|length }}
+                            {% else %}
+                                0
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i data-feather="shield" class="text-danger" style="width: 32px; height: 32px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New content notification -->
+<div id="new-content-notification" class="toast align-items-center text-white bg-info border-0 d-none" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+        <div class="toast-body">
+            <i data-feather="refresh-cw"></i> New content available. Click to refresh.
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="chart-container">
+            <canvas id="narratives-chart"></canvas>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="chart-container">
+            <canvas id="threat-distribution-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <canvas id="source-distribution-chart"></canvas>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Active Data Sources</h5>
+            </div>
+            <div class="card-body">
+                {% if active_sources %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Last Ingestion</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in active_sources %}
+                                    <tr>
+                                        <td>{{ source.name }}</td>
+                                        <td><span class="badge bg-info">{{ source.source_type }}</span></td>
+                                        <td>
+                                            {% if source.is_active %}
+                                                <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if source.last_ingestion %}
+                                                {{ source.last_ingestion.strftime('%Y-%m-%d %H:%M') }}
+                                            {% else %}
+                                                Never
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        No active data sources configured. 
+                        <a href="{{ url_for('dashboard.settings') }}" class="alert-link">Configure sources</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- High Threat Narratives & Counter Messages -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">High Threat Narratives</h5>
+                <a href="{{ url_for('dashboard.narratives') }}" class="btn btn-sm btn-outline-info">View All</a>
+            </div>
+            <div class="card-body">
+                {% if high_threat_narratives %}
+                    {% for narrative in high_threat_narratives %}
+                        <div class="card mb-3 narrative-card high-threat-narrative">
+                            <div class="card-body">
+                                <h6 class="narrative-title">
+                                    <a href="{{ url_for('dashboard.narrative_detail', narrative_id=narrative.id) }}" class="text-white">
+                                        {{ narrative.title }}
+                                    </a>
+                                </h6>
+                                <div class="d-flex justify-content-between align-items-center narrative-meta">
+                                    <div>
+                                        <span class="badge bg-danger" id="threat-badge-{{ narrative.id }}">
+                                            Threat Level: {{ narrative.threat_level }}
+                                        </span>
+                                        <small class="ms-2">
+                                            Last updated: {{ narrative.last_updated.strftime('%Y-%m-%d %H:%M') }}
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <a href="{{ url_for('dashboard.narrative_detail', narrative_id=narrative.id) }}" class="btn btn-sm btn-outline-light">
+                                            <i data-feather="eye" class="feather-small"></i> View
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">No high threat narratives detected.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Pending Counter Messages</h5>
+                <a href="{{ url_for('dashboard.counter_messaging') }}" class="btn btn-sm btn-outline-info">View All</a>
+            </div>
+            <div class="card-body">
+                {% if pending_messages %}
+                    {% for message in pending_messages %}
+                        <div class="card mb-3 counter-message draft">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>
+                                    {% if message.narrative_id %}
+                                        {% set narrative = message.narrative %}
+                                        <a href="{{ url_for('dashboard.narrative_detail', narrative_id=message.narrative_id) }}" class="text-white">
+                                            {{ narrative.title if narrative else 'Unknown Narrative' }}
+                                        </a>
+                                    {% else %}
+                                        Unknown Narrative
+                                    {% endif %}
+                                </span>
+                                <span class="badge bg-warning">Draft</span>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">{{ message.content }}</p>
+                            </div>
+                            <div class="card-footer d-flex justify-content-between align-items-center">
+                                <small class="text-muted">Created: {{ message.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                <button class="btn btn-sm btn-primary approve-counter-btn" data-message-id="{{ message.id }}">
+                                    Approve
+                                </button>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">No pending counter messages.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Logs -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recent System Logs</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Component</th>
+                                    <th>Type</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_logs %}
+                                    <tr class="{% if log.log_type == 'error' %}table-danger{% elif log.log_type == 'warning' %}table-warning{% endif %}">
+                                        <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                        <td>{{ log.component }}</td>
+                                        <td>
+                                            <span class="badge {% if log.log_type == 'error' %}bg-danger{% elif log.log_type == 'warning' %}bg-warning{% else %}bg-info{% endif %}">
+                                                {{ log.log_type }}
+                                            </span>
+                                        </td>
+                                        <td>{{ log.message }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">No recent system logs.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

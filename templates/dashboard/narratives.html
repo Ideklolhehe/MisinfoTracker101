@@ -1,0 +1,452 @@
+{% extends "layout.html" %}
+
+{% block title %}CIVILIAN - Narratives{% endblock %}
+
+{% block content %}
+{% if detail_view %}
+<!-- Narrative Detail View -->
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Narrative Detail</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('dashboard.narratives') }}" class="btn btn-sm btn-outline-secondary">
+                <i data-feather="arrow-left"></i> Back to Narratives
+            </a>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                <i data-feather="printer"></i> Print
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="narrative-detail">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4>{{ narrative.title }}</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <p class="mb-3">{{ narrative.description }}</p>
+                    
+                    <div class="d-flex mb-3">
+                        <div class="me-4">
+                            <strong>Status:</strong> 
+                            <span class="badge {% if narrative.status == 'active' %}bg-danger{% elif narrative.status == 'debunked' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ narrative.status|capitalize }}
+                            </span>
+                        </div>
+                        <div class="me-4">
+                            <strong>Language:</strong> 
+                            <span class="badge bg-info">{{ narrative.language }}</span>
+                        </div>
+                        <div class="me-4">
+                            <strong>Confidence:</strong> 
+                            <span class="badge bg-warning">{{ (narrative.confidence_score * 100)|round(1) }}%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex mb-3">
+                        <div class="me-4">
+                            <strong>First Detected:</strong> 
+                            <span>{{ narrative.first_detected }}</span>
+                        </div>
+                        <div>
+                            <strong>Last Updated:</strong> 
+                            <span>{{ narrative.last_updated }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    {% if metadata %}
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">Threat Assessment</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <strong>Propagation Score:</strong>
+                                <span id="propagation-score-{{ narrative.id }}">{{ (metadata.propagation_score * 100)|round(1) }}%</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <strong>Viral Threat Level:</strong>
+                                <span id="viral-threat-{{ narrative.id }}" class="badge {% if metadata.viral_threat >= 4 %}bg-danger{% elif metadata.viral_threat >= 2 %}bg-warning{% else %}bg-success{% endif %}" id="threat-badge-{{ narrative.id }}">
+                                    {{ metadata.viral_threat }}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <strong>Instance Count:</strong>
+                                <span>{{ metadata.instance_count }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <strong>Unique Sources:</strong>
+                                <span>{{ metadata.unique_sources }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <strong>Velocity:</strong>
+                                <span>{{ metadata.velocity|round(2) }} instances/hr</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary analyze-narrative-btn" data-narrative-id="{{ narrative.id }}">
+                            <i data-feather="refresh-cw"></i> Update Analysis
+                        </button>
+                        {% if show_generate_button %}
+                        <button id="generate-counter-btn" class="btn btn-warning generate-counter-btn" data-narrative-id="{{ narrative.id }}">
+                            <i data-feather="shield"></i> Generate Counter Message
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            <ul class="nav nav-tabs card-header-tabs" id="narrativeDetailTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="instances-tab" data-bs-toggle="tab" data-bs-target="#instances" type="button" role="tab" aria-controls="instances" aria-selected="true">
+                        Instances ({{ instances|length }})
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="counter-tab" data-bs-toggle="tab" data-bs-target="#counter" type="button" role="tab" aria-controls="counter" aria-selected="false">
+                        Counter Messages ({{ counter_messages|length }})
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="graph-tab" data-bs-toggle="tab" data-bs-target="#graph" type="button" role="tab" aria-controls="graph" aria-selected="false">
+                        Belief Graph
+                    </button>
+                </li>
+                {% if metadata and metadata.entity_categories %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="entities-tab" data-bs-toggle="tab" data-bs-target="#entities" type="button" role="tab" aria-controls="entities" aria-selected="false">
+                        Entities
+                    </button>
+                </li>
+                {% endif %}
+            </ul>
+            
+            <div class="tab-content p-3 border border-top-0 rounded-bottom" id="narrativeDetailTabsContent">
+                <!-- Instances Tab -->
+                <div class="tab-pane fade show active" id="instances" role="tabpanel" aria-labelledby="instances-tab">
+                    <div id="narrative-instances" data-narrative-id="{{ narrative.id }}">
+                        {% if instances %}
+                            {% for instance in instances %}
+                                <div class="card mb-3">
+                                    <div class="card-header d-flex justify-content-between">
+                                        {% if instance.metadata %}
+                                            {% set metadata = instance.metadata|tojson|safe %}
+                                            {% if metadata is mapping %}
+                                                {% set user_name = metadata.get('user_name') %}
+                                                {% set chat_name = metadata.get('chat_name') %}
+                                                {% if user_name %}
+                                                    <span>@{{ user_name }}</span>
+                                                {% elif chat_name %}
+                                                    <span>{{ chat_name }}</span>
+                                                {% else %}
+                                                    <span>Unknown Source</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span>Unknown Source</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span>Unknown Source</span>
+                                        {% endif %}
+                                        <small class="text-muted">{{ instance.detected_at }}</small>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="card-text">{{ instance.content }}</p>
+                                    </div>
+                                    {% if instance.url %}
+                                    <div class="card-footer text-end">
+                                        <a href="{{ instance.url }}" target="_blank" class="btn btn-sm btn-outline-info">
+                                            View Original <i data-feather="external-link"></i>
+                                        </a>
+                                        {% if instance.evidence_hash %}
+                                        <a href="{{ url_for('api.get_evidence', evidence_hash=instance.evidence_hash) }}" target="_blank" class="btn btn-sm btn-outline-secondary ms-2">
+                                            View Evidence <i data-feather="file-text"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-info">No instances found for this narrative.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Counter Messages Tab -->
+                <div class="tab-pane fade" id="counter" role="tabpanel" aria-labelledby="counter-tab">
+                    <div id="counter-messages" data-narrative-id="{{ narrative.id }}">
+                        {% if counter_messages %}
+                            {% for message in counter_messages %}
+                                <div class="card mb-3 border-secondary">
+                                    <div class="card-header d-flex justify-content-between">
+                                        <span>Counter Message ({{ message.status|capitalize }})</span>
+                                        <span class="badge {% if message.status == 'approved' %}bg-success{% elif message.status == 'deployed' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                            {{ message.status|capitalize }}
+                                        </span>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="card-text">{{ message.content }}</p>
+                                    </div>
+                                    <div class="card-footer d-flex justify-content-between">
+                                        <small class="text-muted">Strategy: {{ message.strategy }}</small>
+                                        {% if message.status == 'draft' %}
+                                        <button class="btn btn-sm btn-primary approve-counter-btn" data-message-id="{{ message.id }}">
+                                            Approve for Deployment
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-info">No counter messages found for this narrative.</div>
+                            {% if show_generate_button %}
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-warning generate-counter-btn" data-narrative-id="{{ narrative.id }}">
+                                    <i data-feather="shield"></i> Generate Counter Message
+                                </button>
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Belief Graph Tab -->
+                <div class="tab-pane fade" id="graph" role="tabpanel" aria-labelledby="graph-tab">
+                    <div id="belief-graph-container" class="belief-graph-container" data-narrative-id="{{ narrative.id }}">
+                        <!-- Graph will be rendered by D3.js -->
+                    </div>
+                </div>
+                
+                <!-- Entities Tab -->
+                {% if metadata and metadata.entity_categories %}
+                <div class="tab-pane fade" id="entities" role="tabpanel" aria-labelledby="entities-tab">
+                    <div class="row">
+                        {% for category, entities in metadata.entity_categories.items() %}
+                            <div class="col-md-4 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">{{ category }}</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="list-group list-group-flush">
+                                            {% for entity in entities %}
+                                                <li class="list-group-item bg-transparent">{{ entity }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- Narratives List View -->
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Narratives</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                <i data-feather="printer"></i> Print
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary">
+                <i data-feather="download"></i> Export
+            </button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle">
+            <i data-feather="calendar"></i>
+            {{ days }} Days
+        </button>
+    </div>
+</div>
+
+<!-- New content notification -->
+<div id="new-content-notification" class="toast align-items-center text-white bg-info border-0 d-none" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+        <div class="toast-body">
+            <i data-feather="refresh-cw"></i> New narratives available. Click to refresh.
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<!-- Filter Form -->
+<div class="card mb-4">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Filters</h5>
+            <a href="#" id="toggle-advanced-filters" class="btn btn-sm btn-link">Show Advanced Filters</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <form id="filter-form" action="{{ url_for('dashboard.narratives') }}" method="get">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
+                        <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="archived" {% if status == 'archived' %}selected{% endif %}>Archived</option>
+                        <option value="debunked" {% if status == 'debunked' %}selected{% endif %}>Debunked</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="language" class="form-label">Language</label>
+                    <select class="form-select" id="language" name="language">
+                        <option value="all" {% if language == 'all' %}selected{% endif %}>All</option>
+                        {% for lang in available_languages %}
+                            <option value="{{ lang }}" {% if language == lang %}selected{% endif %}>
+                                {% if lang == 'en' %}English
+                                {% elif lang == 'es' %}Spanish
+                                {% else %}{{ lang }}
+                                {% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="days" class="form-label">Time Period</label>
+                    <select class="form-select" id="days" name="days">
+                        <option value="1" {% if days == '1' %}selected{% endif %}>Last 24 Hours</option>
+                        <option value="7" {% if days == '7' %}selected{% endif %}>Last 7 Days</option>
+                        <option value="30" {% if days == '30' %}selected{% endif %}>Last 30 Days</option>
+                        <option value="90" {% if days == '90' %}selected{% endif %}>Last 90 Days</option>
+                        <option value="all" {% if days == 'all' %}selected{% endif %}>All Time</option>
+                    </select>
+                </div>
+                
+                <!-- Advanced Filters (hidden by default) -->
+                <div id="advanced-filters" class="row g-3 mt-1 d-none">
+                    <div class="col-md-12">
+                        <label for="search" class="form-label">Search Term</label>
+                        <input type="text" class="form-control" id="search" name="search" value="{{ search }}" placeholder="Search in titles and descriptions...">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                <a href="{{ url_for('dashboard.narratives') }}" class="btn btn-outline-secondary">Reset</a>
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Narratives List -->
+<div class="card narratives-list">
+    <div class="card-header">
+        <h5 class="mb-0">Detected Narratives ({{ total_narratives }})</h5>
+    </div>
+    <div class="card-body">
+        {% if narratives.items %}
+            {% for narrative in narratives.items %}
+                <div class="card mb-3 narrative-card {% if narrative.metadata and narrative.metadata|tojson|fromjson and narrative.metadata|tojson|fromjson.viral_threat >= 4 %}high-threat-narrative{% endif %}" data-narrative-id="{{ narrative.id }}">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h5 class="narrative-title">
+                                    <a href="{{ url_for('dashboard.narrative_detail', narrative_id=narrative.id) }}" class="text-white">
+                                        {{ narrative.title }}
+                                    </a>
+                                </h5>
+                                <p class="text-truncate-2">{{ narrative.description }}</p>
+                                <div class="narrative-meta">
+                                    <span class="badge {% if narrative.status == 'active' %}bg-danger{% elif narrative.status == 'debunked' %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ narrative.status|capitalize }}
+                                    </span>
+                                    <span class="badge bg-info">{{ narrative.language }}</span>
+                                    <small class="ms-2">First detected: {{ narrative.first_detected.strftime('%Y-%m-%d %H:%M') }}</small>
+                                    <small class="ms-2">Last updated: {{ narrative.last_updated.strftime('%Y-%m-%d %H:%M') }}</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-md-end">
+                                {% if narrative.metadata %}
+                                    {% set metadata = narrative.metadata|tojson|safe %}
+                                    {% if metadata is mapping %}
+                                        {% set threat_level = metadata.get('viral_threat', 0) %}
+                                        {% set propagation_score = metadata.get('propagation_score', 0) %}
+                                        <div class="mb-2">
+                                            <span class="badge {% if threat_level >= 4 %}bg-danger{% elif threat_level >= 2 %}bg-warning{% else %}bg-success{% endif %}" id="threat-badge-{{ narrative.id }}">
+                                                Threat Level: <span id="viral-threat-{{ narrative.id }}">{{ threat_level }}</span>
+                                            </span>
+                                            <span class="ms-2">
+                                                Propagation: <span id="propagation-score-{{ narrative.id }}">{{ (propagation_score * 100)|round(1) }}%</span>
+                                            </span>
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('dashboard.narrative_detail', narrative_id=narrative.id) }}" class="btn btn-sm btn-outline-info">
+                                        <i data-feather="eye"></i> View
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-primary analyze-narrative-btn" data-narrative-id="{{ narrative.id }}">
+                                        <i data-feather="refresh-cw"></i> Analyze
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+            
+            <!-- Pagination -->
+            {% if narratives.pages > 1 %}
+                <nav aria-label="Narratives pagination">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if narratives.page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('dashboard.narratives', page=narratives.prev_num, status=status, language=language, days=days, search=search) if narratives.has_prev else '#' }}">Previous</a>
+                        </li>
+                        
+                        {% for page_num in narratives.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == narratives.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('dashboard.narratives', page=page_num, status=status, language=language, days=days, search=search) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <li class="page-item {% if narratives.page == narratives.pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('dashboard.narratives', page=narratives.next_num, status=status, language=language, days=days, search=search) if narratives.has_next else '#' }}">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-info">
+                No narratives found matching the selected filters.
+                <a href="{{ url_for('dashboard.narratives') }}" class="alert-link">Clear filters</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
