@@ -1,0 +1,486 @@
+{% extends "layout.html" %}
+
+{% block title %}CIVILIAN - Settings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Settings</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#systemInfoModal">
+            <i data-feather="info"></i> System Info
+        </button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card settings-section">
+            <div class="card-header">
+                <h5 class="mb-0">Twitter/X Data Sources</h5>
+            </div>
+            <div class="card-body">
+                {% if twitter_sources %}
+                    <div class="table-responsive mb-3">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Configuration</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in twitter_sources %}
+                                    <tr>
+                                        <td>{{ source.name }}</td>
+                                        <td>
+                                            {% if source.config %}
+                                                {% set config = source.config|tojson|fromjson %}
+                                                {% if config.query %}
+                                                    <span class="badge bg-info">Query</span> {{ config.query }}
+                                                {% elif config.users %}
+                                                    <span class="badge bg-info">Users</span> {{ config.users|join(', ') }}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Unknown</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">No config</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if source.is_active %}
+                                                <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <form action="{{ url_for('dashboard.toggle_source', source_id=source.id) }}" method="post" class="d-inline">
+                                                <button type="submit" class="btn btn-sm {% if source.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                                                    {% if source.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info mb-3">No Twitter data sources configured.</div>
+                {% endif %}
+                
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#twitterSourceModal">
+                    <i data-feather="plus"></i> Add Twitter Source
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card settings-section">
+            <div class="card-header">
+                <h5 class="mb-0">Telegram Data Sources</h5>
+            </div>
+            <div class="card-body">
+                {% if telegram_sources %}
+                    <div class="table-responsive mb-3">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Configuration</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in telegram_sources %}
+                                    <tr>
+                                        <td>{{ source.name }}</td>
+                                        <td>
+                                            {% if source.config %}
+                                                {% set config = source.config|tojson|fromjson %}
+                                                {% if config.channels %}
+                                                    <span class="badge bg-info">Channels</span> {{ config.channels|join(', ') }}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Unknown</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">No config</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if source.is_active %}
+                                                <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <form action="{{ url_for('dashboard.toggle_source', source_id=source.id) }}" method="post" class="d-inline">
+                                                <button type="submit" class="btn btn-sm {% if source.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                                                    {% if source.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info mb-3">No Telegram data sources configured.</div>
+                {% endif %}
+                
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#telegramSourceModal">
+                    <i data-feather="plus"></i> Add Telegram Source
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card settings-section">
+            <div class="card-header">
+                <h5 class="mb-0">Test Detector</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('dashboard.test_detector') }}" method="post">
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Enter content to detect misinformation</label>
+                        <textarea class="form-control" id="content" name="content" rows="5" placeholder="Enter text content to analyze for misinformation..." required>{{ test_content }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Test Detection</button>
+                </form>
+                
+                {% if detection_result %}
+                    <div class="mt-4">
+                        <h6>Detection Results</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <strong>Misinformation Detected:</strong> 
+                                    <span class="badge {% if detection_result.is_misinformation %}bg-danger{% else %}bg-success{% endif %}">
+                                        {{ 'Yes' if detection_result.is_misinformation else 'No' }}
+                                    </span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Confidence Score:</strong> {{ (detection_result.confidence * 100)|round(1) }}%
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Language:</strong> {{ detection_result.language }}
+                                </div>
+                                {% if detection_result.claims %}
+                                    <div>
+                                        <strong>Detected Claims:</strong>
+                                        <ul class="list-group mt-2">
+                                            {% for claim in detection_result.claims %}
+                                                <li class="list-group-item bg-transparent">{{ claim }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card settings-section">
+            <div class="card-header">
+                <h5 class="mb-0">System Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card bg-dark">
+                            <div class="card-body">
+                                <h6 class="card-title">Agent Status</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Detector Agent</span>
+                                    <span class="badge bg-success">Running</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Analyzer Agent</span>
+                                    <span class="badge bg-success">Running</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Counter Agent</span>
+                                    <span class="badge bg-success">Running</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-dark">
+                            <div class="card-body">
+                                <h6 class="card-title">Storage Status</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Database</span>
+                                    <span class="badge bg-success">Connected</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Vector Store</span>
+                                    <span class="badge bg-success">Operational</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Evidence Store</span>
+                                    <span class="badge bg-success">Operational</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Error Logs -->
+                <h6>Recent Error Logs</h6>
+                {% if error_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Component</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in error_logs %}
+                                    <tr>
+                                        <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                        <td>{{ log.component }}</td>
+                                        <td>{{ log.message }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-success">No recent error logs.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Twitter Source Modal -->
+<div class="modal fade" id="twitterSourceModal" tabindex="-1" aria-labelledby="twitterSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="twitterSourceModalLabel">Add Twitter Data Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('dashboard.create_twitter_source') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="twitter-name" class="form-label">Source Name</label>
+                        <input type="text" class="form-control" id="twitter-name" name="name" required placeholder="e.g., Twitter News Monitoring">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Source Type</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="twitter-type-query" value="query" checked>
+                            <label class="form-check-label" for="twitter-type-query">
+                                Search Query
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="twitter-type-users" value="users">
+                            <label class="form-check-label" for="twitter-type-users">
+                                User Timelines
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3" id="twitter-query-container">
+                        <label for="twitter-query" class="form-label">Search Query</label>
+                        <input type="text" class="form-control" id="twitter-query" name="query" placeholder="e.g., #fakenews OR misinformation">
+                        <div class="form-text">Use Twitter search syntax with operators like OR, AND, -</div>
+                    </div>
+                    
+                    <div class="mb-3 d-none" id="twitter-users-container">
+                        <label for="twitter-users" class="form-label">User Accounts</label>
+                        <input type="text" class="form-control" id="twitter-users" name="users" placeholder="e.g., user1, user2, user3">
+                        <div class="form-text">Comma-separated list of Twitter usernames without @ symbol</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Source</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Telegram Source Modal -->
+<div class="modal fade" id="telegramSourceModal" tabindex="-1" aria-labelledby="telegramSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="telegramSourceModalLabel">Add Telegram Data Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('dashboard.create_telegram_source') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="telegram-name" class="form-label">Source Name</label>
+                        <input type="text" class="form-control" id="telegram-name" name="name" required placeholder="e.g., Telegram Channels Monitor">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="telegram-channels" class="form-label">Channels</label>
+                        <input type="text" class="form-control" id="telegram-channels" name="channels" required placeholder="e.g., channel1, channel2, @channel3">
+                        <div class="form-text">Comma-separated list of Telegram channels (with or without @ symbol)</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Source</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- System Info Modal -->
+<div class="modal fade" id="systemInfoModal" tabindex="-1" aria-labelledby="systemInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="systemInfoModalLabel">CIVILIAN System Information</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6>System Components</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                Detector Agent
+                                <span class="badge bg-success">Active</span>
+                            </li>
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                Analyzer Agent
+                                <span class="badge bg-success">Active</span>
+                            </li>
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                Counter Agent
+                                <span class="badge bg-success">Active</span>
+                            </li>
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                Belief Graph Engine
+                                <span class="badge bg-success">Active</span>
+                            </li>
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                Evidence Store
+                                <span class="badge bg-success">Active</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Supported Languages</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                English (en)
+                                <span class="badge bg-success">Primary</span>
+                            </li>
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                Spanish (es)
+                                <span class="badge bg-success">Supported</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <h6>System Architecture</h6>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <p>CIVILIAN is a sovereign machine intelligence system designed for detecting, analyzing, and countering global misinformation through real-time monitoring and intervention.</p>
+                        
+                        <h6 class="mt-3">Core Components:</h6>
+                        <ul>
+                            <li><strong>Data Ingestion Layer</strong> - Monitors and collects content from multiple sources (Twitter/X, Telegram) in real-time</li>
+                            <li><strong>Detection Engine</strong> - Analyzes content for misinformation using NLP techniques</li>
+                            <li><strong>Belief Graph</strong> - Maps relationship between narratives, claims, and sources to track narrative evolution</li>
+                            <li><strong>Analysis Engine</strong> - Evaluates propagation patterns and threat levels of detected narratives</li>
+                            <li><strong>Counter-Messaging System</strong> - Generates and deploys responses to misinformation</li>
+                            <li><strong>Evidence Store</strong> - Maintains immutable records of detected misinformation</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <h6>Version Information</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <td><strong>System Version</strong></td>
+                                <td>0.1.0</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Backend Framework</strong></td>
+                                <td>Flask</td>
+                            </tr>
+                            <tr>
+                                <td><strong>NLP Libraries</strong></td>
+                                <td>spaCy, NLTK</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Graph Database</strong></td>
+                                <td>NetworkX</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Vector Store</strong></td>
+                                <td>FAISS</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for Twitter Source Modal -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const twitterTypeQuery = document.getElementById('twitter-type-query');
+    const twitterTypeUsers = document.getElementById('twitter-type-users');
+    const twitterQueryContainer = document.getElementById('twitter-query-container');
+    const twitterUsersContainer = document.getElementById('twitter-users-container');
+    
+    function updateTwitterSourceForm() {
+        if (twitterTypeQuery.checked) {
+            twitterQueryContainer.classList.remove('d-none');
+            twitterUsersContainer.classList.add('d-none');
+        } else {
+            twitterQueryContainer.classList.add('d-none');
+            twitterUsersContainer.classList.remove('d-none');
+        }
+    }
+    
+    twitterTypeQuery.addEventListener('change', updateTwitterSourceForm);
+    twitterTypeUsers.addEventListener('change', updateTwitterSourceForm);
+    
+    // Initialize form state
+    updateTwitterSourceForm();
+});
+</script>
+{% endblock %}
