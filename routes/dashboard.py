@@ -362,6 +362,44 @@ def toggle_source(source_id):
         flash(f'Error updating source: {str(e)}', 'danger')
         return redirect(url_for('dashboard.settings'))
 
+@dashboard_bp.route('/create-rss-source', methods=['POST'])
+def create_rss_source():
+    """Create a new RSS data source."""
+    try:
+        name = request.form.get('name')
+        feeds = request.form.get('feeds', '')
+        
+        if not name or not feeds:
+            flash('Source name and feeds are required', 'danger')
+            return redirect(url_for('dashboard.settings'))
+            
+        # Split feeds by comma and strip whitespace
+        feed_list = [f.strip() for f in feeds.split(',') if f.strip()]
+        
+        if not feed_list:
+            flash('At least one valid feed URL is required', 'danger')
+            return redirect(url_for('dashboard.settings'))
+        
+        # Create config
+        config = {'feeds': feed_list}
+        
+        # Import and use RSSSource
+        from data_sources.rss_source import RSSSource
+        rss_source = RSSSource()
+        source_id = rss_source.create_source(name, config)
+        
+        if source_id:
+            flash(f'RSS source "{name}" created successfully', 'success')
+        else:
+            flash('Error creating RSS source', 'danger')
+            
+        return redirect(url_for('dashboard.settings'))
+        
+    except Exception as e:
+        logger.error(f"Error creating RSS source: {e}")
+        flash(f'Error creating source: {str(e)}', 'danger')
+        return redirect(url_for('dashboard.settings'))
+
 @dashboard_bp.route('/test-detector', methods=['GET', 'POST'])
 def test_detector():
     """Test the detector with custom content."""

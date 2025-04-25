@@ -24,6 +24,7 @@ dependencies = [
     "tweepy>=4.15.0",
     "feedparser>=6.0.11",
     "telethon>=1.40.0",
+    "flask-wtf>=1.2.2",
 ]
 
 [tool.uv.sources]
