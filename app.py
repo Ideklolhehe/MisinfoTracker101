@@ -42,7 +42,7 @@ with app.app_context():
     from routes.api import api_bp
     
     # Register blueprints
-    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(api_bp, url_prefix='/api')
     
     # Create database tables

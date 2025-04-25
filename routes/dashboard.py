@@ -234,7 +234,8 @@ def settings():
         # Group sources by type
         twitter_sources = [s for s in sources if s.source_type == 'twitter']
         telegram_sources = [s for s in sources if s.source_type == 'telegram']
-        other_sources = [s for s in sources if s.source_type not in ('twitter', 'telegram')]
+        rss_sources = [s for s in sources if s.source_type == 'rss']
+        other_sources = [s for s in sources if s.source_type not in ('twitter', 'telegram', 'rss')]
         
         # Get logs for system status
         recent_logs = SystemLog.query.order_by(
@@ -249,6 +250,7 @@ def settings():
             'dashboard/settings.html',
             twitter_sources=twitter_sources,
             telegram_sources=telegram_sources,
+            rss_sources=rss_sources,
             other_sources=other_sources,
             error_logs=error_logs,
             info_logs=info_logs

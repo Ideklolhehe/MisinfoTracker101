@@ -153,7 +153,6 @@
                 <h5 class="mb-0">RSS Data Sources</h5>
             </div>
             <div class="card-body">
-                {% set rss_sources = other_sources|selectattr('source_type', 'equalto', 'rss')|list %}
                 {% if rss_sources %}
                     <div class="table-responsive mb-3">
                         <table class="table table-hover">
@@ -422,6 +421,36 @@
     </div>
 </div>
 
+<!-- RSS Source Modal -->
+<div class="modal fade" id="rssSourceModal" tabindex="-1" aria-labelledby="rssSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rssSourceModalLabel">Add RSS Data Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('dashboard.create_rss_source') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="rss-name" class="form-label">Source Name</label>
+                        <input type="text" class="form-control" id="rss-name" name="name" required placeholder="e.g., News Feeds Monitor">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rss-feeds" class="form-label">RSS Feed URLs</label>
+                        <textarea class="form-control" id="rss-feeds" name="feeds" rows="4" required placeholder="e.g., https://example.com/feed.xml, https://news.site/rss"></textarea>
+                        <div class="form-text">Comma-separated list of RSS feed URLs</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Source</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- System Info Modal -->
 <div class="modal fade" id="systemInfoModal" tabindex="-1" aria-labelledby="systemInfoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -479,7 +508,7 @@
                         
                         <h6 class="mt-3">Core Components:</h6>
                         <ul>
-                            <li><strong>Data Ingestion Layer</strong> - Monitors and collects content from multiple sources (Twitter/X, Telegram) in real-time</li>
+                            <li><strong>Data Ingestion Layer</strong> - Monitors and collects content from multiple sources (Twitter/X, Telegram, RSS feeds) in real-time</li>
                             <li><strong>Detection Engine</strong> - Analyzes content for misinformation using NLP techniques</li>
                             <li><strong>Belief Graph</strong> - Maps relationship between narratives, claims, and sources to track narrative evolution</li>
                             <li><strong>Analysis Engine</strong> - Evaluates propagation patterns and threat levels of detected narratives</li>
@@ -495,7 +524,7 @@
                         <tbody>
                             <tr>
                                 <td><strong>System Version</strong></td>
-                                <td>0.1.0</td>
+                                <td>0.2.0</td>
                             </tr>
                             <tr>
                                 <td><strong>Backend Framework</strong></td>
