@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 # Import application components
 from utils.text_processor import TextProcessor
+from utils.app_context import ensure_app_context
 from models import DetectedNarrative, NarrativeInstance, BeliefNode, BeliefEdge, SystemLog
 from app import db
 
@@ -74,6 +75,7 @@ class AnalyzerAgent:
                 self._log_error("analysis_loop", str(e))
                 time.sleep(30)  # Short sleep on error
     
+    @ensure_app_context
     def _analyze_recent_narratives(self):
         """Analyze recent narratives to extract patterns and propagation insights."""
         # Get narratives updated in the last day
@@ -93,6 +95,7 @@ class AnalyzerAgent:
             logger.error(f"Error analyzing recent narratives: {e}")
             self._log_error("analyze_recent_narratives", str(e))
     
+    @ensure_app_context
     def analyze_narrative(self, narrative_id: int) -> Dict[str, Any]:
         """Analyze a specific narrative.
         
@@ -214,6 +217,7 @@ class AnalyzerAgent:
             self._log_error("analyze_narrative", f"Error analyzing narrative {narrative_id}: {e}")
             return {"narrative_id": narrative_id, "error": str(e)}
     
+    @ensure_app_context
     def _build_narrative_graph(self, narrative_id: int) -> Optional[nx.Graph]:
         """Build a NetworkX graph for a specific narrative.
         
@@ -271,6 +275,7 @@ class AnalyzerAgent:
             logger.error(f"Error building narrative graph for {narrative_id}: {e}")
             return None
     
+    @ensure_app_context
     def _update_belief_graph_metrics(self):
         """Update the global belief graph metrics."""
         try:
@@ -344,6 +349,7 @@ class AnalyzerAgent:
             logger.error(f"Error updating belief graph metrics: {e}")
             self._log_error("update_belief_graph_metrics", str(e))
     
+    @ensure_app_context
     def _log_error(self, operation: str, message: str):
         """Log an error to the database."""
         try:

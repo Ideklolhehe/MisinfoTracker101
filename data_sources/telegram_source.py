@@ -1,335 +1,241 @@
-import logging
-import time
-import threading
-from typing import List, Dict, Any, Optional, Tuple
-import os
-import json
-from datetime import datetime, timedelta
-import asyncio
-from telethon import TelegramClient, events
-from telethon.errors import SessionPasswordNeededError
+"""
+Telegram data source module for the CIVILIAN system.
+This module handles ingestion of content from Telegram channels and groups.
+"""
 
-# Import application components
-from models import DataSource, NarrativeInstance, SystemLog
+import json
+import logging
+import threading
+import time
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+
+from sqlalchemy.exc import SQLAlchemyError
+
 from app import db
+from models import DataSource, NarrativeInstance, SystemLog
 
 logger = logging.getLogger(__name__)
 
 class TelegramSource:
     """Data source connector for Telegram."""
     
-    def __init__(self, credentials: Dict[str, str] = None):
-        """Initialize the Telegram data source.
+    def __init__(self):
+        """Initialize the Telegram data source."""
+        self._running = False
+        self._thread = None
+        self._client = None
         
-        Args:
-            credentials: Dict containing API keys (optional, can also use env vars)
-        """
-        self.credentials = credentials or {}
-        self.client = None
-        self.running = False
-        self.thread = None
-        self.rate_limit = int(os.environ.get('TELEGRAM_API_RATE_LIMIT', 30))
-        self.channels = []  # List of channels to monitor
-        
-        # Initialize the Telegram client
-        self._init_client()
+        # Try to initialize the API client
+        try:
+            self._initialize_client()
+        except Exception as e:
+            logger.warning(f"Telegram API credentials not provided: {e}")
         
         logger.info("TelegramSource initialized")
     
-    def _init_client(self):
-        """Initialize the Telegram client."""
+    def _initialize_client(self):
+        """Initialize the Telegram API client with credentials."""
+        import os
+        from telethon import TelegramClient
+        
+        # Check for required environment variables
+        api_id = os.environ.get('TELEGRAM_API_ID')
+        api_hash = os.environ.get('TELEGRAM_API_HASH')
+        
+        if not api_id or not api_hash:
+            raise ValueError("Telegram API credentials not provided")
+        
+        # Initialize Telegram client
+        self._client = TelegramClient('civilian_telegram_session', int(api_id), api_hash)
+        
+        # Connect to Telegram
         try:
-            # Get API credentials from environment or passed dictionary
-            api_id = self.credentials.get('api_id') or os.environ.get('TELEGRAM_API_ID')
-            api_hash = self.credentials.get('api_hash') or os.environ.get('TELEGRAM_API_HASH')
-            phone = self.credentials.get('phone') or os.environ.get('TELEGRAM_PHONE')
-            session_name = self.credentials.get('session_name') or 'civilian_telegram_session'
-            
-            if not api_id or not api_hash:
-                logger.warning("Telegram API credentials not provided")
-                return
-                
-            # Will be initialized in the background thread
-            self.api_id = api_id
-            self.api_hash = api_hash
-            self.phone = phone
-            self.session_name = session_name
-            
-            logger.info("Telegram API credentials initialized")
-            
+            self._client.connect()
+            logger.info("Telegram client initialized")
         except Exception as e:
-            logger.error(f"Error initializing Telegram credentials: {e}")
-    
-    async def _create_client(self):
-        """Create the Telegram client asynchronously."""
-        try:
-            # Create client
-            client = TelegramClient(self.session_name, self.api_id, self.api_hash)
-            await client.start(phone=self.phone)
-            
-            # Check if we're logged in
-            if await client.is_user_authorized():
-                logger.info("Successfully logged in to Telegram")
-                self.client = client
-                return client
-            else:
-                logger.error("Failed to authenticate with Telegram")
-                return None
-                
-        except SessionPasswordNeededError:
-            logger.error("Two-factor authentication required for Telegram account")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error creating Telegram client: {e}")
-            return None
+            logger.error(f"Failed to connect to Telegram: {e}")
+            self._client = None
+            raise
     
     def start(self):
         """Start monitoring Telegram in a background thread."""
-        if self.running:
-            logger.warning("TelegramSource is already running")
+        if self._running:
+            logger.warning("TelegramSource monitoring already running")
             return
-            
-        if not hasattr(self, 'api_id') or not self.api_id:
+        
+        if not self._client:
             logger.error("Telegram API credentials not initialized, cannot start monitoring")
             return
-            
-        self.running = True
-        self.thread = threading.Thread(target=self._run_monitoring_loop)
-        self.thread.daemon = True
-        self.thread.start()
         
+        self._running = True
+        self._thread = threading.Thread(target=self._run_monitoring_loop, daemon=True)
+        self._thread.start()
         logger.info("TelegramSource monitoring started")
-        
+    
     def stop(self):
         """Stop monitoring Telegram."""
-        self.running = False
-        if self.thread:
-            self.thread.join(timeout=5.0)
-            
-        # Close client
-        if self.client:
-            asyncio.run_coroutine_threadsafe(self.client.disconnect(), asyncio.get_event_loop())
-            self.client = None
-            
-        logger.info("TelegramSource monitoring stopped")
+        if not self._running:
+            logger.warning("TelegramSource monitoring not running")
+            return
+        
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=3.0)  # Wait up to 3 seconds
+            logger.info("TelegramSource monitoring stopped")
+        
+        # Disconnect from Telegram
+        if self._client:
+            self._client.disconnect()
     
     def _run_monitoring_loop(self):
         """Main monitoring loop that runs in background thread."""
-        # Create event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        from config import Config
+        import asyncio
         
-        try:
-            # Initialize client
-            client = loop.run_until_complete(self._create_client())
-            if not client:
-                logger.error("Failed to initialize Telegram client")
-                self.running = False
-                return
-                
-            # Register event handlers
-            @client.on(events.NewMessage)
-            async def handler(event):
-                if self.running:
-                    chat = await event.get_chat()
-                    chat_id = chat.id
-                    
-                    # Check if this chat is in our monitoring list
-                    for source_id, channel in self.channels:
-                        if channel == str(chat_id) or (hasattr(chat, 'username') and chat.username and channel.lower() == chat.username.lower()):
-                            await self._process_message(source_id, event)
-            
-            # Main monitoring loop
-            while self.running:
-                try:
-                    # Get active sources from database
-                    sources = self._get_active_sources()
-                    
-                    if not sources:
-                        logger.debug("No active Telegram sources defined")
-                        time.sleep(60)  # Sleep briefly before checking again
-                        continue
-                    
-                    # Update channels list
-                    self.channels = []
-                    for source in sources:
-                        config = json.loads(source.config) if source.config else {}
-                        if 'channels' in config:
-                            for channel in config['channels']:
-                                self.channels.append((source.id, channel))
-                    
-                    # Join channels if not already joined
-                    for _, channel in self.channels:
-                        loop.run_until_complete(self._join_channel(client, channel))
-                    
-                    # Update last ingestion timestamp
-                    self._update_ingestion_time(sources)
-                    
-                    # Wait for a bit before checking for new sources
-                    time.sleep(300)  # 5 minutes
-                    
-                except Exception as e:
-                    logger.error(f"Error in Telegram monitoring loop: {e}")
-                    # Log error to database
-                    self._log_error("monitoring_loop", str(e))
-                    time.sleep(60)  # Short sleep on error
-            
-            # Disconnect when stopping
-            loop.run_until_complete(client.disconnect())
-            
-        except Exception as e:
-            logger.error(f"Fatal error in Telegram monitoring: {e}")
-            self._log_error("telegram_monitor", str(e))
-            self.running = False
-            
-        finally:
-            loop.close()
-    
-    async def _join_channel(self, client, channel):
-        """Join a Telegram channel if not already joined."""
-        try:
-            # Check if channel is numeric (chat ID) or username
-            if channel.lstrip('-').isdigit():
-                # It's a chat ID
-                entity = int(channel)
-            else:
-                # It's a username
-                if not channel.startswith('@'):
-                    channel = '@' + channel
-                entity = channel
-            
-            # Try to get entity info (will raise ValueError if not joined)
+        while self._running:
             try:
-                await client.get_entity(entity)
-                logger.debug(f"Already joined channel: {channel}")
-            except ValueError:
-                # Not joined, try to join
-                logger.info(f"Joining channel: {channel}")
-                await client.join_channel(entity)
+                logger.debug("Starting Telegram monitoring cycle")
                 
-        except Exception as e:
-            logger.error(f"Error joining channel {channel}: {e}")
-    
-    async def _process_message(self, source_id, event):
-        """Process a Telegram message event."""
-        try:
-            # Extract message data
-            message = event.message
-            text = message.message
-            
-            if not text:
-                # Skip media-only messages
-                return
+                # Get active Telegram sources from database
+                sources = self._get_active_sources()
                 
-            # Get additional info
-            chat = await event.get_chat()
-            chat_name = getattr(chat, 'title', None) or getattr(chat, 'username', None) or str(chat.id)
+                if not sources:
+                    logger.debug("No active Telegram sources defined")
+                else:
+                    # Process each source
+                    for source in sources:
+                        if not self._running:
+                            break
+                        
+                        try:
+                            # Extract channel/group entities from config
+                            config = json.loads(source.config) if source.config else {}
+                            entities = config.get('entities', [])
+                            
+                            # Create event loop for async operations
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            
+                            for entity in entities:
+                                if not self._running:
+                                    break
+                                # Run async function synchronously
+                                loop.run_until_complete(self._process_entity(source.id, entity))
+                            
+                            loop.close()
+                            
+                        except Exception as e:
+                            self._log_error("process_source", f"Error processing source {source.id}: {e}")
+                    
+                    # Update last ingestion time
+                    self._update_ingestion_time(sources)
+                
+                # Sleep until next cycle (respect Telegram API rate limits)
+                for _ in range(int(Config.INGESTION_INTERVAL / 2)):
+                    if not self._running:
+                        break
+                    time.sleep(2)  # Check if still running every 2 seconds
             
-            # Create metadata
-            metadata = json.dumps({
-                'message_id': message.id,
-                'chat_id': chat.id,
-                'chat_name': chat_name,
-                'timestamp': message.date.isoformat(),
-                'has_media': message.media is not None,
-                'forward': message.forward is not None
-            })
-            
-            # Create chat URL (if possible)
-            url = None
-            if hasattr(chat, 'username') and chat.username:
-                url = f"https://t.me/{chat.username}/{message.id}"
-            
-            # Create a new narrative instance
-            with db.session.begin():
-                instance = NarrativeInstance(
-                    source_id=source_id,
-                    content=text,
-                    metadata=metadata,
-                    url=url,
-                    detected_at=datetime.utcnow()
-                )
-                db.session.add(instance)
-            
-            logger.debug(f"Processed message from {chat_name}")
-            
-        except Exception as e:
-            logger.error(f"Error processing Telegram message: {e}")
-            self._log_error("process_message", str(e))
+            except Exception as e:
+                self._log_error("monitoring_loop", f"Error in Telegram monitoring loop: {e}")
+                time.sleep(60)  # Shorter interval after error
     
     def _get_active_sources(self) -> List[DataSource]:
         """Get active Telegram data sources from the database."""
         try:
-            sources = DataSource.query.filter_by(
+            return DataSource.query.filter_by(
                 source_type='telegram',
                 is_active=True
             ).all()
-            return sources
         except Exception as e:
-            logger.error(f"Error fetching Telegram sources: {e}")
+            self._log_error("get_sources", f"Error fetching Telegram sources: {e}")
             return []
     
     def _update_ingestion_time(self, sources: List[DataSource]):
         """Update the last ingestion timestamp for sources."""
+        current_time = datetime.utcnow()
         try:
-            with db.session.begin():
-                for source in sources:
-                    source.last_ingestion = datetime.utcnow()
+            for source in sources:
+                source.last_ingestion = current_time
+            db.session.commit()
         except Exception as e:
-            logger.error(f"Error updating ingestion time: {e}")
+            self._log_error("update_ingestion_time", f"Error updating ingestion time: {e}")
+            db.session.rollback()
     
-    async def get_channel_messages(self, channel: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get recent messages from a Telegram channel.
+    async def _process_entity(self, source_id: int, entity: str, limit: int = 50):
+        """Process messages from a Telegram channel or group."""
+        logger.debug(f"Processing Telegram entity: {entity}")
+        
+        try:
+            # Get messages from the entity
+            messages = await self.get_messages(entity, limit)
+            
+            # Process each message
+            for msg in messages:
+                # Create a narrative instance for detection
+                instance = NarrativeInstance(
+                    source_id=source_id,
+                    content=msg.get('text', ''),
+                    meta_data=json.dumps(msg),
+                    url=f"t.me/{entity.lstrip('@')}/{msg.get('id', '')}"
+                )
+                
+                # Add to database
+                db.session.add(instance)
+            
+            # Commit changes
+            db.session.commit()
+            logger.debug(f"Processed {len(messages)} messages from {entity}")
+        
+        except Exception as e:
+            self._log_error("process_entity", f"Error processing entity {entity}: {e}")
+            db.session.rollback()
+    
+    async def get_messages(self, entity: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get messages from a Telegram channel or group (for manual API use).
         
         Args:
-            channel: Channel username or ID
+            entity: Channel or group username or ID
             limit: Maximum number of messages to retrieve
             
         Returns:
             messages: List of message dictionaries
         """
-        if not self.client:
-            logger.error("Telegram client not initialized")
-            return []
-            
+        result = []
+        
         try:
-            # Get channel entity
-            if channel.lstrip('-').isdigit():
-                entity = int(channel)
-            else:
-                if not channel.startswith('@'):
-                    channel = '@' + channel
-                entity = channel
+            if not self._client:
+                logger.error("Telegram client not initialized")
+                return []
             
-            # Get messages
-            messages = await self.client.get_messages(entity, limit=limit)
-            
-            # Format message data
-            result = []
-            for message in messages:
-                if message.message:  # Only process text messages
-                    chat = await message.get_chat()
-                    chat_name = getattr(chat, 'title', None) or getattr(chat, 'username', None) or str(chat.id)
-                    
-                    # Create chat URL (if possible)
-                    url = None
-                    if hasattr(chat, 'username') and chat.username:
-                        url = f"https://t.me/{chat.username}/{message.id}"
-                    
-                    result.append({
-                        'message_id': message.id,
-                        'text': message.message,
-                        'chat_id': chat.id,
-                        'chat_name': chat_name,
-                        'timestamp': message.date.isoformat(),
-                        'url': url
-                    })
+            # Get messages from the entity
+            async for message in self._client.iter_messages(entity, limit=limit):
+                if not message.text:
+                    continue
+                
+                # Create message dict
+                msg_data = {
+                    'id': message.id,
+                    'text': message.text,
+                    'date': message.date.isoformat(),
+                    'entity': entity
+                }
+                
+                # Add user info if available
+                if message.sender_id:
+                    msg_data['sender_id'] = message.sender_id
+                
+                # Add forwarded info if available
+                if message.forward:
+                    msg_data['forwarded_from'] = str(message.forward.sender_id)
+                
+                result.append(msg_data)
             
             return result
-            
+        
         except Exception as e:
-            logger.error(f"Error getting messages from channel '{channel}': {e}")
+            logger.error(f"Error getting messages from {entity}: {e}")
             return []
     
     def create_source(self, name: str, config: Dict[str, Any]) -> Optional[int]:
@@ -337,47 +243,55 @@ class TelegramSource:
         
         Args:
             name: Name for the data source
-            config: Configuration dictionary (channels list)
+            config: Configuration dictionary with 'entities' list
             
         Returns:
             source_id: ID of the created source, or None on error
         """
         try:
             # Validate config
-            if 'channels' not in config or not config['channels']:
-                logger.error("Telegram source config must contain 'channels' list")
+            if not isinstance(config, dict) or 'entities' not in config:
+                logger.error("Invalid config: must contain 'entities' list")
                 return None
-                
-            with db.session.begin():
-                source = DataSource(
-                    name=name,
-                    source_type='telegram',
-                    config=json.dumps(config),
-                    is_active=True,
-                    created_at=datetime.utcnow()
-                )
-                db.session.add(source)
-                db.session.flush()
-                
-                source_id = source.id
-                
-            logger.info(f"Created Telegram data source: {name} (ID: {source_id})")
-            return source_id
             
+            if not isinstance(config['entities'], list) or not all(isinstance(e, str) for e in config['entities']):
+                logger.error("Invalid config: 'entities' must be a list of strings")
+                return None
+            
+            # Create a new data source
+            source = DataSource(
+                name=name,
+                source_type='telegram',
+                config=json.dumps(config),
+                is_active=True,
+                created_at=datetime.utcnow()
+            )
+            
+            # Add to database
+            db.session.add(source)
+            db.session.commit()
+            
+            logger.info(f"Created Telegram source: {name} (ID: {source.id})")
+            return source.id
+        
         except Exception as e:
-            logger.error(f"Error creating Telegram data source '{name}': {e}")
+            db.session.rollback()
+            self._log_error("create_source", f"Error creating Telegram source: {e}")
             return None
     
     def _log_error(self, operation: str, message: str):
         """Log an error to the database."""
         try:
-            log_entry = SystemLog(
-                log_type="error",
-                component="telegram_source",
-                message=f"Error in {operation}: {message}"
+            log = SystemLog(
+                timestamp=datetime.utcnow(),
+                log_type='error',
+                component='telegram_source',
+                message=f"{operation}: {message}"
             )
-            with db.session.begin():
-                db.session.add(log_entry)
-        except Exception:
-            # Just log to console if database logging fails
+            db.session.add(log)
+            db.session.commit()
+        except SQLAlchemyError:
             logger.error(f"Failed to log error to database: {message}")
+            db.session.rollback()
+        except Exception as e:
+            logger.error(f"Error logging to database: {e}")

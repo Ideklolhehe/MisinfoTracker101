@@ -1,0 +1,75 @@
+{
+  "government": [
+    {
+      "name": "Data.gov (US)",
+      "url": "https://www.data.gov/feed/",
+      "category": "government-data"
+    },
+    {
+      "name": "EU Open Data Portal",
+      "url": "https://data.europa.eu/en/rss.xml",
+      "category": "government-data"
+    },
+    {
+      "name": "UK Government Data",
+      "url": "https://ckan.publishing.service.gov.uk/feeds/dataset.atom",
+      "category": "government-data"
+    },
+    {
+      "name": "Canada Open Data",
+      "url": "https://open.canada.ca/en/feeds/rss",
+      "category": "government-data"
+    }
+  ],
+  "health": [
+    {
+      "name": "WHO Data Repository",
+      "url": "https://apps.who.int/gho/athena/data/GHO?filter=COUNTRY:*&x-sideaxis=COUNTRY&x-topaxis=GHO",
+      "category": "health-data"
+    },
+    {
+      "name": "CDC Data Portal",
+      "url": "https://data.cdc.gov/feed/",
+      "category": "health-data"
+    },
+    {
+      "name": "ECDC Data",
+      "url": "https://www.ecdc.europa.eu/en/rss-feed",
+      "category": "health-data"
+    }
+  ],
+  "science": [
+    {
+      "name": "NASA Earth Data",
+      "url": "https://earthdata.nasa.gov/feed",
+      "category": "science-data"
+    },
+    {
+      "name": "NOAA Data",
+      "url": "https://www.ncei.noaa.gov/feed",
+      "category": "science-data"
+    },
+    {
+      "name": "World Bank Open Data",
+      "url": "https://blogs.worldbank.org/opendata/rss.xml",
+      "category": "science-data"
+    }
+  ],
+  "international": [
+    {
+      "name": "UN Data",
+      "url": "https://www.un.org/en/rss.xml",
+      "category": "international-data"
+    },
+    {
+      "name": "IMF Data",
+      "url": "https://www.imf.org/rss-daily.xml",
+      "category": "international-data"
+    },
+    {
+      "name": "WorldBank Data",
+      "url": "https://data.worldbank.org/rss.xml",
+      "category": "international-data"
+    }
+  ]
+}

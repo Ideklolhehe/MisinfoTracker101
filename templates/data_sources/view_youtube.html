@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}View YouTube Source: {{ source.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>YouTube Source: {{ source.name }}</h1>
+            <p class="text-muted">
+                Created at: {{ source.created_at.strftime('%Y-%m-%d %H:%M:%S') if source.created_at }}
+                {% if source.last_ingestion %}
+                | Last ingestion: {{ source.last_ingestion.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('data_sources.edit', source_id=source.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            <a href="{{ url_for('data_sources.test', source_id=source.id) }}" class="btn btn-info">
+                <i class="fas fa-vial"></i> Test
+            </a>
+            <form action="{{ url_for('data_sources.toggle_active', source_id=source.id) }}" method="post" class="d-inline">
+                <button type="submit" class="btn {% if source.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                    <i class="fas {% if source.is_active %}fa-pause{% else %}fa-play{% endif %}"></i>
+                    {% if source.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+            </form>
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">YouTube Configuration</h5>
+                </div>
+                <div class="card-body">
+                    {% set config = source.config|from_json %}
+
+                    <div class="mb-3">
+                        <h6>Monitoring Type</h6>
+                        <p class="text-muted mb-1">{{ config.monitor_type|capitalize }}</p>
+                    </div>
+
+                    <div class="mb-3">
+                        {% if config.monitor_type == 'channel' %}
+                        <h6>Channel IDs</h6>
+                        <ul class="list-group">
+                            {% for channel_id in config.channel_ids %}
+                            <li class="list-group-item">
+                                {{ channel_id }}
+                                <a href="https://www.youtube.com/channel/{{ channel_id }}" target="_blank" class="float-end text-decoration-none">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% elif config.monitor_type == 'search' %}
+                        <h6>Search Queries</h6>
+                        <ul class="list-group">
+                            {% for query in config.search_queries %}
+                            <li class="list-group-item">
+                                {{ query }}
+                                <a href="https://www.youtube.com/results?search_query={{ query|urlencode }}" target="_blank" class="float-end text-decoration-none">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% elif config.monitor_type == 'video' %}
+                        <h6>Video IDs</h6>
+                        <ul class="list-group">
+                            {% for video_id in config.video_ids %}
+                            <li class="list-group-item">
+                                {{ video_id }}
+                                <a href="https://www.youtube.com/watch?v={{ video_id }}" target="_blank" class="float-end text-decoration-none">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% elif config.monitor_type == 'playlist' %}
+                        <h6>Playlist IDs</h6>
+                        <ul class="list-group">
+                            {% for playlist_id in config.playlist_ids %}
+                            <li class="list-group-item">
+                                {{ playlist_id }}
+                                <a href="https://www.youtube.com/playlist?list={{ playlist_id }}" target="_blank" class="float-end text-decoration-none">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <h6>Settings</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>Max Videos:</strong> {{ config.max_videos|default(10) }}</p>
+                                <p class="mb-1"><strong>Days Lookback:</strong> {{ config.days_back|default(7) }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-1">
+                                    <strong>Include Comments:</strong>
+                                    {% if config.include_comments %}
+                                    <span class="text-success">Yes</span>
+                                    <span class="text-muted">(Max: {{ config.max_comments|default(50) }})</span>
+                                    {% else %}
+                                    <span class="text-danger">No</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if config.description %}
+                    <div class="mb-3">
+                        <h6>Description</h6>
+                        <p class="mb-0">{{ config.description }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Status</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1">
+                        <strong>Status:</strong>
+                        {% if source.is_active %}
+                        <span class="badge bg-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-warning">Inactive</span>
+                        {% endif %}
+                    </p>
+                    <hr>
+                    <p class="mb-1">
+                        <strong>Requirements:</strong>
+                    </p>
+                    <ul class="mb-0">
+                        <li>Google API Key with YouTube Data API v3 enabled</li>
+                        <li>Proper quota allocation (YouTube API has limited quota)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Activity</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">No recent activity recorded.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the YouTube source "<strong>{{ source.name }}</strong>"?
+                This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('data_sources.delete', source_id=source.id) }}" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

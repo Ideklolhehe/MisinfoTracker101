@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 # Import application components
 from utils.text_processor import TextProcessor
 from utils.ai_processor import AIProcessor
+from utils.app_context import ensure_app_context
 from models import DetectedNarrative, CounterMessage, NarrativeInstance, SystemLog
 from app import db
 
@@ -71,6 +72,7 @@ class CounterAgent:
                 self._log_error("counter_loop", str(e))
                 time.sleep(60)  # Short sleep on error
     
+    @ensure_app_context
     def _generate_counter_messages(self):
         """Generate counter-messages for high-priority narratives."""
         try:
@@ -120,6 +122,7 @@ class CounterAgent:
             logger.error(f"Error generating counter-messages: {e}")
             self._log_error("generate_counter_messages", str(e))
     
+    @ensure_app_context
     def generate_counter_message(self, narrative_id: int) -> Dict[str, Any]:
         """Generate a counter-message for a specific narrative.
         
@@ -254,6 +257,7 @@ class CounterAgent:
         
         return counter_message
     
+    @ensure_app_context
     def approve_counter_message(self, counter_id: int, user_id: int) -> Dict[str, Any]:
         """Approve a counter-message for deployment.
         
@@ -292,6 +296,7 @@ class CounterAgent:
             self._log_error("approve_counter_message", f"Error for counter {counter_id}: {e}")
             return {"counter_id": counter_id, "error": str(e)}
     
+    @ensure_app_context
     def _log_error(self, operation: str, message: str):
         """Log an error to the database."""
         try:

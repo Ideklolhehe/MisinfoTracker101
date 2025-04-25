@@ -1,0 +1,85 @@
+{
+  "security_intelligence": [
+    {
+      "name": "CISA Alerts",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/feed",
+      "category": "cyber-security"
+    },
+    {
+      "name": "US-CERT Alerts",
+      "url": "https://us-cert.cisa.gov/ncas/alerts.xml",
+      "category": "cyber-security"
+    },
+    {
+      "name": "Krebs on Security",
+      "url": "https://krebsonsecurity.com/feed/",
+      "category": "cyber-security"
+    },
+    {
+      "name": "Schneier on Security",
+      "url": "https://www.schneier.com/feed/atom/",
+      "category": "cyber-security"
+    }
+  ],
+  "academic_research": [
+    {
+      "name": "arXiv AI",
+      "url": "https://export.arxiv.org/rss/cs.AI",
+      "category": "research"
+    },
+    {
+      "name": "arXiv CL (Computational Linguistics)",
+      "url": "https://export.arxiv.org/rss/cs.CL",
+      "category": "research"
+    },
+    {
+      "name": "arXiv IR (Information Retrieval)",
+      "url": "https://export.arxiv.org/rss/cs.IR",
+      "category": "research"
+    },
+    {
+      "name": "MIT CSAIL",
+      "url": "https://www.csail.mit.edu/news.xml",
+      "category": "research"
+    }
+  ],
+  "misinformation_tracking": [
+    {
+      "name": "Media Manipulation",
+      "url": "https://mediamanipulation.org/rss.xml",
+      "category": "misinfo-tracking"
+    },
+    {
+      "name": "First Draft News",
+      "url": "https://firstdraftnews.org/feed/",
+      "category": "misinfo-tracking"
+    },
+    {
+      "name": "The Debunking Handbook",
+      "url": "https://skepticalscience.com/feed.php",
+      "category": "misinfo-tracking"
+    }
+  ],
+  "multilingual_sources": [
+    {
+      "name": "EFE (Spanish)",
+      "url": "https://www.efe.com/rss/espana/es",
+      "category": "spanish-news"
+    },
+    {
+      "name": "El País (Spanish)",
+      "url": "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada",
+      "category": "spanish-news"
+    },
+    {
+      "name": "Le Monde (French)",
+      "url": "https://www.lemonde.fr/rss/une.xml",
+      "category": "french-news"
+    },
+    {
+      "name": "Deutsche Welle (German)",
+      "url": "https://rss.dw.com/xml/rss-de-all",
+      "category": "german-news"
+    }
+  ]
+}
