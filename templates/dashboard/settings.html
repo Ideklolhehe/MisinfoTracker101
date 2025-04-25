@@ -147,6 +147,72 @@
 </div>
 
 <div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card settings-section">
+            <div class="card-header">
+                <h5 class="mb-0">RSS Data Sources</h5>
+            </div>
+            <div class="card-body">
+                {% set rss_sources = other_sources|selectattr('source_type', 'equalto', 'rss')|list %}
+                {% if rss_sources %}
+                    <div class="table-responsive mb-3">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Configuration</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in rss_sources %}
+                                    <tr>
+                                        <td>{{ source.name }}</td>
+                                        <td>
+                                            {% if source.config %}
+                                                {% set config = source.config|tojson|fromjson %}
+                                                {% if config.feeds %}
+                                                    <span class="badge bg-info">Feeds</span> {{ config.feeds|join(', ') }}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Unknown</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">No config</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if source.is_active %}
+                                                <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <form action="{{ url_for('dashboard.toggle_source', source_id=source.id) }}" method="post" class="d-inline">
+                                                <button type="submit" class="btn btn-sm {% if source.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                                                    {% if source.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info mb-3">No RSS data sources configured.</div>
+                {% endif %}
+                
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#rssSourceModal">
+                    <i data-feather="plus"></i> Add RSS Source
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
     <div class="col-md-6">
         <div class="card settings-section">
             <div class="card-header">
