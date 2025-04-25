@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 
 # Import application components
 from utils.text_processor import TextProcessor
-from models import DetectedNarrative, CounterMessage, SystemLog
+from utils.ai_processor import AIProcessor
+from models import DetectedNarrative, CounterMessage, NarrativeInstance, SystemLog
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class CounterAgent:
             text_processor: Text processing utility
         """
         self.text_processor = text_processor
+        self.ai_processor = AIProcessor()
         self.running = False
         self.thread = None
         self.refresh_interval = int(os.environ.get('COUNTER_REFRESH_INTERVAL', 900))  # 15 min default
@@ -136,16 +138,46 @@ class CounterAgent:
             # Get the narrative content
             narrative_text = narrative.description or narrative.title
             
-            # In a real system, this would use an LLM to generate counter-messaging
-            # For this proof of concept, we'll use template-based generation
-            counter_message = self._generate_template_counter(narrative_text, narrative.language)
+            # Gather evidence points from associated instances for better counter-messaging
+            evidence_points = []
+            instances = NarrativeInstance.query.filter_by(narrative_id=narrative_id).limit(5).all()
+            for instance in instances:
+                evidence_points.append(instance.content)
+            
+            # Generate counter-message using AI if available, otherwise fall back to templates
+            if self.ai_processor.openai_available or self.ai_processor.anthropic_available:
+                try:
+                    # Use AI to generate counter-message
+                    logger.info(f"Using AI to generate counter-message for narrative {narrative_id}")
+                    ai_result = self.ai_processor.generate_counter_message(narrative_text, evidence_points)
+                    
+                    # Check if we got a valid counter-message
+                    if 'counter_message' in ai_result:
+                        counter_message = ai_result['counter_message']
+                        strategy = ai_result.get('strategy', 'ai_generated')
+                        logger.info(f"AI generated counter-message using strategy: {strategy}")
+                    else:
+                        # Fall back to template if AI result is not as expected
+                        logger.warning("AI counter-message generation did not return expected format, falling back to template")
+                        counter_message = self._generate_template_counter(narrative_text, narrative.language)
+                        strategy = 'factual_correction'
+                except Exception as e:
+                    logger.error(f"Error during AI counter-message generation: {e}")
+                    logger.info("Falling back to template-based counter-message")
+                    counter_message = self._generate_template_counter(narrative_text, narrative.language)
+                    strategy = 'factual_correction'
+            else:
+                # Use template-based generation if AI is not available
+                logger.debug("Using template-based counter-message generation")
+                counter_message = self._generate_template_counter(narrative_text, narrative.language)
+                strategy = 'factual_correction'
             
             # Create counter-message in database
             with db.session.begin():
                 counter = CounterMessage(
                     narrative_id=narrative_id,
                     content=counter_message,
-                    strategy='factual_correction',
+                    strategy=strategy,
                     status='draft',  # Requires human approval
                     created_at=datetime.utcnow()
                 )
