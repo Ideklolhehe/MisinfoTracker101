@@ -1,86 +1,160 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CIVILIAN - Countering Misinformation{% endblock %}</title>
+    <title>{% block title %}CIVILIAN - Combating Information Manipulation{% endblock %}</title>
+    <!-- Bootstrap CSS (Replit dark theme) -->
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
-    {% block css %}{% endblock %}
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .navbar-brand img {
+            height: 30px;
+            margin-right: 10px;
+        }
+        
+        main {
+            flex: 1;
+        }
+        
+        .footer {
+            margin-top: auto;
+            padding: 1rem 0;
+            background-color: var(--bs-dark);
+            color: var(--bs-light);
+        }
+        
+        /* Dashboard specific styles */
+        .stat-card {
+            border-radius: 10px;
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        /* Custom theme colors */
+        :root {
+            --civilian-primary: #3d5afe;
+            --civilian-secondary: #7986cb;
+            --civilian-accent: #00b0ff;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand" href="/">CIVILIAN</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-shield-check fs-3 me-2"></i>
+                <span>CIVILIAN</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/">Home</a>
+                        <a class="nav-link" href="/"><i class="bi bi-house-door me-1"></i> Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/dashboard">Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('dashboard.index') }}"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/data-sources">Data Sources</a>
+                        <a class="nav-link" href="{{ url_for('verification.index') }}"><i class="bi bi-check-circle me-1"></i> Verify Content</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/verify">Verify Content</a>
+                        <a class="nav-link" href="{{ url_for('data_sources.index') }}"><i class="bi bi-database me-1"></i> Data Sources</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/adversarial">Adversarial Training</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/about">About</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <span class="nav-link">CIVILIAN System</span>
-                    </li>
-                    {% if current_user.is_authenticated %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ current_user.username }}
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-tools me-1"></i> Tools
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#">Narrative Tracker</a></li>
+                            <li><a class="dropdown-item" href="#">Belief Graph Visualizer</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('adversarial.index') }}">Adversarial Training</a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('replit_auth.logout') }}">Logout</a></li>
+                            <li><a class="dropdown-item" href="#">API Documentation</a></li>
                         </ul>
                     </li>
+                </ul>
+                <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-person-circle me-1"></i> {{ current_user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#">My Profile</a></li>
+                                <li><a class="dropdown-item" href="#">Settings</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('replit_auth.logout') }}">Log Out</a></li>
+                            </ul>
+                        </li>
                     {% else %}
-                    <li class="nav-item">
-                        <a class="nav-link btn btn-sm btn-outline-primary ms-2" href="{{ url_for('replit_auth.login') }}">Login</a>
-                    </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('replit_auth.login') }}"><i class="bi bi-box-arrow-in-right me-1"></i> Log In</a>
+                        </li>
                     {% endif %}
                 </ul>
             </div>
         </div>
     </nav>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="container mt-3">
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
+    <!-- Main Content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 bg-dark">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>CIVILIAN</h5>
+                    <p class="text-muted">A sovereign machine intelligence for detecting, tracing, and dismantling global misinformation networks.</p>
+                </div>
+                <div class="col-md-3">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="link-light">About</a></li>
+                        <li><a href="#" class="link-light">Documentation</a></li>
+                        <li><a href="{{ url_for('verification.index') }}" class="link-light">Verify Content</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h5>Resources</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="link-light">Research</a></li>
+                        <li><a href="#" class="link-light">Publications</a></li>
+                        <li><a href="#" class="link-light">Contact</a></li>
+                    </ul>
+                </div>
             </div>
-        {% endif %}
-    {% endwith %}
-
-    {% block content %}{% endblock %}
-
-    <footer class="bg-dark text-white mt-5 py-3">
-        <div class="container text-center">
-            <p>CIVILIAN &copy; 2025 - Countering Misinformation Globally</p>
+            <hr>
+            <div class="d-flex justify-content-between">
+                <p class="text-muted mb-0">&copy; 2025 CIVILIAN Project</p>
+                <div>
+                    <a href="#" class="link-light me-3"><i class="bi bi-github"></i></a>
+                    <a href="#" class="link-light me-3"><i class="bi bi-twitter-x"></i></a>
+                    <a href="#" class="link-light"><i class="bi bi-envelope"></i></a>
+                </div>
+            </div>
         </div>
     </footer>
 
+    <!-- Bootstrap JS Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
