@@ -119,6 +119,7 @@ class RSSSource:
             self._log_error("update_ingestion_time", f"Error updating ingestion time: {e}")
             db.session.rollback()
     
+    @ensure_app_context
     def _process_feed(self, source_id: int, feed_url: str, max_entries: int = 50):
         """Process an RSS feed."""
         logger.debug(f"Processing feed: {feed_url}")
@@ -127,22 +128,52 @@ class RSSSource:
             # Fetch and parse the feed
             entries = self.fetch_feed(feed_url, max_entries)
             
+            from models import DetectedNarrative
+            processed_count = 0
+            
             # Process each entry
             for entry in entries:
-                # Create a narrative instance for detection
+                content = entry.get('content', '')
+                if not content:
+                    continue  # Skip empty content
+                
+                # We need to either find or create a narrative since narrative_id is required
+                # For now, we'll create a simple narrative for each feed item
+                title = entry.get('title', 'Untitled')
+                
+                # Check if we have a similar narrative already
+                narrative = DetectedNarrative.query.filter_by(
+                    title=title
+                ).first()
+                
+                # If no existing narrative, create one
+                if not narrative:
+                    narrative = DetectedNarrative(
+                        title=title,
+                        description=content[:500] if len(content) > 500 else content,
+                        confidence_score=0.5,  # Default confidence
+                        language='en',         # Default language
+                        status='unverified'    # Mark as unverified initially
+                    )
+                    db.session.add(narrative)
+                    db.session.flush()  # Get an ID without committing
+                
+                # Create the narrative instance linked to the narrative
                 instance = NarrativeInstance(
+                    narrative_id=narrative.id,  # Link to the narrative
                     source_id=source_id,
-                    content=entry.get('content', ''),
+                    content=content,
                     meta_data=json.dumps(entry),
                     url=entry.get('link', '')
                 )
                 
                 # Add to database
                 db.session.add(instance)
+                processed_count += 1
             
             # Commit changes
             db.session.commit()
-            logger.debug(f"Processed {len(entries)} entries from {feed_url}")
+            logger.debug(f"Processed {processed_count} entries from {feed_url}")
         
         except Exception as e:
             self._log_error("process_feed", f"Error processing feed {feed_url}: {e}")
@@ -202,6 +233,7 @@ class RSSSource:
             logger.error(f"Error fetching feed {feed_url}: {e}")
             return []
     
+    @ensure_app_context
     def create_source(self, name: str, config: Dict[str, Any]) -> Optional[int]:
         """Create a new RSS data source in the database.
         
@@ -243,6 +275,7 @@ class RSSSource:
             self._log_error("create_source", f"Error creating RSS source: {e}")
             return None
     
+    @ensure_app_context
     def _log_error(self, operation: str, message: str):
         """Log an error to the database."""
         try:

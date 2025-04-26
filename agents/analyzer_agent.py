@@ -89,7 +89,15 @@ class AnalyzerAgent:
             logger.debug(f"Analyzing {len(recent_narratives)} recent narratives")
             
             for narrative in recent_narratives:
-                self.analyze_narrative(narrative.id)
+                try:
+                    # Process each narrative in a separate transaction
+                    result = self.analyze_narrative(narrative.id)
+                    # Small delay between narratives to avoid overloading the database
+                    time.sleep(0.1)
+                except Exception as e:
+                    logger.error(f"Error analyzing narrative {narrative.id}: {e}")
+                    # Continue with the next narrative
+                    continue
                 
         except Exception as e:
             logger.error(f"Error analyzing recent narratives: {e}")
@@ -158,36 +166,40 @@ class AnalyzerAgent:
             # Calculate viral threat level (0-5 scale)
             viral_threat = round(propagation_score * 5)
             
-            # Update narrative with analysis results
-            with db.session.begin():
-                # Store analysis results in metadata if not already present
-                metadata = {
-                    "instance_count": instance_count,
-                    "unique_sources": unique_sources,
-                    "velocity": velocity,
-                    "propagation_score": propagation_score,
-                    "viral_threat": viral_threat,
-                    "entity_categories": entity_categories,
-                    "analyzed_at": datetime.utcnow().isoformat()
-                }
+            # Store analysis results in metadata
+            metadata = {
+                "instance_count": instance_count,
+                "unique_sources": unique_sources,
+                "velocity": velocity,
+                "propagation_score": propagation_score,
+                "viral_threat": viral_threat,
+                "entity_categories": entity_categories,
+                "analyzed_at": datetime.utcnow().isoformat()
+            }
+            
+            # Build a graph representation for this narrative outside any transaction
+            graph = self._build_narrative_graph(narrative_id)
+            if graph:
+                # Calculate centrality metrics
+                centrality = nx.degree_centrality(graph)
+                betweenness = nx.betweenness_centrality(graph)
                 
-                # Build a graph representation for this narrative
-                graph = self._build_narrative_graph(narrative_id)
-                if graph:
-                    # Calculate centrality metrics
-                    centrality = nx.degree_centrality(graph)
-                    betweenness = nx.betweenness_centrality(graph)
-                    
-                    # Find key nodes
-                    key_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)[:5]
-                    
-                    # Add graph metrics to metadata
-                    metadata["graph_metrics"] = {
-                        "node_count": len(graph.nodes),
-                        "edge_count": len(graph.edges),
-                        "density": nx.density(graph),
-                        "key_nodes": [{"id": n, "centrality": c} for n, c in key_nodes]
-                    }
+                # Find key nodes
+                key_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)[:5]
+                
+                # Add graph metrics to metadata
+                metadata["graph_metrics"] = {
+                    "node_count": len(graph.nodes),
+                    "edge_count": len(graph.edges),
+                    "density": nx.density(graph),
+                    "key_nodes": [{"id": n, "centrality": c} for n, c in key_nodes]
+                }
+            
+            # Now update the narrative in a single transaction
+            try:
+                # Get a fresh instance of the narrative
+                db.session.expire_all()  # Clear any stale data
+                narrative = DetectedNarrative.query.get(narrative_id)
                 
                 # Update narrative with analysis results
                 if hasattr(narrative, 'meta_data') and narrative.meta_data:
@@ -199,6 +211,12 @@ class AnalyzerAgent:
                         narrative.meta_data = json.dumps(metadata)
                 else:
                     narrative.meta_data = json.dumps(metadata)
+                    
+                # Commit the changes
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Error updating narrative metadata: {e}")
                     
             logger.info(f"Analyzed narrative {narrative_id}: propagation={propagation_score:.2f}, threat={viral_threat}")
             return {
@@ -336,14 +354,17 @@ class AnalyzerAgent:
             logger.info(f"Updated belief graph metrics: {len(G.nodes)} nodes, {len(G.edges)} edges")
             
             # Store metrics in a database log entry
+            # Make sure there's no active transaction 
+            db.session.rollback()
+            
             log_entry = SystemLog(
                 log_type="info",
                 component="analyzer_agent",
                 message="Updated belief graph metrics",
                 meta_data=json.dumps(metrics)
             )
-            with db.session.begin():
-                db.session.add(log_entry)
+            db.session.add(log_entry)
+            db.session.commit()
                 
         except Exception as e:
             logger.error(f"Error updating belief graph metrics: {e}")
@@ -353,13 +374,17 @@ class AnalyzerAgent:
     def _log_error(self, operation: str, message: str):
         """Log an error to the database."""
         try:
+            # Make sure there's no active transaction
+            db.session.rollback()
+            
             log_entry = SystemLog(
                 log_type="error",
                 component="analyzer_agent",
                 message=f"Error in {operation}: {message}"
             )
-            with db.session.begin():
-                db.session.add(log_entry)
+            db.session.add(log_entry)
+            db.session.commit()
         except Exception:
             # Just log to console if database logging fails
             logger.error(f"Failed to log error to database: {message}")
+            db.session.rollback()
