@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Content Verification | CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Content Verification System</h1>
+            <p class="lead">Verify the authenticity and credibility of multimedia content.</p>
+            <p>Use our advanced AI-powered verification system to check content for:</p>
+            <ul>
+                <li><strong>Misinformation:</strong> Detect false or misleading claims</li>
+                <li><strong>AI Generation:</strong> Identify content created by AI systems</li>
+                <li><strong>Content Manipulation:</strong> Spot altered or out-of-context media</li>
+                <li><strong>Factual Accuracy:</strong> Verify claims against reliable sources</li>
+            </ul>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Submit Content</h5>
+                    <p class="card-text">Submit text, images, or videos for verification.</p>
+                    <a href="{{ url_for('verification.submit_content') }}" class="btn btn-primary w-100">New Verification</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-12">
+            <h2>Recent Verifications</h2>
+            <hr>
+            
+            {% if recent_submissions.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Title</th>
+                                <th>Type</th>
+                                <th>Submitted</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for submission in recent_submissions.items %}
+                                <tr>
+                                    <td>{{ submission.id }}</td>
+                                    <td>
+                                        {% if submission.title %}
+                                            {{ submission.title }}
+                                        {% else %}
+                                            <em>Untitled Submission</em>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if submission.content_type == 'text' %}
+                                            <span class="badge bg-secondary">Text</span>
+                                        {% elif submission.content_type == 'image' %}
+                                            <span class="badge bg-info">Image</span>
+                                        {% elif submission.content_type == 'video' %}
+                                            <span class="badge bg-warning">Video</span>
+                                        {% elif submission.content_type == 'text_image' %}
+                                            <span class="badge bg-primary">Text+Image</span>
+                                        {% elif submission.content_type == 'text_video' %}
+                                            <span class="badge bg-success">Text+Video</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ submission.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        {% set completed = namespace(value=0) %}
+                                        {% set total = namespace(value=0) %}
+                                        
+                                        {% for result in submission.verification_results %}
+                                            {% set total.value = total.value + 1 %}
+                                            {% if result.status == 'completed' %}
+                                                {% set completed.value = completed.value + 1 %}
+                                            {% endif %}
+                                        {% endfor %}
+                                        
+                                        {% if total.value == 0 %}
+                                            <span class="badge bg-secondary">Pending</span>
+                                        {% elif completed.value == total.value %}
+                                            <span class="badge bg-success">Complete</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Processing ({{ completed.value }}/{{ total.value }})</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('verification.view_results', submission_id=submission.id) }}" class="btn btn-sm btn-primary">
+                                            View Results
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <nav aria-label="Verification results pagination">
+                    <ul class="pagination justify-content-center">
+                        {% if recent_submissions.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('verification.index', page=recent_submissions.prev_num) }}">
+                                    Previous
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Previous</span>
+                            </li>
+                        {% endif %}
+                        
+                        {% for page_num in recent_submissions.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                            {% if page_num %}
+                                {% if page_num == recent_submissions.page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">
+                                            {{ page_num }}
+                                            <span class="sr-only">(current)</span>
+                                        </span>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('verification.index', page=page_num) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if recent_submissions.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('verification.index', page=recent_submissions.next_num) }}">
+                                    Next
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Next</span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% else %}
+                <div class="alert alert-info">
+                    No verification submissions yet. Be the first to <a href="{{ url_for('verification.submit_content') }}">submit content</a>!
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Mark the active navigation link
+    document.addEventListener('DOMContentLoaded', function() {
+        const verifyLink = document.querySelector('a.nav-link[href="/verify"]');
+        if (verifyLink) {
+            verifyLink.classList.add('active');
+        }
+    });
+</script>
+{% endblock %}

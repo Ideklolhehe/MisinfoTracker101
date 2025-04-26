@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Submit Content for Verification | CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">Submit Content for Verification</h3>
+                </div>
+                <div class="card-body">
+                    <p class="lead mb-4">
+                        Upload text, images, or videos to verify if they contain misinformation,
+                        are AI-generated, or have been manipulated.
+                    </p>
+
+                    <form method="POST" enctype="multipart/form-data" id="verificationForm">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Title (Optional)</label>
+                            <input type="text" class="form-control" id="title" name="title" placeholder="Brief title for your submission">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="contentType" class="form-label">Content Type*</label>
+                            <select class="form-select" id="contentType" name="content_type" required>
+                                <option value="" selected disabled>Select content type</option>
+                                <option value="text">Text only</option>
+                                <option value="image">Image only</option>
+                                <option value="video">Video only</option>
+                                <option value="text_image">Text with Image</option>
+                                <option value="text_video">Text with Video</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3 text-content-field" style="display: none;">
+                            <label for="textContent" class="form-label">Text Content*</label>
+                            <textarea class="form-control" id="textContent" name="text_content" rows="5" placeholder="Enter the text content you want to verify"></textarea>
+                            <div class="form-text">Enter the full text that you want to analyze</div>
+                        </div>
+                        
+                        <div class="mb-3 media-file-field" style="display: none;">
+                            <label for="mediaFile" class="form-label">Media File*</label>
+                            <input type="file" class="form-control" id="mediaFile" name="media_file">
+                            <div class="form-text image-help" style="display: none;">
+                                Supported formats: JPG, PNG, GIF, WEBP (max 50MB)
+                            </div>
+                            <div class="form-text video-help" style="display: none;">
+                                Supported formats: MP4, WEBM, AVI, MOV (max 50MB)
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="sourceUrl" class="form-label">Source URL (Optional)</label>
+                            <input type="url" class="form-control" id="sourceUrl" name="source_url" placeholder="https://...">
+                            <div class="form-text">If the content is from a specific website, provide the URL</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description (Optional)</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" placeholder="Additional context or information about the content..."></textarea>
+                        </div>
+                        
+                        <div class="alert alert-info verification-info">
+                            <h5>What happens after submission?</h5>
+                            <p>Your content will be analyzed by our AI system, which will:</p>
+                            <ol>
+                                <li>Check for misinformation or false claims</li>
+                                <li>Analyze whether it was AI-generated</li>
+                                <li>Verify its authenticity and integrity</li>
+                                <li>Assess factual accuracy against reliable sources</li>
+                            </ol>
+                            <p class="mb-0">Results are typically available in 1-2 minutes.</p>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Submit for Verification</button>
+                            <a href="{{ url_for('verification.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Show/hide appropriate form fields based on content type
+    document.addEventListener('DOMContentLoaded', function() {
+        const contentTypeSelect = document.getElementById('contentType');
+        const textContentField = document.querySelector('.text-content-field');
+        const mediaFileField = document.querySelector('.media-file-field');
+        const imageHelp = document.querySelector('.image-help');
+        const videoHelp = document.querySelector('.video-help');
+        const textContentInput = document.getElementById('textContent');
+        const mediaFileInput = document.getElementById('mediaFile');
+        
+        contentTypeSelect.addEventListener('change', function() {
+            const contentType = this.value;
+            
+            // Reset required attributes
+            textContentInput.required = false;
+            mediaFileInput.required = false;
+            
+            // Show/hide appropriate fields based on content type
+            if (contentType === 'text') {
+                textContentField.style.display = 'block';
+                mediaFileField.style.display = 'none';
+                imageHelp.style.display = 'none';
+                videoHelp.style.display = 'none';
+                textContentInput.required = true;
+            } else if (contentType === 'image') {
+                textContentField.style.display = 'none';
+                mediaFileField.style.display = 'block';
+                imageHelp.style.display = 'block';
+                videoHelp.style.display = 'none';
+                mediaFileInput.required = true;
+                mediaFileInput.accept = "image/*";
+            } else if (contentType === 'video') {
+                textContentField.style.display = 'none';
+                mediaFileField.style.display = 'block';
+                imageHelp.style.display = 'none';
+                videoHelp.style.display = 'block';
+                mediaFileInput.required = true;
+                mediaFileInput.accept = "video/*";
+            } else if (contentType === 'text_image') {
+                textContentField.style.display = 'block';
+                mediaFileField.style.display = 'block';
+                imageHelp.style.display = 'block';
+                videoHelp.style.display = 'none';
+                textContentInput.required = true;
+                mediaFileInput.required = true;
+                mediaFileInput.accept = "image/*";
+            } else if (contentType === 'text_video') {
+                textContentField.style.display = 'block';
+                mediaFileField.style.display = 'block';
+                imageHelp.style.display = 'none';
+                videoHelp.style.display = 'block';
+                textContentInput.required = true;
+                mediaFileInput.required = true;
+                mediaFileInput.accept = "video/*";
+            }
+        });
+        
+        // Form validation
+        const form = document.getElementById('verificationForm');
+        form.addEventListener('submit', function(event) {
+            const contentType = contentTypeSelect.value;
+            
+            if (!contentType) {
+                alert('Please select a content type');
+                event.preventDefault();
+                return;
+            }
+            
+            if (contentType.includes('text') && !textContentInput.value.trim()) {
+                alert('Please enter text content');
+                event.preventDefault();
+                return;
+            }
+            
+            if (contentType.includes('image') || contentType.includes('video')) {
+                if (!mediaFileInput.files || mediaFileInput.files.length === 0) {
+                    alert('Please select a media file');
+                    event.preventDefault();
+                    return;
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
