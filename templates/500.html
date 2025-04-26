@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Server Error{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4><i class="fas fa-exclamation-circle"></i> Server Error (500)</h4>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Something went wrong on our end</h5>
+                    <p class="card-text">
+                        Sorry, but we're experiencing some technical difficulties. 
+                        Our team has been notified of this issue and is working to fix it as soon as possible.
+                    </p>
+                    <p>
+                        You can try:
+                    </p>
+                    <ul>
+                        <li>Refreshing the page</li>
+                        <li>Coming back in a few minutes</li>
+                        <li>Trying a different browser</li>
+                    </ul>
+                    <div class="mt-4">
+                        <a href="{{ url_for('homepage.index') }}" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Return to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

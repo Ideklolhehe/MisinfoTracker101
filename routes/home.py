@@ -5,8 +5,8 @@ This module handles the homepage and redirects to the dashboard.
 
 from flask import Blueprint, render_template, redirect, url_for
 
-# Create blueprint
-home_bp = Blueprint('home', __name__)
+# Create blueprint with a unique name
+home_bp = Blueprint('home_bp', __name__)
 
 @home_bp.route('/')
 def index():
