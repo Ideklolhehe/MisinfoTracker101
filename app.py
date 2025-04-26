@@ -72,6 +72,7 @@ with app.app_context():
     from routes.adversarial import adversarial_bp
     from routes.verification import verification_bp
     from routes.home import home_bp
+    from routes.profile import profile_bp
     
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
