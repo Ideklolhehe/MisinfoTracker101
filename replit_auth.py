@@ -4,32 +4,24 @@ import uuid
 from functools import wraps
 from urllib.parse import urlencode
 
-from flask import g, session, redirect, request, render_template, url_for
+from flask import g, session, redirect, request, render_template, url_for, current_app
 from flask_dance.consumer import (
     OAuth2ConsumerBlueprint,
     oauth_authorized,
     oauth_error,
 )
 from flask_dance.consumer.storage import BaseStorage
-from flask_login import LoginManager, login_user, logout_user, current_user
+from flask_login import login_user, logout_user, current_user
 from oauthlib.oauth2.rfc6749.errors import InvalidGrantError
 from sqlalchemy.exc import NoResultFound
 from werkzeug.local import LocalProxy
 
-from app import app, db
-from models import OAuth, User
-
-login_manager = LoginManager(app)
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(user_id)
-
-
 class UserSessionStorage(BaseStorage):
 
     def get(self, blueprint):
+        from app import db
+        from models import OAuth
+        
         try:
             token = db.session.query(OAuth).filter_by(
                 user_id=current_user.get_id(),
@@ -41,6 +33,9 @@ class UserSessionStorage(BaseStorage):
         return token
 
     def set(self, blueprint, token):
+        from app import db
+        from models import OAuth
+        
         db.session.query(OAuth).filter_by(
             user_id=current_user.get_id(),
             browser_session_key=g.browser_session_key,
@@ -55,6 +50,9 @@ class UserSessionStorage(BaseStorage):
         db.session.commit()
 
     def delete(self, blueprint):
+        from app import db
+        from models import OAuth
+        
         db.session.query(OAuth).filter_by(
             user_id=current_user.get_id(),
             browser_session_key=g.browser_session_key,
@@ -125,6 +123,9 @@ def make_replit_blueprint():
 
 
 def save_user(user_claims):
+    from app import db
+    from models import User
+    
     user = User()
     user.id = user_claims['sub']
     user.username = user_claims['username']
@@ -162,11 +163,13 @@ def require_login(f):
             session["next_url"] = get_next_navigation_url(request)
             return redirect(url_for('replit_auth.login'))
 
+        # Get issuer URL
+        issuer_url = os.environ.get('ISSUER_URL', "https://replit.com/oidc")
+        
         expires_in = replit.token.get('expires_in', 0)
         if expires_in < 0:
-            refresh_token_url = issuer_url + "/token"
             try:
-                token = replit.refresh_token(token_url=refresh_token_url,
+                token = replit.refresh_token(token_url=f"{issuer_url}/token",
                                              client_id=os.environ['REPL_ID'])
             except InvalidGrantError:
                 # If the refresh token is invalid, the users needs to re-login.

@@ -193,7 +193,7 @@ class AdversarialEvaluation(db.Model):
     correct_detection = db.Column(db.Boolean)  # Whether system correctly identified it as misinfo
     confidence_score = db.Column(db.Float)  # Detection confidence score
     evaluation_date = db.Column(db.DateTime, default=datetime.utcnow)
-    evaluated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    evaluated_by = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
     notes = db.Column(db.Text)
     meta_data = db.Column(db.Text)  # JSON with additional evaluation data
     
