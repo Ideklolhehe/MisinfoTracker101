@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from models import DataSource, NarrativeInstance, SystemLog
 from utils.app_context import ensure_app_context
+from utils.feed_parser import FeedParser
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class RSSSource:
         """Initialize the RSS data source."""
         self._running = False
         self._thread = None
+        self._feed_parser = FeedParser(timeout=15, retries=2, backoff_factor=0.5)
         logger.info("RSSSource initialized")
     
     def start(self):
@@ -190,39 +192,41 @@ class RSSSource:
             entries: List of entry dictionaries
         """
         try:
-            # Parse the feed
-            feed = feedparser.parse(feed_url)
+            # Use enhanced feed parser
+            entries = self._feed_parser.get_feed_entries(feed_url, max_entries)
             
-            if feed.get('bozo', 0) == 1:
-                # Feed parsing had errors
-                logger.warning(f"Feed parsing error for {feed_url}: {feed.get('bozo_exception')}")
-            
-            # Extract feed title
-            feed_title = feed.get('feed', {}).get('title', 'Unknown Feed')
+            if not entries:
+                return []
+                
+            # Extract feed title if available
+            feed_title = "Unknown Feed"
+            try:
+                feed = feedparser.parse(feed_url)
+                if hasattr(feed, 'feed') and hasattr(feed.feed, 'title'):
+                    feed_title = feed.feed.title
+            except:
+                pass  # Use default feed title
             
             # Process entries
             result = []
-            for i, entry in enumerate(feed.get('entries', [])):
-                if i >= max_entries:
-                    break
-                
+            for entry in entries:
                 # Extract content
                 content = ""
-                if 'content' in entry:
+                if hasattr(entry, 'content'):
                     content = ' '.join([c.get('value', '') for c in entry.content])
-                elif 'summary' in entry:
+                elif hasattr(entry, 'summary'):
                     content = entry.summary
-                elif 'description' in entry:
+                elif hasattr(entry, 'description'):
                     content = entry.description
                 
                 # Create entry dict
                 entry_data = {
-                    'title': entry.get('title', 'No Title'),
+                    'title': getattr(entry, 'title', 'No Title'),
                     'content': content,
-                    'link': entry.get('link', ''),
-                    'published': entry.get('published', ''),
+                    'link': getattr(entry, 'link', ''),
+                    'published': getattr(entry, 'published', ''),
                     'feed_title': feed_title,
-                    'author': entry.get('author', '')
+                    'author': getattr(entry, 'author', '')
                 }
                 
                 result.append(entry_data)
