@@ -90,3 +90,51 @@ class SystemLog(db.Model):
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class AdversarialContent(db.Model):
+    """Model for storing adversarial content generated for system training."""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.Text, nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    topic = db.Column(db.String(50), nullable=False)  # health, politics, etc.
+    misinfo_type = db.Column(db.String(50), nullable=False)  # conspiracy_theory, misleading_statistics, etc.
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    generation_method = db.Column(db.String(20), default='ai')  # ai, template, human
+    meta_data = db.Column(db.Text)  # JSON with additional information
+    variant_of_id = db.Column(db.Integer, db.ForeignKey('adversarial_content.id'), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)  # Whether to use in training
+    
+    # Relationships
+    variants = db.relationship('AdversarialContent', 
+                              backref=db.backref('parent', remote_side=[id]),
+                              lazy='dynamic')
+    evaluations = db.relationship('AdversarialEvaluation', backref='content', lazy='dynamic')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class AdversarialEvaluation(db.Model):
+    """Model for storing evaluation results from adversarial training content."""
+    id = db.Column(db.Integer, primary_key=True)
+    content_id = db.Column(db.Integer, db.ForeignKey('adversarial_content.id'), nullable=False)
+    detector_version = db.Column(db.String(50))  # Version of detector used
+    correct_detection = db.Column(db.Boolean)  # Whether system correctly identified it as misinfo
+    confidence_score = db.Column(db.Float)  # Detection confidence score
+    evaluation_date = db.Column(db.DateTime, default=datetime.utcnow)
+    evaluated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    notes = db.Column(db.Text)
+    meta_data = db.Column(db.Text)  # JSON with additional evaluation data
+    
+    # Relationship
+    evaluator = db.relationship('User', foreign_keys=[evaluated_by])
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
