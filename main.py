@@ -1,5 +1,4 @@
-from app import app
-from routes import blueprints
+from app import app  # noqa: F401
 import logging
 import os
 from utils.text_processor import TextProcessor
