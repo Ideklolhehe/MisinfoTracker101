@@ -33,6 +33,10 @@ dependencies = [
     "requests[socks]>=2.32.3",
     "beautifulsoup4>=4.13.4",
     "pysocks>=1.7.1",
+    "flask-dance>=7.1.0",
+    "oauthlib>=3.2.2",
+    "pyjwt>=2.10.1",
+    "python-jwt>=4.1.0",
 ]
 
 [tool.uv.sources]
