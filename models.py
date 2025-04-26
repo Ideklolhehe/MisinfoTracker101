@@ -11,6 +11,13 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), default='analyst')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
+    meta_data = db.Column(db.Text)  # JSON with user preferences, settings, expertise areas, etc.
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 class DataSource(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -20,6 +27,13 @@ class DataSource(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_ingestion = db.Column(db.DateTime)
+    meta_data = db.Column(db.Text)  # JSON with additional source metadata (credibility, topics, etc.)
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 class DetectedNarrative(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -78,9 +92,16 @@ class BeliefEdge(db.Model):
     relation_type = db.Column(db.String(50))  # supports, contradicts, mentions, etc.
     weight = db.Column(db.Float, default=1.0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    meta_data = db.Column(db.Text)  # JSON with additional relationship metadata
     
     source_node = db.relationship('BeliefNode', foreign_keys=[source_id])
     target_node = db.relationship('BeliefNode', foreign_keys=[target_id])
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 class CounterMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -91,10 +112,17 @@ class CounterMessage(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+    meta_data = db.Column(db.Text)  # JSON with effectiveness metrics, audience data, etc.
     
     narrative = db.relationship('DetectedNarrative')
     creator = db.relationship('User', foreign_keys=[created_by])
     approver = db.relationship('User', foreign_keys=[approved_by])
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 class SystemLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
