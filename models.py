@@ -31,6 +31,13 @@ class DetectedNarrative(db.Model):
     status = db.Column(db.String(50), default='active')  # active, archived, debunked
     language = db.Column(db.String(10), default='en')
     vector_id = db.Column(db.String(100))  # Reference to vector in FAISS
+    meta_data = db.Column(db.Text)  # JSON with narrative-specific metadata
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 class NarrativeInstance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
