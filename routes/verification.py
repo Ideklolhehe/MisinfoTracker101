@@ -1,302 +1,219 @@
 """
-Routes for the content verification features of the CIVILIAN system.
-Handles user submissions and verification results.
+Verification routes for the CIVILIAN system.
+This module handles content verification and user submission functionality.
 """
 
-import os
-import logging
-import uuid
-import json
-from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, session
-from werkzeug.utils import secure_filename
-from sqlalchemy import desc
-
-from app import db
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from replit_auth import require_login
+from flask_login import current_user
 from models import UserSubmission, VerificationResult, ContentType, VerificationType, VerificationStatus
-from services.verification_service import VerificationService
+from app import db
+from services.verification_service import verify_content, analyze_image_content
+import os
+import uuid
+from werkzeug.utils import secure_filename
+import logging
 
 logger = logging.getLogger(__name__)
 
 # Create blueprint
-verification_bp = Blueprint('verification', __name__, url_prefix='/verify')
+verification_bp = Blueprint('verification', __name__)
 
-# Initialize verification service
-verification_service = VerificationService()
-
-# Configure file upload settings
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'avi', 'mov'}
-MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max upload
 
-# Ensure upload directory exists
+# Create upload folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def allowed_file(filename, content_type):
-    """Check if the file has an allowed extension."""
-    if '.' not in filename:
-        return False
-    
-    ext = filename.rsplit('.', 1)[1].lower()
-    
-    if content_type in ['image', 'text_image']:
-        return ext in ALLOWED_IMAGE_EXTENSIONS
-    elif content_type in ['video', 'text_video']:
-        return ext in ALLOWED_VIDEO_EXTENSIONS
-    
-    return False
+def allowed_file(filename):
+    """Check if file has an allowed extension."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@verification_bp.route('/', methods=['GET'])
+@verification_bp.route('/')
 def index():
-    """Main verification page."""
-    # Get recent submissions (with pagination)
-    page = request.args.get('page', 1, type=int)
-    per_page = 10
+    """Render the verification submission form."""
+    return render_template('verification/index.html')
+
+@verification_bp.route('/submit', methods=['POST'])
+def submit():
+    """
+    Handle user submission for verification.
+    This accepts both text and media for analysis.
+    """
+    title = request.form.get('title', '')
+    description = request.form.get('description', '')
+    text_content = request.form.get('text_content', '')
+    source_url = request.form.get('source_url', '')
+    content_type = request.form.get('content_type', 'text')
     
-    recent_submissions = UserSubmission.query.order_by(
-        desc(UserSubmission.submitted_at)
-    ).paginate(page=page, per_page=per_page)
+    # Validate submission
+    if not (text_content or 'media' in request.files):
+        flash("Please provide either text content or upload media", "warning")
+        return redirect(url_for('verification.index'))
     
-    # Render the template
-    return render_template(
-        'verification/index.html',
-        recent_submissions=recent_submissions
+    # Handle media upload if present
+    media_path = None
+    if 'media' in request.files and request.files['media'].filename:
+        media_file = request.files['media']
+        
+        if media_file and allowed_file(media_file.filename):
+            # Generate unique filename
+            filename = secure_filename(media_file.filename)
+            unique_filename = f"{uuid.uuid4()}_{filename}"
+            file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+            
+            # Save file
+            media_file.save(file_path)
+            media_path = file_path
+            
+            # Determine content type based on media
+            if text_content:
+                content_type = ContentType.TEXT_IMAGE.value
+            else:
+                content_type = ContentType.IMAGE.value
+    
+    # Create user submission
+    submission = UserSubmission(
+        title=title,
+        description=description,
+        content_type=content_type,
+        text_content=text_content,
+        media_path=media_path,
+        source_url=source_url,
+        ip_address=request.remote_addr
     )
-
-@verification_bp.route('/submit', methods=['GET', 'POST'])
-def submit_content():
-    """Submit content for verification."""
-    if request.method == 'GET':
-        # Display the submission form
-        return render_template('verification/submit.html')
     
-    elif request.method == 'POST':
-        try:
-            # Extract form data
-            title = request.form.get('title', '')
-            description = request.form.get('description', '')
-            content_type = request.form.get('content_type')
-            text_content = request.form.get('text_content', '')
-            source_url = request.form.get('source_url', '')
-            
-            # Validate content type
-            if not content_type or content_type not in [ct.value for ct in ContentType]:
-                flash('Invalid content type selected.', 'danger')
-                return redirect(url_for('verification.submit_content'))
-            
-            # Handle file uploads
-            media_path = None
-            if content_type in ['image', 'text_image', 'video', 'text_video']:
-                if 'media_file' not in request.files:
-                    flash('No file uploaded.', 'danger')
-                    return redirect(request.url)
-                
-                file = request.files['media_file']
-                
-                if file.filename == '':
-                    flash('No file selected.', 'danger')
-                    return redirect(request.url)
-                
-                if not allowed_file(file.filename, content_type):
-                    flash('File type not allowed.', 'danger')
-                    return redirect(request.url)
-                
-                # Generate a unique filename
-                filename = secure_filename(file.filename)
-                unique_filename = f"{uuid.uuid4()}_{filename}"
-                
-                # Create a subdirectory based on content type
-                upload_subdir = os.path.join(UPLOAD_FOLDER, content_type)
-                os.makedirs(upload_subdir, exist_ok=True)
-                
-                # Save the file
-                file_path = os.path.join(upload_subdir, unique_filename)
-                file.save(file_path)
-                
-                # Store relative path from the application root
-                media_path = os.path.join('static/uploads', content_type, unique_filename)
-            
-            # Create submission record
-            submission = UserSubmission(
-                title=title,
-                description=description,
-                content_type=content_type,
-                text_content=text_content,
-                media_path=media_path,
-                source_url=source_url,
-                submitted_at=datetime.utcnow(),
-                ip_address=request.remote_addr,
-                # user_id would be set for logged-in users if needed
-            )
-            
-            # Add metadata
-            metadata = {
-                "browser": request.user_agent.browser,
-                "version": request.user_agent.version,
-                "platform": request.user_agent.platform,
-                "request_id": str(uuid.uuid4())
-            }
-            submission.set_meta_data(metadata)
-            
-            # Save to database
-            db.session.add(submission)
-            db.session.commit()
-            
-            # Start verification process
-            # This could be done asynchronously in a real system
-            logger.info(f"Starting verification for submission ID {submission.id}")
-            verification_result = verification_service.verify_submission(submission.id)
-            
-            # Redirect to results page
-            return redirect(url_for('verification.view_results', submission_id=submission.id))
-        
-        except Exception as e:
-            logger.error(f"Error processing submission: {e}")
-            db.session.rollback()
-            flash(f"Error processing your submission: {str(e)}", 'danger')
-            return redirect(url_for('verification.submit_content'))
-
-@verification_bp.route('/submission/<int:submission_id>', methods=['GET'])
-def view_results(submission_id):
-    """View verification results for a submission."""
-    # Get the submission
-    submission = UserSubmission.query.get_or_404(submission_id)
+    # Associate with user if logged in
+    if current_user.is_authenticated:
+        submission.user_id = current_user.id
     
-    # Get verification results
-    verification_results = VerificationResult.query.filter_by(
-        submission_id=submission_id
-    ).all()
+    # Save submission
+    db.session.add(submission)
+    db.session.commit()
     
-    # Render the template
-    return render_template(
-        'verification/results.html',
-        submission=submission,
-        verification_results=verification_results
-    )
-
-@verification_bp.route('/api/submit', methods=['POST'])
-def api_submit_content():
-    """API endpoint for submitting content for verification."""
-    try:
-        # Extract JSON data
-        data = request.get_json()
-        
-        # Validate required fields
-        required_fields = ['content_type']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({
-                    'success': False,
-                    'error': f'Missing required field: {field}'
-                }), 400
-        
-        # Extract fields
-        content_type = data.get('content_type')
-        title = data.get('title', '')
-        description = data.get('description', '')
-        text_content = data.get('text_content', '')
-        source_url = data.get('source_url', '')
-        
-        # Validate content type
-        if content_type not in [ct.value for ct in ContentType]:
-            return jsonify({
-                'success': False,
-                'error': 'Invalid content type'
-            }), 400
-        
-        # Handle media for API submissions
-        media_path = None
-        if 'media_data' in data and data['media_data']:
-            # For API-based submissions, media would be handled differently
-            # This would need to be implemented for a production system
-            pass
-        
-        # Create submission record
-        submission = UserSubmission(
-            title=title,
-            description=description,
-            content_type=content_type,
-            text_content=text_content,
-            media_path=media_path,
-            source_url=source_url,
-            submitted_at=datetime.utcnow(),
-            ip_address=request.remote_addr,
+    # Create verification tasks
+    if content_type in [ContentType.TEXT.value, ContentType.TEXT_IMAGE.value]:
+        # Create misinformation verification task
+        misinfo_result = VerificationResult(
+            submission_id=submission.id,
+            verification_type=VerificationType.MISINFORMATION.value,
+            status=VerificationStatus.PENDING.value
         )
+        db.session.add(misinfo_result)
         
-        # Add metadata
-        metadata = {
-            "api_request": True,
-            "request_id": str(uuid.uuid4())
-        }
-        submission.set_meta_data(metadata)
-        
-        # Save to database
-        db.session.add(submission)
+        # Create AI-generated content verification task
+        ai_result = VerificationResult(
+            submission_id=submission.id,
+            verification_type=VerificationType.AI_GENERATED.value,
+            status=VerificationStatus.PENDING.value
+        )
+        db.session.add(ai_result)
+    
+    if content_type in [ContentType.IMAGE.value, ContentType.TEXT_IMAGE.value]:
+        # Create image authenticity verification task
+        authenticity_result = VerificationResult(
+            submission_id=submission.id,
+            verification_type=VerificationType.AUTHENTICITY.value,
+            status=VerificationStatus.PENDING.value
+        )
+        db.session.add(authenticity_result)
+    
+    db.session.commit()
+    
+    # Begin verification process asynchronously
+    try:
+        # Start verification process for the submission
+        process_verification(submission.id)
+    except Exception as e:
+        logger.error(f"Error initiating verification: {e}")
+    
+    # Redirect to results page
+    return redirect(url_for('verification.results', submission_id=submission.id))
+
+@verification_bp.route('/results/<int:submission_id>')
+def results(submission_id):
+    """Display verification results for a submission."""
+    submission = UserSubmission.query.get_or_404(submission_id)
+    results = VerificationResult.query.filter_by(submission_id=submission_id).all()
+    
+    return render_template('verification/results.html', submission=submission, results=results)
+
+@verification_bp.route('/api/status/<int:submission_id>')
+def check_status(submission_id):
+    """API endpoint to check verification status."""
+    results = VerificationResult.query.filter_by(submission_id=submission_id).all()
+    status_data = []
+    
+    for result in results:
+        status_data.append({
+            'id': result.id,
+            'type': result.verification_type,
+            'status': result.status,
+            'confidence': result.confidence_score
+        })
+    
+    return jsonify(status_data)
+
+def process_verification(submission_id):
+    """Process verification tasks for a submission."""
+    submission = UserSubmission.query.get(submission_id)
+    if not submission:
+        logger.error(f"Submission {submission_id} not found")
+        return
+    
+    results = VerificationResult.query.filter_by(submission_id=submission_id).all()
+    
+    for result in results:
+        # Update status to processing
+        result.status = VerificationStatus.PROCESSING.value
         db.session.commit()
         
-        # Start verification process
-        # This should be done asynchronously in a real system
-        verification_result = verification_service.verify_submission(submission.id)
+        try:
+            if result.verification_type == VerificationType.MISINFORMATION.value:
+                # Verify text content for misinformation
+                if submission.text_content:
+                    verification_output = verify_content(
+                        content=submission.text_content,
+                        verification_type="misinformation"
+                    )
+                    
+                    result.confidence_score = verification_output.get('confidence', 0.0)
+                    result.result_summary = verification_output.get('summary', '')
+                    result.evidence = verification_output.get('evidence', '')
+                    result.completed_at = db.func.now()
+                    result.status = VerificationStatus.COMPLETED.value
+            
+            elif result.verification_type == VerificationType.AI_GENERATED.value:
+                # Verify text content for AI generation
+                if submission.text_content:
+                    verification_output = verify_content(
+                        content=submission.text_content,
+                        verification_type="ai_generated"
+                    )
+                    
+                    result.confidence_score = verification_output.get('confidence', 0.0)
+                    result.result_summary = verification_output.get('summary', '')
+                    result.evidence = verification_output.get('evidence', '')
+                    result.completed_at = db.func.now()
+                    result.status = VerificationStatus.COMPLETED.value
+            
+            elif result.verification_type == VerificationType.AUTHENTICITY.value:
+                # Verify image authenticity
+                if submission.media_path:
+                    verification_output = analyze_image_content(
+                        image_path=submission.media_path
+                    )
+                    
+                    result.confidence_score = verification_output.get('confidence', 0.0)
+                    result.result_summary = verification_output.get('summary', '')
+                    result.evidence = verification_output.get('evidence', '')
+                    result.completed_at = db.func.now()
+                    result.status = VerificationStatus.COMPLETED.value
+            
+            db.session.commit()
         
-        # Return the submission ID and status
-        return jsonify({
-            'success': True,
-            'submission_id': submission.id,
-            'message': 'Content submitted for verification',
-            'results_url': url_for('verification.view_results', submission_id=submission.id, _external=True)
-        })
-    
-    except Exception as e:
-        logger.error(f"API error processing submission: {e}")
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@verification_bp.route('/api/results/<int:submission_id>', methods=['GET'])
-def api_get_results(submission_id):
-    """API endpoint to get verification results for a submission."""
-    try:
-        # Get the submission
-        submission = UserSubmission.query.get(submission_id)
-        if not submission:
-            return jsonify({
-                'success': False,
-                'error': f'Submission with ID {submission_id} not found'
-            }), 404
-        
-        # Get verification results
-        verification_results = VerificationResult.query.filter_by(
-            submission_id=submission_id
-        ).all()
-        
-        # Format the results
-        results = []
-        for result in verification_results:
-            results.append({
-                'id': result.id,
-                'verification_type': result.verification_type,
-                'status': result.status,
-                'confidence_score': result.confidence_score,
-                'summary': result.result_summary,
-                'completed_at': result.completed_at.isoformat() if result.completed_at else None
-            })
-        
-        # Return the results
-        return jsonify({
-            'success': True,
-            'submission_id': submission_id,
-            'submission_time': submission.submitted_at.isoformat(),
-            'content_type': submission.content_type,
-            'title': submission.title,
-            'results': results
-        })
-    
-    except Exception as e:
-        logger.error(f"API error retrieving results: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        except Exception as e:
+            logger.error(f"Error processing verification {result.id}: {e}")
+            result.status = VerificationStatus.FAILED.value
+            result.result_summary = f"Verification failed: {str(e)}"
+            db.session.commit()

@@ -1,520 +1,283 @@
 {% extends "base.html" %}
 
-{% block title %}Verification Results | CIVILIAN{% endblock %}
+{% block title %}Verification Results - CIVILIAN{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container py-4">
     <div class="row mb-4">
-        <div class="col-12">
+        <div class="col">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{{ url_for('verification.index') }}">Verification</a></li>
                     <li class="breadcrumb-item active" aria-current="page">Results</li>
                 </ol>
             </nav>
-            
-            <h1>Verification Results</h1>
-            <p class="lead">
-                Analysis of your submitted content is complete. Review the detailed findings below.
-            </p>
+            <h1 class="mb-3">Verification Results</h1>
+            {% if submission.title %}
+                <p class="lead">{{ submission.title }}</p>
+            {% else %}
+                <p class="lead">Content submission #{{ submission.id }}</p>
+            {% endif %}
         </div>
     </div>
-    
+
     <div class="row mb-4">
         <div class="col-md-8">
-            <div class="card mb-4">
-                <div class="card-header bg-dark text-white">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">Submitted Content</h4>
                 </div>
                 <div class="card-body">
-                    <h5>{{ submission.title or 'Untitled Submission' }}</h5>
+                    <div class="mb-3">
+                        <h5>Content Type:</h5>
+                        <p class="mb-0">
+                            {% if submission.content_type == 'text' %}
+                                <span class="badge bg-info">Text Only</span>
+                            {% elif submission.content_type == 'image' %}
+                                <span class="badge bg-info">Image Only</span>
+                            {% elif submission.content_type == 'text_image' %}
+                                <span class="badge bg-info">Text & Image</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ submission.content_type }}</span>
+                            {% endif %}
+                        </p>
+                    </div>
                     
-                    {% if submission.description %}
+                    {% if submission.text_content %}
                         <div class="mb-3">
-                            <strong>Description:</strong>
-                            <p>{{ submission.description }}</p>
-                        </div>
-                    {% endif %}
-                    
-                    {% if submission.content_type in ['text', 'text_image', 'text_video'] and submission.text_content %}
-                        <div class="mb-3">
-                            <strong>Text Content:</strong>
-                            <div class="p-3 bg-light rounded">
-                                <p>{{ submission.text_content }}</p>
+                            <h5>Text Content:</h5>
+                            <div class="bg-light p-3 rounded">
+                                <p class="mb-0">{{ submission.text_content }}</p>
                             </div>
                         </div>
                     {% endif %}
                     
-                    {% if submission.content_type in ['image', 'text_image'] and submission.media_path %}
+                    {% if submission.media_path %}
                         <div class="mb-3">
-                            <strong>Image:</strong>
-                            <div class="text-center">
-                                <img src="{{ url_for('static', filename=submission.media_path.replace('static/', '')) }}" 
-                                     class="img-fluid rounded" 
-                                     alt="Submitted image" 
-                                     style="max-height: 400px;">
-                            </div>
-                        </div>
-                    {% endif %}
-                    
-                    {% if submission.content_type in ['video', 'text_video'] and submission.media_path %}
-                        <div class="mb-3">
-                            <strong>Video:</strong>
-                            <div class="text-center">
-                                <video controls class="img-fluid rounded" style="max-height: 400px;">
-                                    <source src="{{ url_for('static', filename=submission.media_path.replace('static/', '')) }}" type="video/mp4">
-                                    Your browser does not support the video tag.
-                                </video>
-                            </div>
+                            <h5>Submitted Media:</h5>
+                            <img src="/{{ submission.media_path }}" class="img-fluid rounded" alt="Submitted media">
                         </div>
                     {% endif %}
                     
                     {% if submission.source_url %}
                         <div class="mb-3">
-                            <strong>Source URL:</strong>
-                            <a href="{{ submission.source_url }}" target="_blank" rel="noopener noreferrer">
-                                {{ submission.source_url }}
-                            </a>
+                            <h5>Source URL:</h5>
+                            <a href="{{ submission.source_url }}" target="_blank" rel="noopener noreferrer">{{ submission.source_url }}</a>
                         </div>
                     {% endif %}
                     
-                    <div class="d-flex justify-content-between">
-                        <small class="text-muted">Submitted on: {{ submission.submitted_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
-                        <small class="text-muted">ID: {{ submission.id }}</small>
+                    {% if submission.description %}
+                        <div class="mb-3">
+                            <h5>Additional Context:</h5>
+                            <p class="mb-0">{{ submission.description }}</p>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="text-muted">
+                        <small>Submitted: {{ submission.submitted_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
                     </div>
                 </div>
             </div>
         </div>
         
         <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Verification Summary</h4>
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">Verification Status</h4>
                 </div>
                 <div class="card-body">
-                    {% set misinformation_result = namespace(found=False, value=None) %}
-                    {% set ai_generated_result = namespace(found=False, value=None) %}
-                    {% set authenticity_result = namespace(found=False, value=None) %}
-                    {% set factual_result = namespace(found=False, value=None) %}
-                    
-                    {% for result in verification_results %}
-                        {% if result.verification_type == 'misinformation' and result.status == 'completed' %}
-                            {% set misinformation_result.found = True %}
-                            {% set misinformation_result.value = result %}
-                        {% elif result.verification_type == 'ai_generated' and result.status == 'completed' %}
-                            {% set ai_generated_result.found = True %}
-                            {% set ai_generated_result.value = result %}
-                        {% elif result.verification_type == 'authenticity' and result.status == 'completed' %}
-                            {% set authenticity_result.found = True %}
-                            {% set authenticity_result.value = result %}
-                        {% elif result.verification_type == 'factual_accuracy' and result.status == 'completed' %}
-                            {% set factual_result.found = True %}
-                            {% set factual_result.value = result %}
-                        {% endif %}
-                    {% endfor %}
-                    
-                    <div class="verification-gauge mb-4">
-                        {% set overall_score = 0 %}
-                        {% set count = 0 %}
+                    <div class="verification-status">
+                        {% set all_completed = true %}
+                        {% for result in results %}
+                            {% if result.status != 'completed' %}
+                                {% set all_completed = false %}
+                            {% endif %}
+                        {% endfor %}
                         
-                        {% if misinformation_result.found %}
-                            {% set overall_score = overall_score + misinformation_result.value.confidence_score %}
-                            {% set count = count + 1 %}
-                        {% endif %}
-                        
-                        {% if ai_generated_result.found %}
-                            {% set overall_score = overall_score + ai_generated_result.value.confidence_score %}
-                            {% set count = count + 1 %}
-                        {% endif %}
-                        
-                        {% if authenticity_result.found %}
-                            {% set overall_score = overall_score + authenticity_result.value.confidence_score %}
-                            {% set count = count + 1 %}
-                        {% endif %}
-                        
-                        {% if factual_result.found %}
-                            {% set overall_score = overall_score + factual_result.value.confidence_score %}
-                            {% set count = count + 1 %}
-                        {% endif %}
-                        
-                        {% if count > 0 %}
-                            {% set avg_score = overall_score / count %}
-                            
-                            <div class="text-center">
-                                <div class="h1 mb-2">
-                                    {% if avg_score > 0.8 %}
-                                        <span class="badge bg-danger">High Concern</span>
-                                    {% elif avg_score > 0.5 %}
-                                        <span class="badge bg-warning">Moderate Concern</span>
-                                    {% elif avg_score > 0.2 %}
-                                        <span class="badge bg-info">Low Concern</span>
-                                    {% else %}
-                                        <span class="badge bg-success">No Concern</span>
-                                    {% endif %}
-                                </div>
-                                <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar 
-                                        {% if avg_score > 0.8 %}bg-danger
-                                        {% elif avg_score > 0.5 %}bg-warning
-                                        {% elif avg_score > 0.2 %}bg-info
-                                        {% else %}bg-success{% endif %}"
-                                        role="progressbar" 
-                                        style="width: {{ avg_score * 100 }}%"
-                                        aria-valuenow="{{ avg_score * 100 }}" 
-                                        aria-valuemin="0" 
-                                        aria-valuemax="100">
-                                        {{ "%.1f"|format(avg_score * 100) }}%
-                                    </div>
-                                </div>
-                                <small class="text-muted">Overall credibility concern level</small>
+                        {% if all_completed %}
+                            <div class="alert alert-success" role="alert">
+                                <h5 class="alert-heading"><i class="bi bi-check-circle-fill me-2"></i> Complete</h5>
+                                <p class="mb-0">All verification processes have been completed.</p>
                             </div>
                         {% else %}
-                            <div class="alert alert-info text-center">
-                                <i class="fas fa-spinner fa-spin"></i> Processing verification...
+                            <div class="alert alert-warning" role="alert">
+                                <h5 class="alert-heading"><i class="bi bi-hourglass-split me-2"></i> In Progress</h5>
+                                <p class="mb-0">Some verification processes are still running.</p>
                             </div>
                         {% endif %}
                     </div>
                     
-                    <ul class="list-group mb-3">
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Misinformation</span>
-                            {% if misinformation_result.found %}
-                                {% if misinformation_result.value.confidence_score > 0.7 %}
-                                    <span class="badge bg-danger rounded-pill">High</span>
-                                {% elif misinformation_result.value.confidence_score > 0.4 %}
-                                    <span class="badge bg-warning rounded-pill">Medium</span>
-                                {% else %}
-                                    <span class="badge bg-success rounded-pill">Low</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="badge bg-secondary rounded-pill">Pending</span>
-                            {% endif %}
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>AI Generated</span>
-                            {% if ai_generated_result.found %}
-                                {% if ai_generated_result.value.confidence_score > 0.7 %}
-                                    <span class="badge bg-danger rounded-pill">High</span>
-                                {% elif ai_generated_result.value.confidence_score > 0.4 %}
-                                    <span class="badge bg-warning rounded-pill">Medium</span>
-                                {% else %}
-                                    <span class="badge bg-success rounded-pill">Low</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="badge bg-secondary rounded-pill">Pending</span>
-                            {% endif %}
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Manipulation</span>
-                            {% if authenticity_result.found %}
-                                {% if authenticity_result.value.confidence_score > 0.7 %}
-                                    <span class="badge bg-danger rounded-pill">High</span>
-                                {% elif authenticity_result.value.confidence_score > 0.4 %}
-                                    <span class="badge bg-warning rounded-pill">Medium</span>
-                                {% else %}
-                                    <span class="badge bg-success rounded-pill">Low</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="badge bg-secondary rounded-pill">Pending</span>
-                            {% endif %}
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Factual Issues</span>
-                            {% if factual_result.found %}
-                                {% if factual_result.value.confidence_score > 0.7 %}
-                                    <span class="badge bg-danger rounded-pill">High</span>
-                                {% elif factual_result.value.confidence_score > 0.4 %}
-                                    <span class="badge bg-warning rounded-pill">Medium</span>
-                                {% else %}
-                                    <span class="badge bg-success rounded-pill">Low</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="badge bg-secondary rounded-pill">Pending</span>
-                            {% endif %}
-                        </li>
-                    </ul>
-                    
-                    <div class="d-grid gap-2">
-                        <a href="{{ url_for('verification.submit_content') }}" class="btn btn-primary">Submit New Content</a>
+                    <div class="verification-types mt-3">
+                        <h5>Verification Types:</h5>
+                        <ul class="list-group list-group-flush">
+                            {% for result in results %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {% if result.verification_type == 'misinformation' %}
+                                        <span><i class="bi bi-shield-check me-2"></i> Misinformation Check</span>
+                                    {% elif result.verification_type == 'ai_generated' %}
+                                        <span><i class="bi bi-robot me-2"></i> AI Content Detection</span>
+                                    {% elif result.verification_type == 'authenticity' %}
+                                        <span><i class="bi bi-image me-2"></i> Image Authenticity</span>
+                                    {% else %}
+                                        <span><i class="bi bi-question-circle me-2"></i> {{ result.verification_type }}</span>
+                                    {% endif %}
+                                    
+                                    {% if result.status == 'pending' %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                    {% elif result.status == 'processing' %}
+                                        <span class="badge bg-primary">Processing</span>
+                                    {% elif result.status == 'completed' %}
+                                        <span class="badge bg-success">Completed</span>
+                                    {% elif result.status == 'failed' %}
+                                        <span class="badge bg-danger">Failed</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ result.status }}</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Detailed Analysis Results Tabs -->
     <div class="row">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <ul class="nav nav-tabs card-header-tabs" id="resultTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="misinformation-tab" data-bs-toggle="tab" data-bs-target="#misinformation" 
-                                    type="button" role="tab" aria-controls="misinformation" aria-selected="true">
-                                Misinformation
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="ai-generated-tab" data-bs-toggle="tab" data-bs-target="#ai-generated" 
-                                    type="button" role="tab" aria-controls="ai-generated" aria-selected="false">
-                                AI Generated
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="authenticity-tab" data-bs-toggle="tab" data-bs-target="#authenticity" 
-                                    type="button" role="tab" aria-controls="authenticity" aria-selected="false">
-                                Authenticity
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="factual-tab" data-bs-toggle="tab" data-bs-target="#factual" 
-                                    type="button" role="tab" aria-controls="factual" aria-selected="false">
-                                Factual Accuracy
-                            </button>
-                        </li>
-                    </ul>
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">Verification Results</h4>
                 </div>
                 <div class="card-body">
-                    <div class="tab-content" id="resultTabsContent">
-                        <div class="tab-pane fade show active" id="misinformation" role="tabpanel" aria-labelledby="misinformation-tab">
-                            {% set found = False %}
-                            {% for result in verification_results %}
-                                {% if result.verification_type == 'misinformation' %}
-                                    {% set found = True %}
-                                    <h4>Misinformation Analysis</h4>
-                                    
-                                    {% if result.status == 'completed' %}
-                                        <div class="alert 
-                                            {% if result.confidence_score > 0.7 %}alert-danger
-                                            {% elif result.confidence_score > 0.4 %}alert-warning
-                                            {% else %}alert-success{% endif %}">
-                                            <h5>{{ result.result_summary }}</h5>
-                                        </div>
-                                        
-                                        {% if result.evidence %}
-                                            <h5>Evidence:</h5>
-                                            <div class="p-3 bg-light rounded mb-3">
-                                                <p>{{ result.evidence }}</p>
-                                            </div>
-                                        {% endif %}
-                                        
-                                        {% set metadata = result.get_meta_data() %}
-                                        {% if metadata and metadata.recommendations %}
-                                            <h5>Recommendations:</h5>
-                                            <ul class="list-group mb-3">
-                                                {% for rec in metadata.recommendations %}
-                                                    <li class="list-group-item">{{ rec }}</li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% endif %}
-                                        
-                                    {% elif result.status == 'processing' %}
-                                        <div class="alert alert-info">
-                                            <p><i class="fas fa-spinner fa-spin"></i> Analysis in progress... Please check back in a few moments.</p>
-                                        </div>
-                                    {% elif result.status == 'failed' %}
-                                        <div class="alert alert-danger">
-                                            <p>Analysis failed: {{ result.result_summary }}</p>
-                                        </div>
-                                    {% else %}
-                                        <div class="alert alert-secondary">
-                                            <p>Analysis pending...</p>
-                                        </div>
-                                    {% endif %}
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% if not found %}
-                                <div class="alert alert-info">
-                                    <p>No misinformation analysis has been performed yet.</p>
-                                </div>
-                            {% endif %}
+                    {% if results|length == 0 %}
+                        <div class="alert alert-info" role="alert">
+                            No verification processes have been initiated for this submission.
                         </div>
-                        
-                        <div class="tab-pane fade" id="ai-generated" role="tabpanel" aria-labelledby="ai-generated-tab">
-                            {% set found = False %}
-                            {% for result in verification_results %}
-                                {% if result.verification_type == 'ai_generated' %}
-                                    {% set found = True %}
-                                    <h4>AI Generation Analysis</h4>
-                                    
-                                    {% if result.status == 'completed' %}
-                                        <div class="alert 
-                                            {% if result.confidence_score > 0.7 %}alert-danger
-                                            {% elif result.confidence_score > 0.4 %}alert-warning
-                                            {% else %}alert-success{% endif %}">
-                                            <h5>{{ result.result_summary }}</h5>
+                    {% else %}
+                        <div class="accordion" id="verificationResults">
+                            {% for result in results %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading{{ result.id }}">
+                                        <button class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ result.id }}" aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}" aria-controls="collapse{{ result.id }}">
+                                            {% if result.verification_type == 'misinformation' %}
+                                                <i class="bi bi-shield-check me-2"></i> Misinformation Analysis
+                                            {% elif result.verification_type == 'ai_generated' %}
+                                                <i class="bi bi-robot me-2"></i> AI Content Detection
+                                            {% elif result.verification_type == 'authenticity' %}
+                                                <i class="bi bi-image me-2"></i> Image Authenticity Analysis
+                                            {% else %}
+                                                <i class="bi bi-question-circle me-2"></i> {{ result.verification_type }}
+                                            {% endif %}
+                                            
+                                            {% if result.status == 'completed' and result.confidence_score is not none %}
+                                                - 
+                                                {% if result.confidence_score > 0.75 %}
+                                                    <span class="text-danger">High Confidence ({{ (result.confidence_score * 100)|round }}%)</span>
+                                                {% elif result.confidence_score > 0.4 %}
+                                                    <span class="text-warning">Medium Confidence ({{ (result.confidence_score * 100)|round }}%)</span>
+                                                {% else %}
+                                                    <span class="text-success">Low Confidence ({{ (result.confidence_score * 100)|round }}%)</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </button>
+                                    </h2>
+                                    <div id="collapse{{ result.id }}" class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}" aria-labelledby="heading{{ result.id }}" data-bs-parent="#verificationResults">
+                                        <div class="accordion-body">
+                                            {% if result.status == 'pending' %}
+                                                <div class="d-flex justify-content-center align-items-center p-5">
+                                                    <div class="spinner-border text-primary" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <span class="ms-3">Verification pending...</span>
+                                                </div>
+                                            {% elif result.status == 'processing' %}
+                                                <div class="d-flex justify-content-center align-items-center p-5">
+                                                    <div class="spinner-border text-primary" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <span class="ms-3">Processing in progress...</span>
+                                                </div>
+                                            {% elif result.status == 'failed' %}
+                                                <div class="alert alert-danger" role="alert">
+                                                    <h5 class="alert-heading">Verification Failed</h5>
+                                                    <p>{{ result.result_summary if result.result_summary else 'An unknown error occurred during verification.' }}</p>
+                                                </div>
+                                            {% elif result.status == 'completed' %}
+                                                <div class="row">
+                                                    <div class="col-md-4">
+                                                        <div class="mb-4">
+                                                            <h5>Confidence Score</h5>
+                                                            <div class="progress" style="height: 25px;">
+                                                                {% if result.confidence_score > 0.75 %}
+                                                                    <div class="progress-bar bg-danger" role="progressbar" style="width: {{ (result.confidence_score * 100)|round }}%;" aria-valuenow="{{ (result.confidence_score * 100)|round }}" aria-valuemin="0" aria-valuemax="100">{{ (result.confidence_score * 100)|round }}%</div>
+                                                                {% elif result.confidence_score > 0.4 %}
+                                                                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ (result.confidence_score * 100)|round }}%;" aria-valuenow="{{ (result.confidence_score * 100)|round }}" aria-valuemin="0" aria-valuemax="100">{{ (result.confidence_score * 100)|round }}%</div>
+                                                                {% else %}
+                                                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ (result.confidence_score * 100)|round }}%;" aria-valuenow="{{ (result.confidence_score * 100)|round }}" aria-valuemin="0" aria-valuemax="100">{{ (result.confidence_score * 100)|round }}%</div>
+                                                                {% endif %}
+                                                            </div>
+                                                            <small class="text-muted mt-1 d-block">
+                                                                {% if result.verification_type == 'misinformation' %}
+                                                                    Higher score indicates higher likelihood of misinformation
+                                                                {% elif result.verification_type == 'ai_generated' %}
+                                                                    Higher score indicates higher likelihood of AI generation
+                                                                {% elif result.verification_type == 'authenticity' %}
+                                                                    Higher score indicates higher likelihood of manipulation
+                                                                {% endif %}
+                                                            </small>
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <h5>Summary</h5>
+                                                            <p>{{ result.result_summary }}</p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="col-md-8">
+                                                        <h5>Detailed Evidence</h5>
+                                                        <div class="bg-light p-3 rounded">
+                                                            <p class="mb-0">{{ result.evidence|default('No detailed evidence provided.') }}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
                                         </div>
-                                        
-                                        {% if result.evidence %}
-                                            <h5>Evidence:</h5>
-                                            <div class="p-3 bg-light rounded mb-3">
-                                                <p>{{ result.evidence }}</p>
-                                            </div>
-                                        {% endif %}
-                                        
-                                        {% set metadata = result.get_meta_data() %}
-                                        {% if metadata and metadata.recommendations %}
-                                            <h5>Recommendations:</h5>
-                                            <ul class="list-group mb-3">
-                                                {% for rec in metadata.recommendations %}
-                                                    <li class="list-group-item">{{ rec }}</li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% endif %}
-                                        
-                                    {% elif result.status == 'processing' %}
-                                        <div class="alert alert-info">
-                                            <p><i class="fas fa-spinner fa-spin"></i> Analysis in progress... Please check back in a few moments.</p>
-                                        </div>
-                                    {% elif result.status == 'failed' %}
-                                        <div class="alert alert-danger">
-                                            <p>Analysis failed: {{ result.result_summary }}</p>
-                                        </div>
-                                    {% else %}
-                                        <div class="alert alert-secondary">
-                                            <p>Analysis pending...</p>
-                                        </div>
-                                    {% endif %}
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% if not found %}
-                                <div class="alert alert-info">
-                                    <p>No AI generation analysis has been performed yet.</p>
+                                    </div>
                                 </div>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="tab-pane fade" id="authenticity" role="tabpanel" aria-labelledby="authenticity-tab">
-                            {% set found = False %}
-                            {% for result in verification_results %}
-                                {% if result.verification_type == 'authenticity' %}
-                                    {% set found = True %}
-                                    <h4>Authenticity Analysis</h4>
-                                    
-                                    {% if result.status == 'completed' %}
-                                        <div class="alert 
-                                            {% if result.confidence_score > 0.7 %}alert-danger
-                                            {% elif result.confidence_score > 0.4 %}alert-warning
-                                            {% else %}alert-success{% endif %}">
-                                            <h5>{{ result.result_summary }}</h5>
-                                        </div>
-                                        
-                                        {% if result.evidence %}
-                                            <h5>Evidence:</h5>
-                                            <div class="p-3 bg-light rounded mb-3">
-                                                <p>{{ result.evidence }}</p>
-                                            </div>
-                                        {% endif %}
-                                        
-                                        {% set metadata = result.get_meta_data() %}
-                                        {% if metadata and metadata.recommendations %}
-                                            <h5>Recommendations:</h5>
-                                            <ul class="list-group mb-3">
-                                                {% for rec in metadata.recommendations %}
-                                                    <li class="list-group-item">{{ rec }}</li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% endif %}
-                                        
-                                    {% elif result.status == 'processing' %}
-                                        <div class="alert alert-info">
-                                            <p><i class="fas fa-spinner fa-spin"></i> Analysis in progress... Please check back in a few moments.</p>
-                                        </div>
-                                    {% elif result.status == 'failed' %}
-                                        <div class="alert alert-danger">
-                                            <p>Analysis failed: {{ result.result_summary }}</p>
-                                        </div>
-                                    {% else %}
-                                        <div class="alert alert-secondary">
-                                            <p>Analysis pending...</p>
-                                        </div>
-                                    {% endif %}
-                                {% endif %}
                             {% endfor %}
-                            
-                            {% if not found %}
-                                <div class="alert alert-info">
-                                    <p>No authenticity analysis has been performed yet.</p>
-                                </div>
-                            {% endif %}
                         </div>
-                        
-                        <div class="tab-pane fade" id="factual" role="tabpanel" aria-labelledby="factual-tab">
-                            {% set found = False %}
-                            {% for result in verification_results %}
-                                {% if result.verification_type == 'factual_accuracy' %}
-                                    {% set found = True %}
-                                    <h4>Factual Accuracy Analysis</h4>
-                                    
-                                    {% if result.status == 'completed' %}
-                                        <div class="alert 
-                                            {% if result.confidence_score > 0.7 %}alert-danger
-                                            {% elif result.confidence_score > 0.4 %}alert-warning
-                                            {% else %}alert-success{% endif %}">
-                                            <h5>{{ result.result_summary }}</h5>
-                                        </div>
-                                        
-                                        {% if result.evidence %}
-                                            <h5>Evidence:</h5>
-                                            <div class="p-3 bg-light rounded mb-3">
-                                                <p>{{ result.evidence }}</p>
-                                            </div>
-                                        {% endif %}
-                                        
-                                        {% set metadata = result.get_meta_data() %}
-                                        {% if metadata and metadata.recommendations %}
-                                            <h5>Recommendations:</h5>
-                                            <ul class="list-group mb-3">
-                                                {% for rec in metadata.recommendations %}
-                                                    <li class="list-group-item">{{ rec }}</li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% endif %}
-                                        
-                                    {% elif result.status == 'processing' %}
-                                        <div class="alert alert-info">
-                                            <p><i class="fas fa-spinner fa-spin"></i> Analysis in progress... Please check back in a few moments.</p>
-                                        </div>
-                                    {% elif result.status == 'failed' %}
-                                        <div class="alert alert-danger">
-                                            <p>Analysis failed: {{ result.result_summary }}</p>
-                                        </div>
-                                    {% else %}
-                                        <div class="alert alert-secondary">
-                                            <p>Analysis pending...</p>
-                                        </div>
-                                    {% endif %}
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% if not found %}
-                                <div class="alert alert-info">
-                                    <p>No factual accuracy analysis has been performed yet.</p>
-                                </div>
-                            {% endif %}
-                        </div>
+                    {% endif %}
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('verification.index') }}" class="btn btn-primary">New Verification</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
-    // Auto-refresh the page if any verifications are still processing
+    // Auto-refresh results if any are still processing
     document.addEventListener('DOMContentLoaded', function() {
-        const hasProcessing = Array.from(document.querySelectorAll('.alert-info')).some(
-            el => el.textContent.includes('Analysis in progress')
-        );
+        const hasPendingResults = document.querySelectorAll('.badge.bg-secondary, .badge.bg-primary').length > 0;
         
-        if (hasProcessing) {
-            setTimeout(function() {
-                window.location.reload();
-            }, 10000); // Refresh every 10 seconds if processing
+        if (hasPendingResults) {
+            // Check status every 5 seconds
+            setInterval(function() {
+                fetch('{{ url_for("verification.check_status", submission_id=submission.id) }}')
+                    .then(response => response.json())
+                    .then(data => {
+                        // If any status has changed, reload the page
+                        const hasCompleted = data.some(result => 
+                            (result.status === 'completed' || result.status === 'failed'));
+                        
+                        if (hasCompleted) {
+                            window.location.reload();
+                        }
+                    })
+                    .catch(error => console.error('Error checking status:', error));
+            }, 5000);
         }
     });
 </script>

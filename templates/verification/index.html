@@ -1,174 +1,154 @@
 {% extends "base.html" %}
 
-{% block title %}Content Verification | CIVILIAN{% endblock %}
+{% block title %}Content Verification - CIVILIAN{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container py-4">
     <div class="row mb-4">
-        <div class="col-md-8">
-            <h1>Content Verification System</h1>
-            <p class="lead">Verify the authenticity and credibility of multimedia content.</p>
-            <p>Use our advanced AI-powered verification system to check content for:</p>
-            <ul>
-                <li><strong>Misinformation:</strong> Detect false or misleading claims</li>
-                <li><strong>AI Generation:</strong> Identify content created by AI systems</li>
-                <li><strong>Content Manipulation:</strong> Spot altered or out-of-context media</li>
-                <li><strong>Factual Accuracy:</strong> Verify claims against reliable sources</li>
-            </ul>
+        <div class="col">
+            <h1 class="mb-3">Content Verification</h1>
+            <p class="lead">Submit content for verification to determine if it contains misinformation or AI-generated elements.</p>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-dark text-white">
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Verification Request</h4>
+                </div>
                 <div class="card-body">
-                    <h5 class="card-title">Submit Content</h5>
-                    <p class="card-text">Submit text, images, or videos for verification.</p>
-                    <a href="{{ url_for('verification.submit_content') }}" class="btn btn-primary w-100">New Verification</a>
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                
+                    <form method="POST" action="{{ url_for('verification.submit') }}" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Title <small class="text-muted">(optional)</small></label>
+                            <input type="text" class="form-control" id="title" name="title" placeholder="Give your verification request a title">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="content_type" class="form-label">Content Type</label>
+                            <select class="form-select" id="content_type" name="content_type">
+                                <option value="text" selected>Text Only</option>
+                                <option value="image">Image Only</option>
+                                <option value="text_image">Text & Image</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3" id="text_input_section">
+                            <label for="text_content" class="form-label">Text Content</label>
+                            <textarea class="form-control" id="text_content" name="text_content" rows="5" placeholder="Paste the text you want to verify here..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3" id="media_upload_section">
+                            <label for="media" class="form-label">Upload Media</label>
+                            <input type="file" class="form-control" id="media" name="media" accept="image/*">
+                            <div class="form-text">Supported formats: PNG, JPG, JPEG, GIF</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="source_url" class="form-label">Source URL <small class="text-muted">(optional)</small></label>
+                            <input type="url" class="form-control" id="source_url" name="source_url" placeholder="https://example.com/article">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Additional Context <small class="text-muted">(optional)</small></label>
+                            <textarea class="form-control" id="description" name="description" rows="2" placeholder="Any other information that would help with verification..."></textarea>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Submit for Verification</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">What We Verify</h4>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex">
+                            <i class="bi bi-shield-check me-3 fs-4"></i>
+                            <div>
+                                <h5>Misinformation Detection</h5>
+                                <p class="mb-0">Analysis of factual claims, logical consistency, and comparison against reliable sources.</p>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex">
+                            <i class="bi bi-robot me-3 fs-4"></i>
+                            <div>
+                                <h5>AI-Generated Content</h5>
+                                <p class="mb-0">Detection of text that may have been artificially generated by large language models.</p>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex">
+                            <i class="bi bi-image me-3 fs-4"></i>
+                            <div>
+                                <h5>Image Authenticity</h5>
+                                <p class="mb-0">Analysis for signs of manipulation, AI generation, or misleading content in images.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="mb-0">How It Works</h4>
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0">
+                        <li class="mb-3">Submit your content through the form</li>
+                        <li class="mb-3">Our multi-agent system analyzes the content using advanced AI and verification techniques</li>
+                        <li class="mb-3">Results are presented with confidence scores and detailed evidence</li>
+                        <li>Use the insights to better understand the reliability of the content</li>
+                    </ol>
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="row mt-5">
-        <div class="col-12">
-            <h2>Recent Verifications</h2>
-            <hr>
-            
-            {% if recent_submissions.items %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Title</th>
-                                <th>Type</th>
-                                <th>Submitted</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for submission in recent_submissions.items %}
-                                <tr>
-                                    <td>{{ submission.id }}</td>
-                                    <td>
-                                        {% if submission.title %}
-                                            {{ submission.title }}
-                                        {% else %}
-                                            <em>Untitled Submission</em>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if submission.content_type == 'text' %}
-                                            <span class="badge bg-secondary">Text</span>
-                                        {% elif submission.content_type == 'image' %}
-                                            <span class="badge bg-info">Image</span>
-                                        {% elif submission.content_type == 'video' %}
-                                            <span class="badge bg-warning">Video</span>
-                                        {% elif submission.content_type == 'text_image' %}
-                                            <span class="badge bg-primary">Text+Image</span>
-                                        {% elif submission.content_type == 'text_video' %}
-                                            <span class="badge bg-success">Text+Video</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ submission.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                    <td>
-                                        {% set completed = namespace(value=0) %}
-                                        {% set total = namespace(value=0) %}
-                                        
-                                        {% for result in submission.verification_results %}
-                                            {% set total.value = total.value + 1 %}
-                                            {% if result.status == 'completed' %}
-                                                {% set completed.value = completed.value + 1 %}
-                                            {% endif %}
-                                        {% endfor %}
-                                        
-                                        {% if total.value == 0 %}
-                                            <span class="badge bg-secondary">Pending</span>
-                                        {% elif completed.value == total.value %}
-                                            <span class="badge bg-success">Complete</span>
-                                        {% else %}
-                                            <span class="badge bg-warning">Processing ({{ completed.value }}/{{ total.value }})</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{{ url_for('verification.view_results', submission_id=submission.id) }}" class="btn btn-sm btn-primary">
-                                            View Results
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Pagination -->
-                <nav aria-label="Verification results pagination">
-                    <ul class="pagination justify-content-center">
-                        {% if recent_submissions.has_prev %}
-                            <li class="page-item">
-                                <a class="page-link" href="{{ url_for('verification.index', page=recent_submissions.prev_num) }}">
-                                    Previous
-                                </a>
-                            </li>
-                        {% else %}
-                            <li class="page-item disabled">
-                                <span class="page-link">Previous</span>
-                            </li>
-                        {% endif %}
-                        
-                        {% for page_num in recent_submissions.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
-                            {% if page_num %}
-                                {% if page_num == recent_submissions.page %}
-                                    <li class="page-item active">
-                                        <span class="page-link">
-                                            {{ page_num }}
-                                            <span class="sr-only">(current)</span>
-                                        </span>
-                                    </li>
-                                {% else %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('verification.index', page=page_num) }}">
-                                            {{ page_num }}
-                                        </a>
-                                    </li>
-                                {% endif %}
-                            {% else %}
-                                <li class="page-item disabled">
-                                    <span class="page-link">...</span>
-                                </li>
-                            {% endif %}
-                        {% endfor %}
-                        
-                        {% if recent_submissions.has_next %}
-                            <li class="page-item">
-                                <a class="page-link" href="{{ url_for('verification.index', page=recent_submissions.next_num) }}">
-                                    Next
-                                </a>
-                            </li>
-                        {% else %}
-                            <li class="page-item disabled">
-                                <span class="page-link">Next</span>
-                            </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            {% else %}
-                <div class="alert alert-info">
-                    No verification submissions yet. Be the first to <a href="{{ url_for('verification.submit_content') }}">submit content</a>!
-                </div>
-            {% endif %}
-        </div>
-    </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
-    // Mark the active navigation link
+    // Toggle fields based on content type selection
     document.addEventListener('DOMContentLoaded', function() {
-        const verifyLink = document.querySelector('a.nav-link[href="/verify"]');
-        if (verifyLink) {
-            verifyLink.classList.add('active');
+        const contentTypeSelect = document.getElementById('content_type');
+        const textInputSection = document.getElementById('text_input_section');
+        const mediaUploadSection = document.getElementById('media_upload_section');
+        
+        function updateFormDisplay() {
+            const contentType = contentTypeSelect.value;
+            
+            if (contentType === 'text') {
+                textInputSection.style.display = 'block';
+                mediaUploadSection.style.display = 'none';
+            } else if (contentType === 'image') {
+                textInputSection.style.display = 'none';
+                mediaUploadSection.style.display = 'block';
+            } else if (contentType === 'text_image') {
+                textInputSection.style.display = 'block';
+                mediaUploadSection.style.display = 'block';
+            }
         }
+        
+        // Set initial state
+        updateFormDisplay();
+        
+        // Add change listener
+        contentTypeSelect.addEventListener('change', updateFormDisplay);
     });
 </script>
 {% endblock %}
