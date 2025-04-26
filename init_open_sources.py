@@ -1,312 +1,187 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 Initialization script to configure open news and data sources for the CIVILIAN system.
 This script must be run with the Flask application context to avoid app context errors.
 """
 
-import json
-import logging
 import os
+import json
 import sys
-from pathlib import Path
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("init_open_sources")
-
-# Load application components
 from app import app, db
 from models import DataSource
-from data_sources.rss_source import RSSSource
-from data_sources.twitter_source import TwitterSource
-from data_sources.telegram_source import TelegramSource
+import logging
 
-# Define paths
-CONFIG_DIR = Path("config")
-OPEN_NEWS_SOURCES_FILE = CONFIG_DIR / "open_news_sources.json"
-FACT_CHECK_SOURCES_FILE = CONFIG_DIR / "fact_check_sources.json"
-OPEN_DATA_SOURCES_FILE = CONFIG_DIR / "open_data_sources.json"
+logger = logging.getLogger(__name__)
 
 def load_json_config(filepath):
     """Load a JSON configuration file."""
+    if not os.path.exists(filepath):
+        logger.error(f"Configuration file {filepath} not found")
+        return None
+    
     try:
-        if filepath.exists():
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        else:
-            logger.warning(f"Config file not found: {filepath}")
-            return None
-    except Exception as e:
-        logger.error(f"Error loading config file {filepath}: {e}")
+        with open(filepath, 'r') as f:
+            config = json.load(f)
+        return config
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing configuration file {filepath}: {e}")
         return None
 
 def configure_rss_sources():
     """Configure RSS data sources from configuration files."""
-    # Initialize RSS source
-    rss_source = RSSSource()
-    success_count = 0
-    failure_count = 0
+    # Path to configuration file
+    config_file = os.path.join('config', 'open_news_sources.json')
     
-    # Process open news sources
-    news_sources = load_json_config(OPEN_NEWS_SOURCES_FILE)
-    if news_sources:
-        logger.info("Configuring open news sources...")
-        for category, feeds in news_sources.items():
-            logger.info(f"Processing {category} category with {len(feeds)} feeds")
+    config = load_json_config(config_file)
+    if not config:
+        return 0
+    
+    # Process each category of news sources
+    total_added = 0
+    for category, sources in config.items():
+        logger.info(f"Processing category: {category}")
+        for source_name, source_config in sources.items():
+            # Create a properly formatted name for the source
+            full_name = f"RSS: {source_name} ({category})"
             
-            for feed in feeds:
-                try:
-                    # Create a name for the source
-                    name = f"{feed['name']} ({feed['category']})"
-                    
-                    # Check if source already exists
-                    existing = DataSource.query.filter_by(name=name).first()
-                    if existing:
-                        logger.info(f"Source '{name}' already exists, skipping.")
-                        continue
-                    
-                    # Create the RSS source
-                    config = {'feeds': [feed['url']]}
-                    source_id = rss_source.create_source(name, config)
-                    
-                    if source_id:
-                        logger.info(f"Added RSS source: {name}")
-                        success_count += 1
-                    else:
-                        logger.warning(f"Failed to add RSS source: {name}")
-                        failure_count += 1
-                
-                except Exception as e:
-                    logger.error(f"Error adding source {feed.get('name', 'unknown')}: {e}")
-                    failure_count += 1
-    
-    # Process fact check sources
-    fact_check_sources = load_json_config(FACT_CHECK_SOURCES_FILE)
-    if fact_check_sources:
-        logger.info("Configuring fact-checking sources...")
-        for category, feeds in fact_check_sources.items():
-            logger.info(f"Processing {category} category with {len(feeds)} feeds")
+            # Check if the source already exists
+            existing = db.session.query(DataSource).filter_by(name=full_name).first()
+            if existing:
+                logger.info(f"Source '{full_name}' already exists, skipping.")
+                continue
             
-            for feed in feeds:
-                try:
-                    # Create a name for the source
-                    name = f"FactCheck: {feed['name']} ({feed['category']})"
-                    
-                    # Check if source already exists
-                    existing = DataSource.query.filter_by(name=name).first()
-                    if existing:
-                        logger.info(f"Source '{name}' already exists, skipping.")
-                        continue
-                    
-                    # Create the RSS source
-                    config = {'feeds': [feed['url']]}
-                    source_id = rss_source.create_source(name, config)
-                    
-                    if source_id:
-                        logger.info(f"Added fact-check source: {name}")
-                        success_count += 1
-                    else:
-                        logger.warning(f"Failed to add fact-check source: {name}")
-                        failure_count += 1
-                
-                except Exception as e:
-                    logger.error(f"Error adding fact-check source {feed.get('name', 'unknown')}: {e}")
-                    failure_count += 1
-    
-    # Process open data sources
-    open_data_sources = load_json_config(OPEN_DATA_SOURCES_FILE)
-    if open_data_sources:
-        logger.info("Configuring open data sources...")
-        for category, feeds in open_data_sources.items():
-            logger.info(f"Processing {category} category with {len(feeds)} feeds")
+            # Create config JSON for the source
+            source_data = {
+                "url": source_config["url"],
+                "category": category,
+                "language": source_config.get("language", "en"),
+                "update_frequency": source_config.get("update_frequency", 3600),
+                "max_entries": source_config.get("max_entries", 50)
+            }
             
-            for feed in feeds:
-                try:
-                    # Create a name for the source
-                    name = f"OpenData: {feed['name']} ({feed['category']})"
-                    
-                    # Check if source already exists
-                    existing = DataSource.query.filter_by(name=name).first()
-                    if existing:
-                        logger.info(f"Source '{name}' already exists, skipping.")
-                        continue
-                    
-                    # Create the RSS source
-                    config = {'feeds': [feed['url']]}
-                    source_id = rss_source.create_source(name, config)
-                    
-                    if source_id:
-                        logger.info(f"Added open data source: {name}")
-                        success_count += 1
-                    else:
-                        logger.warning(f"Failed to add open data source: {name}")
-                        failure_count += 1
-                
-                except Exception as e:
-                    logger.error(f"Error adding open data source {feed.get('name', 'unknown')}: {e}")
-                    failure_count += 1
+            # Create and add the source
+            new_source = DataSource(
+                name=full_name,
+                source_type="rss",
+                config=json.dumps(source_data),
+                is_active=True
+            )
+            db.session.add(new_source)
+            
+            logger.info(f"Added source: {full_name}")
+            total_added += 1
     
-    logger.info(f"RSS configuration complete. Added {success_count} sources. Failed: {failure_count}")
-    return success_count, failure_count
+    # Commit changes to the database
+    if total_added > 0:
+        db.session.commit()
+        logger.info(f"Successfully added {total_added} RSS sources")
+    
+    return total_added
 
 def configure_twitter_sources():
     """Configure Twitter data sources for monitoring."""
-    # Initialize Twitter source
-    twitter_source = TwitterSource()
-    success_count = 0
-    failure_count = 0
+    # Path to configuration file
+    config_file = os.path.join('config', 'twitter_sources.json')
     
-    # Define misinformation monitoring queries
-    misinfo_queries = [
-        {
-            "name": "COVID-19 Misinformation Monitor",
-            "queries": [
-                "covid hoax",
-                "covid conspiracy",
-                "vaccine microchip",
-                "5G covid",
-                "pandemic fake"
-            ]
-        },
-        {
-            "name": "Climate Change Misinformation Monitor",
-            "queries": [
-                "climate hoax",
-                "climate change fake",
-                "global warming myth",
-                "climate scientists lying"
-            ]
-        },
-        {
-            "name": "Election Misinformation Monitor",
-            "queries": [
-                "election rigged",
-                "election stolen",
-                "voter fraud widespread",
-                "voting machines hacked"
-            ]
-        },
-        {
-            "name": "Fact-Check Accounts",
-            "queries": [
-                "from:Snopes",
-                "from:PolitiFact",
-                "from:FactCheck.org",
-                "from:APFactCheck",
-                "from:FullFact"
-            ]
-        }
-    ]
+    config = load_json_config(config_file)
+    if not config:
+        return 0
     
-    # Create Twitter sources
-    for source_config in misinfo_queries:
-        try:
-            name = source_config["name"]
-            
-            # Check if source already exists
-            existing = DataSource.query.filter_by(name=name, source_type='twitter').first()
-            if existing:
-                logger.info(f"Twitter source '{name}' already exists, skipping.")
-                continue
-            
-            # Create config
-            config = {'queries': source_config["queries"]}
-            source_id = twitter_source.create_source(name, config)
-            
-            if source_id:
-                logger.info(f"Added Twitter source: {name}")
-                success_count += 1
-            else:
-                logger.warning(f"Failed to add Twitter source: {name}")
-                failure_count += 1
+    # Process each monitoring group
+    total_added = 0
+    for group_name, group_config in config.items():
+        # Create a properly formatted name for the source
+        full_name = f"Twitter: {group_name}"
         
-        except Exception as e:
-            logger.error(f"Error adding Twitter source {source_config.get('name', 'unknown')}: {e}")
-            failure_count += 1
+        # Check if the source already exists
+        existing = db.session.query(DataSource).filter_by(name=full_name).first()
+        if existing:
+            logger.info(f"Twitter source '{full_name}' already exists, skipping.")
+            continue
+        
+        # Create and add the source
+        new_source = DataSource(
+            name=full_name,
+            source_type="twitter",
+            config=json.dumps(group_config),
+            is_active=True
+        )
+        db.session.add(new_source)
+        
+        logger.info(f"Added Twitter source: {full_name}")
+        total_added += 1
     
-    logger.info(f"Twitter configuration complete. Added {success_count} sources. Failed: {failure_count}")
-    return success_count, failure_count
+    # Commit changes to the database
+    if total_added > 0:
+        db.session.commit()
+        logger.info(f"Successfully added {total_added} Twitter sources")
+    else:
+        logger.info("No new Twitter sources added")
+    
+    return total_added
 
 def configure_telegram_sources():
     """Configure Telegram data sources for monitoring."""
-    # Initialize Telegram source
-    telegram_source = TelegramSource()
-    success_count = 0
-    failure_count = 0
+    # Path to configuration file
+    config_file = os.path.join('config', 'telegram_sources.json')
     
-    # Define Telegram channels/groups to monitor
-    telegram_sources = [
-        {
-            "name": "Public Fact-Check Channels",
-            "entities": [
-                "@FactCheck",
-                "@Fullfact",
-                "@correctiv_org",
-                "@AP_FactCheck"
-            ]
-        },
-        {
-            "name": "Science Communication Channels",
-            "entities": [
-                "@WHO",
-                "@CDCgov",
-                "@ScienceAlert",
-                "@NatureNews"
-            ]
-        }
-    ]
+    config = load_json_config(config_file)
+    if not config:
+        return 0
     
-    # Create Telegram sources
-    for source_config in telegram_sources:
-        try:
-            name = source_config["name"]
-            
-            # Check if source already exists
-            existing = DataSource.query.filter_by(name=name, source_type='telegram').first()
-            if existing:
-                logger.info(f"Telegram source '{name}' already exists, skipping.")
-                continue
-            
-            # Create config
-            config = {'entities': source_config["entities"]}
-            source_id = telegram_source.create_source(name, config)
-            
-            if source_id:
-                logger.info(f"Added Telegram source: {name}")
-                success_count += 1
-            else:
-                logger.warning(f"Failed to add Telegram source: {name}")
-                failure_count += 1
+    # Process each monitoring group
+    total_added = 0
+    for group_name, group_config in config.items():
+        # Create a properly formatted name for the source
+        full_name = f"Telegram: {group_name}"
         
-        except Exception as e:
-            logger.error(f"Error adding Telegram source {source_config.get('name', 'unknown')}: {e}")
-            failure_count += 1
+        # Check if the source already exists
+        existing = db.session.query(DataSource).filter_by(name=full_name).first()
+        if existing:
+            logger.info(f"Telegram source '{full_name}' already exists, skipping.")
+            continue
+        
+        # Create and add the source
+        new_source = DataSource(
+            name=full_name,
+            source_type="telegram",
+            config=json.dumps(group_config),
+            is_active=True
+        )
+        db.session.add(new_source)
+        
+        logger.info(f"Added Telegram source: {full_name}")
+        total_added += 1
     
-    logger.info(f"Telegram configuration complete. Added {success_count} sources. Failed: {failure_count}")
-    return success_count, failure_count
+    # Commit changes to the database
+    if total_added > 0:
+        db.session.commit()
+        logger.info(f"Successfully added {total_added} Telegram sources")
+    
+    return total_added
 
 def main():
     """Main initialization function."""
-    logger.info("Starting initialization of open sources for CIVILIAN system")
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     
-    with app.app_context():
-        # Configure all data sources
-        rss_success, rss_failed = configure_rss_sources()
-        twitter_success, twitter_failed = configure_twitter_sources()
-        telegram_success, telegram_failed = configure_telegram_sources()
-        
-        # Summary
-        total_success = rss_success + twitter_success + telegram_success
-        total_failed = rss_failed + twitter_failed + telegram_failed
-        
-        logger.info("========== INITIALIZATION SUMMARY ==========")
-        logger.info(f"Total sources added: {total_success}")
-        logger.info(f"Total sources failed: {total_failed}")
-        logger.info(f"RSS sources: {rss_success} added, {rss_failed} failed")
-        logger.info(f"Twitter sources: {twitter_success} added, {twitter_failed} failed")
-        logger.info(f"Telegram sources: {telegram_success} added, {telegram_failed} failed")
-        logger.info("===========================================")
+    logger.info("Starting open sources configuration")
+    
+    # Configure RSS sources
+    rss_count = configure_rss_sources()
+    logger.info(f"Total RSS sources added: {rss_count}")
+    
+    # Configure Twitter sources
+    twitter_count = configure_twitter_sources()
+    
+    # Configure Telegram sources
+    telegram_count = configure_telegram_sources()
+    
+    logger.info("Open sources configuration completed")
 
 if __name__ == "__main__":
-    main()
+    with app.app_context():
+        main()

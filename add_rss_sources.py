@@ -1,75 +1,74 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 A simplified script to add RSS sources to the CIVILIAN system.
 This only processes the open news sources configuration file.
 """
 
-import json
-import logging
 import os
-from pathlib import Path
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("add_rss_sources")
-
-# Import app components
+import json
+import sys
 from app import app, db
 from models import DataSource
 
 def add_rss_sources():
     """Add RSS sources defined in the config file."""
-    config_path = Path("config/open_news_sources.json")
-    success_count = 0
+    # Path to configuration file
+    config_file = os.path.join('config', 'open_news_sources.json')
     
-    with app.app_context():
-        # Load the news sources config
+    if not os.path.exists(config_file):
+        print(f"Error: Configuration file {config_file} not found")
+        sys.exit(1)
+    
+    # Load the configuration
+    with open(config_file, 'r') as f:
         try:
-            with open(config_path, 'r') as f:
-                news_sources = json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading news sources: {e}")
-            return
-        
-        # Process each category
-        for category, feeds in news_sources.items():
-            logger.info(f"Processing {category} category with {len(feeds)} feeds")
+            config = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"Error parsing configuration file: {e}")
+            sys.exit(1)
+    
+    # Process each category of news sources
+    total_added = 0
+    for category, sources in config.items():
+        print(f"Processing category: {category}")
+        for source_name, source_config in sources.items():
+            # Create a properly formatted name for the source
+            full_name = f"RSS: {source_name} ({category})"
             
-            for feed in feeds:
-                try:
-                    # Create source name
-                    name = f"{feed['name']} ({feed['category']})"
-                    
-                    # Check if source already exists
-                    existing = DataSource.query.filter_by(name=name).first()
-                    if existing:
-                        logger.info(f"Source '{name}' already exists, skipping.")
-                        continue
-                    
-                    # Create config
-                    config = {'feeds': [feed['url']]}
-                    
-                    # Create the source
-                    source = DataSource(
-                        name=name,
-                        source_type='rss',
-                        config=json.dumps(config),
-                        is_active=True
-                    )
-                    
-                    # Add to database
-                    db.session.add(source)
-                    db.session.commit()
-                    
-                    logger.info(f"Added source: {name}")
-                    success_count += 1
-                
-                except Exception as e:
-                    logger.error(f"Error adding source {feed['name']}: {e}")
-                    db.session.rollback()
-        
-        logger.info(f"Added {success_count} RSS sources")
+            # Check if the source already exists
+            existing = db.session.query(DataSource).filter_by(name=full_name).first()
+            if existing:
+                print(f"Source '{full_name}' already exists, skipping.")
+                continue
+            
+            # Create config JSON for the source
+            source_data = {
+                "url": source_config["url"],
+                "category": category,
+                "language": source_config.get("language", "en"),
+                "update_frequency": source_config.get("update_frequency", 3600),
+                "max_entries": source_config.get("max_entries", 50)
+            }
+            
+            # Create and add the source
+            new_source = DataSource(
+                name=full_name,
+                source_type="rss",
+                config=json.dumps(source_data),
+                is_active=True
+            )
+            db.session.add(new_source)
+            
+            print(f"Added source: {full_name}")
+            total_added += 1
+    
+    # Commit changes to the database
+    if total_added > 0:
+        db.session.commit()
+        print(f"Successfully added {total_added} RSS sources")
+    else:
+        print("No new RSS sources added")
 
 if __name__ == "__main__":
-    add_rss_sources()
+    with app.app_context():
+        add_rss_sources()
