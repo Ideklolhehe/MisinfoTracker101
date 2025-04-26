@@ -51,6 +51,12 @@ class NarrativeInstance(db.Model):
     
     narrative = db.relationship('DetectedNarrative', backref='instances')
     source = db.relationship('DataSource')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 class BeliefNode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -58,6 +64,12 @@ class BeliefNode(db.Model):
     node_type = db.Column(db.String(50))  # claim, entity, source, etc.
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     meta_data = db.Column(db.Text)  # JSON with additional metadata
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 class BeliefEdge(db.Model):
     id = db.Column(db.Integer, primary_key=True)
