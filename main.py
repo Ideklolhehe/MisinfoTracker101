@@ -439,9 +439,13 @@ def initialize_app():
     
     logger.info("CIVILIAN application initialized")
 
-# Register home blueprint for root URL
+# Register blueprints
 from routes.home import home_bp
 app.register_blueprint(home_bp)
+
+# Register adversarial content management blueprint
+from routes.adversarial import adversarial_bp
+app.register_blueprint(adversarial_bp)
 
 # Initialize the app when imported
 with app.app_context():

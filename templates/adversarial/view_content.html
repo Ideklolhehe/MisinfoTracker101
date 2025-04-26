@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}View Adversarial Content{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('adversarial.index') }}">Adversarial Content</a></li>
+            <li class="breadcrumb-item active">View Content</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        {% if content.variant_of_id %}
+                            Variant of Content #{{ content.variant_of_id }}
+                        {% else %}
+                            Content #{{ content.id }}
+                        {% endif %}
+                    </h5>
+                    <div>
+                        <span class="badge bg-info">{{ content.topic|replace('_', ' ')|title }}</span>
+                        <span class="badge bg-secondary">{{ content.misinfo_type|replace('_', ' ')|title }}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h4>{{ content.title }}</h4>
+                    
+                    <div class="alert alert-warning">
+                        <small class="text-uppercase fw-bold">Training Content Only</small> - This is artificially generated misinformation for system training purposes.
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h6>Content:</h6>
+                        <div class="p-3 bg-dark text-light rounded">
+                            {{ content.content|nl2br }}
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Details:</h6>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Topic:</span>
+                                    <span>{{ content.topic|replace('_', ' ')|title }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Misinformation Type:</span>
+                                    <span>{{ content.misinfo_type|replace('_', ' ')|title }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Generation Method:</span>
+                                    <span>{{ content.generation_method|upper }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Generated At:</span>
+                                    <span>{{ content.generated_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Active:</span>
+                                    <span>
+                                        {% if content.is_active %}
+                                            <span class="badge bg-success">Yes</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">No</span>
+                                        {% endif %}
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Metadata:</h6>
+                            <div class="p-3 bg-dark text-light rounded" style="max-height: 200px; overflow-y: auto;">
+                                <pre>{{ content.get_meta_data()|tojson(indent=2) }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#evaluateModal">
+                                Evaluate Detection
+                            </button>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            {% if not content.variant_of_id %}
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#variantsModal">
+                                    Generate Variants
+                                </button>
+                            {% endif %}
+                            
+                            {% if content.is_active %}
+                                <form action="{{ url_for('adversarial.deactivate_content', content_id=content.id) }}" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Are you sure you want to deactivate this content?')">
+                                        Deactivate
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Evaluations Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Detection Evaluations</h5>
+                </div>
+                <div class="card-body">
+                    {% if evaluations %}
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Detector Version</th>
+                                        <th>Correct?</th>
+                                        <th>Score</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for eval in evaluations %}
+                                    <tr>
+                                        <td>{{ eval.evaluation_date.strftime('%Y-%m-%d') }}</td>
+                                        <td>{{ eval.detector_version }}</td>
+                                        <td>
+                                            {% if eval.correct_detection %}
+                                                <span class="badge bg-success">Yes</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">No</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ "%.2f"|format(eval.confidence_score) }}</td>
+                                        <td>{{ eval.notes|truncate(30) if eval.notes else '-' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-center">No evaluations recorded yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Parent Content Section (for variants) -->
+            {% if parent %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Parent Content</h5>
+                </div>
+                <div class="card-body">
+                    <h6>{{ parent.title }}</h6>
+                    <p class="small">{{ parent.content|truncate(200) }}</p>
+                    <a href="{{ url_for('adversarial.view_content', content_id=parent.id) }}" class="btn btn-sm btn-outline-primary">View Parent</a>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Variants Section -->
+            {% if variants %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Content Variants</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for variant in variants %}
+                        <a href="{{ url_for('adversarial.view_content', content_id=variant.id) }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">Variant #{{ variant.id }}</h6>
+                                <small>{{ variant.generated_at.strftime('%Y-%m-%d') }}</small>
+                            </div>
+                            <p class="mb-1">{{ variant.title|truncate(50) }}</p>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Evaluate Modal -->
+<div class="modal fade" id="evaluateModal" tabindex="-1" aria-labelledby="evaluateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="evaluateModalLabel">Evaluate Detection</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('adversarial.evaluate_content', content_id=content.id) }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="detector_version" class="form-label">Detector Version</label>
+                        <input type="text" class="form-control" id="detector_version" name="detector_version" value="current" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="correct_detection" class="form-label">Was Detection Correct?</label>
+                        <select class="form-select" id="correct_detection" name="correct_detection" required>
+                            <option value="true">Yes - Correctly Identified as Misinformation</option>
+                            <option value="false">No - Failed to Identify as Misinformation</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confidence_score" class="form-label">Confidence Score</label>
+                        <input type="range" class="form-range" min="0" max="1" step="0.01" id="confidence_score" name="confidence_score" value="0.75">
+                        <div class="text-center" id="confidence_value">0.75</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Evaluation Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Record Evaluation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Generate Variants Modal -->
+<div class="modal fade" id="variantsModal" tabindex="-1" aria-labelledby="variantsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="variantsModalLabel">Generate Content Variants</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('adversarial.generate_variants', content_id=content.id) }}" method="post">
+                <div class="modal-body">
+                    <p>Create variations of this content that maintain the same false claims but change the presentation.</p>
+                    
+                    <div class="mb-3">
+                        <label for="num_variants" class="form-label">Number of Variants</label>
+                        <input type="number" class="form-control" id="num_variants" name="num_variants" min="1" max="5" value="3" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Generate Variants</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Update confidence score value display
+    document.getElementById('confidence_score').addEventListener('input', function() {
+        document.getElementById('confidence_value').textContent = this.value;
+    });
+</script>
+{% endblock %}
+{% endblock %}

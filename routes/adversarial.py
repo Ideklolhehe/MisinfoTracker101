@@ -8,7 +8,7 @@ adversarial content used for training the CIVILIAN system.
 import logging
 import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import login_required, current_user
+# from flask_login import login_required, current_user
 
 from app import db
 from models import AdversarialContent, AdversarialEvaluation
@@ -21,7 +21,6 @@ adversarial_bp = Blueprint('adversarial', __name__, url_prefix='/adversarial')
 adversarial_service = AdversarialService()
 
 @adversarial_bp.route('/')
-@login_required
 def index():
     """Render the adversarial content management page."""
     # Get all active adversarial content
@@ -44,7 +43,6 @@ def index():
                          misinfo_options=misinfo_options)
 
 @adversarial_bp.route('/content/<int:content_id>')
-@login_required
 def view_content(content_id):
     """View details of a specific adversarial content piece."""
     content = adversarial_service.get_content_by_id(content_id)
@@ -71,7 +69,6 @@ def view_content(content_id):
                          evaluations=evaluations)
 
 @adversarial_bp.route('/generate', methods=['POST'])
-@login_required
 def generate_content():
     """Generate new adversarial content."""
     topic = request.form.get('topic')
@@ -98,7 +95,6 @@ def generate_content():
         return redirect(url_for('adversarial.index'))
 
 @adversarial_bp.route('/batch', methods=['POST'])
-@login_required
 def generate_batch():
     """Generate a batch of adversarial content."""
     batch_size = int(request.form.get('batch_size', 5))
@@ -125,7 +121,6 @@ def generate_batch():
         return redirect(url_for('adversarial.index'))
 
 @adversarial_bp.route('/variants/<int:content_id>', methods=['POST'])
-@login_required
 def generate_variants(content_id):
     """Generate variants of existing content."""
     num_variants = int(request.form.get('num_variants', 3))
@@ -153,7 +148,6 @@ def generate_variants(content_id):
         return redirect(url_for('adversarial.view_content', content_id=content_id))
 
 @adversarial_bp.route('/evaluate/<int:content_id>', methods=['POST'])
-@login_required
 def evaluate_content(content_id):
     """Evaluate adversarial content."""
     detector_version = request.form.get('detector_version', 'current')
@@ -167,7 +161,7 @@ def evaluate_content(content_id):
             detector_version=detector_version,
             correct_detection=correct_detection,
             confidence_score=confidence_score,
-            user_id=current_user.id,
+            user_id=None,
             notes=notes
         )
         
@@ -180,7 +174,6 @@ def evaluate_content(content_id):
         return redirect(url_for('adversarial.view_content', content_id=content_id))
 
 @adversarial_bp.route('/deactivate/<int:content_id>', methods=['POST'])
-@login_required
 def deactivate_content(content_id):
     """Deactivate adversarial content (don't use for training)."""
     try:
@@ -197,7 +190,6 @@ def deactivate_content(content_id):
         return redirect(url_for('adversarial.index'))
 
 @adversarial_bp.route('/api/content/<int:content_id>')
-@login_required
 def api_get_content(content_id):
     """API endpoint to get content details."""
     content = adversarial_service.get_content_by_id(content_id)
@@ -225,14 +217,12 @@ def api_get_content(content_id):
     return jsonify(result)
 
 @adversarial_bp.route('/api/stats')
-@login_required
 def api_get_stats():
     """API endpoint to get evaluation statistics."""
     stats = adversarial_service.get_evaluation_stats()
     return jsonify(stats)
 
 @adversarial_bp.route('/api/content/topic/<topic>')
-@login_required
 def api_get_by_topic(topic):
     """API endpoint to get content by topic."""
     limit = request.args.get('limit', 10, type=int)
@@ -249,7 +239,6 @@ def api_get_by_topic(topic):
     return jsonify(results)
 
 @adversarial_bp.route('/api/training-data')
-@login_required
 def api_get_training_data():
     """API endpoint to get content for training."""
     limit = request.args.get('limit', 100, type=int)
