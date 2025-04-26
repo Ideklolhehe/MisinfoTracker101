@@ -80,6 +80,7 @@ with app.app_context():
     app.register_blueprint(data_sources_bp, url_prefix='/data-sources')
     app.register_blueprint(adversarial_bp, url_prefix='/adversarial')
     app.register_blueprint(verification_bp, url_prefix='/verify')
+    app.register_blueprint(profile_bp)
     app.register_blueprint(home_bp)
     
     # Create database tables
