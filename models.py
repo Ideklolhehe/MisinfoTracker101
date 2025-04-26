@@ -23,7 +23,7 @@ class DataSource(db.Model):
 
 class DetectedNarrative(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.Text, nullable=False)  # Changed from String(200) to Text to handle longer titles
     description = db.Column(db.Text)
     confidence_score = db.Column(db.Float)
     first_detected = db.Column(db.DateTime, default=datetime.utcnow)
