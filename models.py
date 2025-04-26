@@ -1,17 +1,24 @@
 from datetime import datetime
 from app import db
 from flask_login import UserMixin
+from flask_dance.consumer.storage.sqla import OAuthConsumerMixin
+from sqlalchemy import UniqueConstraint
 import json
 import enum
 
 class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = 'users'
+    id = db.Column(db.String, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256))
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    password_hash = db.Column(db.String(256), nullable=True)
     role = db.Column(db.String(20), default='analyst')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
+    first_name = db.Column(db.String(64), nullable=True)
+    last_name = db.Column(db.String(64), nullable=True)
+    bio = db.Column(db.Text, nullable=True)
+    profile_image_url = db.Column(db.String(512), nullable=True)
     meta_data = db.Column(db.Text)  # JSON with user preferences, settings, expertise areas, etc.
     
     def set_meta_data(self, data):
@@ -19,6 +26,18 @@ class User(UserMixin, db.Model):
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
+        
+class OAuth(OAuthConsumerMixin, db.Model):
+    user_id = db.Column(db.String, db.ForeignKey(User.id))
+    browser_session_key = db.Column(db.String, nullable=False)
+    user = db.relationship(User)
+
+    __table_args__ = (UniqueConstraint(
+        'user_id',
+        'browser_session_key',
+        'provider',
+        name='uq_user_browser_session_key_provider',
+    ),)
 
 class DataSource(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -111,8 +130,8 @@ class CounterMessage(db.Model):
     strategy = db.Column(db.String(100))  # fact-checking, prebunking, etc.
     status = db.Column(db.String(50), default='draft')  # draft, approved, deployed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
-    approved_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+    created_by = db.Column(db.String, db.ForeignKey('users.id'))
+    approved_by = db.Column(db.String, db.ForeignKey('users.id'))
     meta_data = db.Column(db.Text)  # JSON with effectiveness metrics, audience data, etc.
     
     narrative = db.relationship('DetectedNarrative')
@@ -224,7 +243,7 @@ class UserSubmission(db.Model):
     source_url = db.Column(db.String(1024))  # Original source if provided
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
     ip_address = db.Column(db.String(45))  # To track submission source
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Optional, for logged-in users
+    user_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)  # Optional, for logged-in users
     meta_data = db.Column(db.Text)  # JSON with additional submission metadata
     
     # Relationships
