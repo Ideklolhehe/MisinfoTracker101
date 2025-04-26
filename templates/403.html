@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Access Denied{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Access Denied (403)</h4>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">You don't have permission to access this resource</h5>
+                    <p class="card-text">
+                        Sorry, but you don't have the necessary permissions to access this page. 
+                        This might be because:
+                    </p>
+                    <ul>
+                        <li>You need to log in first</li>
+                        <li>Your account doesn't have the required access level</li>
+                        <li>The resource has been moved or restricted</li>
+                    </ul>
+                    <div class="mt-4">
+                        <a href="{{ url_for('homepage.index') }}" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Return to Home
+                        </a>
+                        <a href="{{ url_for('replit_auth.login') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-sign-in-alt"></i> Log In
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
