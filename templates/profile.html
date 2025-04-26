@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}User Profile - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    {% if current_user.profile_image_url %}
+                    <img src="{{ current_user.profile_image_url }}" alt="Profile Picture" class="rounded-circle img-fluid" style="width: 150px;">
+                    {% else %}
+                    <img src="{{ url_for('static', filename='images/default-profile.png') }}" alt="Default Profile Picture" class="rounded-circle img-fluid" style="width: 150px;">
+                    {% endif %}
+                    <h5 class="my-3">{{ current_user.username }}</h5>
+                    <p class="text-muted mb-1">CIVILIAN System User</p>
+                    <p class="text-muted mb-4">Role: {{ current_user.role if current_user.role else "User" }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-sm-3">
+                            <p class="mb-0">Username</p>
+                        </div>
+                        <div class="col-sm-9">
+                            <p class="text-muted mb-0">{{ current_user.username }}</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-3">
+                            <p class="mb-0">Email</p>
+                        </div>
+                        <div class="col-sm-9">
+                            <p class="text-muted mb-0">{{ current_user.email if current_user.email else "Not provided" }}</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-3">
+                            <p class="mb-0">Full Name</p>
+                        </div>
+                        <div class="col-sm-9">
+                            <p class="text-muted mb-0">
+                                {% if current_user.first_name or current_user.last_name %}
+                                    {{ current_user.first_name if current_user.first_name else "" }} 
+                                    {{ current_user.last_name if current_user.last_name else "" }}
+                                {% else %}
+                                    Not provided
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-3">
+                            <p class="mb-0">Bio</p>
+                        </div>
+                        <div class="col-sm-9">
+                            <p class="text-muted mb-0">{{ current_user.bio if current_user.bio else "No bio provided" }}</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-3">
+                            <p class="mb-0">Account Created</p>
+                        </div>
+                        <div class="col-sm-9">
+                            <p class="text-muted mb-0">{{ current_user.created_at.strftime('%B %d, %Y') if current_user.created_at else "Unknown" }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Activity Summary</h5>
+                </div>
+                <div class="card-body">
+                    <p>To track and view your activity within the CIVILIAN system, visit the dashboard for detailed statistics and reports.</p>
+                    <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">View Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
