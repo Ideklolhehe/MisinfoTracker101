@@ -447,6 +447,10 @@ app.register_blueprint(home_bp)
 from routes.adversarial import adversarial_bp
 app.register_blueprint(adversarial_bp)
 
+# Register content verification blueprint
+from routes.verification import verification_bp
+app.register_blueprint(verification_bp)
+
 # Initialize the app when imported
 with app.app_context():
     initialize_app()
