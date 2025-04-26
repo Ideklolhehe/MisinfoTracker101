@@ -1,306 +1,241 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 
-{% block title %}CIVILIAN - Dashboard{% endblock %}
+{% block title %}Dashboard - CIVILIAN{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Dashboard</h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <div class="btn-group me-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary">Export</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary">Share</button>
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="mb-3">CIVILIAN Dashboard</h1>
+            <p class="lead">Welcome to the CIVILIAN intelligence dashboard, {{ current_user.username }}.</p>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle">
-            <i data-feather="calendar"></i>
-            Last 7 days
-        </button>
     </div>
-</div>
 
-{% if error %}
-<div class="alert alert-danger">{{ error }}</div>
-{% endif %}
-
-<!-- Dashboard Stats -->
-<div class="row" id="dashboard-stats">
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stats-card h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="card-title text-uppercase mb-1">Total Narratives</div>
-                        <div class="stat-value text-info" id="total-narratives-count">{{ total_narratives }}</div>
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Narrative Detection</h5>
+                </div>
+                <div class="card-body">
+                    <h3 class="display-4 text-center">58</h3>
+                    <p class="text-center mb-0">Active narratives tracked</p>
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="#" class="btn btn-outline-primary">View Narratives</a>
                     </div>
-                    <div class="col-auto">
-                        <i data-feather="activity" class="text-info" style="width: 32px; height: 32px;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">Threat Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <h3 class="display-4 text-center">12</h3>
+                    <p class="text-center mb-0">High-threat narratives</p>
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="#" class="btn btn-outline-warning">View Threats</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Counter-messaging</h5>
+                </div>
+                <div class="card-body">
+                    <h3 class="display-4 text-center">27</h3>
+                    <p class="text-center mb-0">Active countermeasures</p>
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="#" class="btn btn-outline-success">View Countermeasures</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stats-card h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="card-title text-uppercase mb-1">Active Narratives</div>
-                        <div class="stat-value text-warning" id="active-narratives-count">{{ active_narratives }}</div>
-                    </div>
-                    <div class="col-auto">
-                        <i data-feather="alert-triangle" class="text-warning" style="width: 32px; height: 32px;"></i>
-                    </div>
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Emerging Trends</h5>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stats-card h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="card-title text-uppercase mb-1">Content Instances</div>
-                        <div class="stat-value text-success" id="total-instances-count">{{ total_instances }}</div>
-                    </div>
-                    <div class="col-auto">
-                        <i data-feather="file-text" class="text-success" style="width: 32px; height: 32px;"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stats-card h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="card-title text-uppercase mb-1">Pending Messages</div>
-                        <div class="stat-value text-danger" id="pending-messages-count">
-                            {% if pending_messages %}
-                                {{ pending_messages|length }}
-                            {% else %}
-                                0
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="col-auto">
-                        <i data-feather="shield" class="text-danger" style="width: 32px; height: 32px;"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- New content notification -->
-<div id="new-content-notification" class="toast align-items-center text-white bg-info border-0 d-none" role="alert" aria-live="assertive" aria-atomic="true">
-    <div class="d-flex">
-        <div class="toast-body">
-            <i data-feather="refresh-cw"></i> New content available. Click to refresh.
-        </div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-</div>
-
-<!-- Charts -->
-<div class="row mb-4">
-    <div class="col-md-8">
-        <div class="chart-container">
-            <canvas id="narratives-chart"></canvas>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="chart-container">
-            <canvas id="threat-distribution-chart"></canvas>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="chart-container">
-            <canvas id="source-distribution-chart"></canvas>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Active Data Sources</h5>
-            </div>
-            <div class="card-body">
-                {% if active_sources %}
+                <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-sm table-hover">
+                        <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Last Ingestion</th>
+                                    <th>Narrative</th>
+                                    <th>First Detected</th>
+                                    <th>Threat Level</th>
+                                    <th>Propagation</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for source in active_sources %}
-                                    <tr>
-                                        <td>{{ source.name }}</td>
-                                        <td><span class="badge bg-info">{{ source.source_type }}</span></td>
-                                        <td>
-                                            {% if source.is_active %}
-                                                <span class="badge bg-success">Active</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary">Inactive</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if source.last_ingestion %}
-                                                {{ source.last_ingestion.strftime('%Y-%m-%d %H:%M') }}
-                                            {% else %}
-                                                Never
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endfor %}
+                                <tr>
+                                    <td>COVID-19 vaccine microchip conspiracy</td>
+                                    <td>Jan 15, 2025</td>
+                                    <td><span class="badge bg-danger">High</span></td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-danger" role="progressbar" style="width: 75%;" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100">75%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Election fraud claims in Argentina</td>
+                                    <td>Feb 2, 2025</td>
+                                    <td><span class="badge bg-warning">Medium</span></td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 45%;" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100">45%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Climate change data manipulation</td>
+                                    <td>Mar 10, 2025</td>
+                                    <td><span class="badge bg-danger">High</span></td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-danger" role="progressbar" style="width: 68%;" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100">68%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>AI-generated political deepfakes</td>
+                                    <td>Mar 22, 2025</td>
+                                    <td><span class="badge bg-danger">High</span></td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-danger" role="progressbar" style="width: 82%;" aria-valuenow="82" aria-valuemin="0" aria-valuemax="100">82%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Financial market manipulation rumors</td>
+                                    <td>Apr 5, 2025</td>
+                                    <td><span class="badge bg-success">Low</span></td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 15%;" aria-valuenow="15" aria-valuemin="0" aria-valuemax="100">15%</div>
+                                        </div>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
-                {% else %}
-                    <div class="alert alert-warning">
-                        No active data sources configured. 
-                        <a href="{{ url_for('dashboard.settings') }}" class="alert-link">Configure sources</a>
-                    </div>
-                {% endif %}
+                </div>
             </div>
         </div>
-    </div>
-</div>
-
-<!-- High Threat Narratives & Counter Messages -->
-<div class="row">
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">High Threat Narratives</h5>
-                <a href="{{ url_for('dashboard.narratives') }}" class="btn btn-sm btn-outline-info">View All</a>
-            </div>
-            <div class="card-body">
-                {% if high_threat_narratives %}
-                    {% for narrative in high_threat_narratives %}
-                        <div class="card mb-3 narrative-card high-threat-narrative">
-                            <div class="card-body">
-                                <h6 class="narrative-title">
-                                    <a href="{{ url_for('dashboard.narrative_detail', narrative_id=narrative.id) }}" class="text-white">
-                                        {{ narrative.title }}
-                                    </a>
-                                </h6>
-                                <div class="d-flex justify-content-between align-items-center narrative-meta">
-                                    <div>
-                                        <span class="badge bg-danger" id="threat-badge-{{ narrative.id }}">
-                                            Threat Level: {{ narrative.threat_level }}
-                                        </span>
-                                        <small class="ms-2">
-                                            Last updated: {{ narrative.last_updated.strftime('%Y-%m-%d %H:%M') }}
-                                        </small>
-                                    </div>
-                                    <div>
-                                        <a href="{{ url_for('dashboard.narrative_detail', narrative_id=narrative.id) }}" class="btn btn-sm btn-outline-light">
-                                            <i data-feather="eye" class="feather-small"></i> View
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="alert alert-info">No high threat narratives detected.</div>
-                {% endif %}
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Source Reliability Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <p>Top misinformation sources tracked this month:</p>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Social Media Platform A</span>
+                            <span class="badge bg-danger rounded-pill">43%</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>News Network B</span>
+                            <span class="badge bg-warning rounded-pill">28%</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Messaging App C</span>
+                            <span class="badge bg-danger rounded-pill">39%</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Blog Network D</span>
+                            <span class="badge bg-success rounded-pill">12%</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Video Platform E</span>
+                            <span class="badge bg-warning rounded-pill">31%</span>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
     
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Pending Counter Messages</h5>
-                <a href="{{ url_for('dashboard.counter_messaging') }}" class="btn btn-sm btn-outline-info">View All</a>
-            </div>
-            <div class="card-body">
-                {% if pending_messages %}
-                    {% for message in pending_messages %}
-                        <div class="card mb-3 counter-message draft">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>
-                                    {% if message.narrative_id %}
-                                        {% set narrative = message.narrative %}
-                                        <a href="{{ url_for('dashboard.narrative_detail', narrative_id=message.narrative_id) }}" class="text-white">
-                                            {{ narrative.title if narrative else 'Unknown Narrative' }}
-                                        </a>
-                                    {% else %}
-                                        Unknown Narrative
-                                    {% endif %}
-                                </span>
-                                <span class="badge bg-warning">Draft</span>
-                            </div>
-                            <div class="card-body">
-                                <p class="card-text">{{ message.content }}</p>
-                            </div>
-                            <div class="card-footer d-flex justify-content-between align-items-center">
-                                <small class="text-muted">Created: {{ message.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
-                                <button class="btn btn-sm btn-primary approve-counter-btn" data-message-id="{{ message.id }}">
-                                    Approve
-                                </button>
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent System Activities</h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-0">Detection engine identified new narrative cluster</h6>
+                                <small class="text-muted">10 minutes ago</small>
+                                <p class="mt-2">The system detected a new narrative involving "synthetic food conspiracies" spreading across multiple platforms.</p>
                             </div>
                         </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="alert alert-info">No pending counter messages.</div>
-                {% endif %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-success"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-0">Countermeasure deployed</h6>
+                                <small class="text-muted">45 minutes ago</small>
+                                <p class="mt-2">Automated fact-checking response deployed against "financial market manipulation" narrative.</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-warning"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-0">Threat level increased</h6>
+                                <small class="text-muted">2 hours ago</small>
+                                <p class="mt-2">The propagation of "election fraud claims" narrative has increased above threshold, prompting escalation.</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-info"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-0">New data source connected</h6>
+                                <small class="text-muted">4 hours ago</small>
+                                <p class="mt-2">Added monitoring for emerging social platform to improve detection capabilities.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- System Logs -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Recent System Logs</h5>
-            </div>
-            <div class="card-body">
-                {% if recent_logs %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Timestamp</th>
-                                    <th>Component</th>
-                                    <th>Type</th>
-                                    <th>Message</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for log in recent_logs %}
-                                    <tr class="{% if log.log_type == 'error' %}table-danger{% elif log.log_type == 'warning' %}table-warning{% endif %}">
-                                        <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                                        <td>{{ log.component }}</td>
-                                        <td>
-                                            <span class="badge {% if log.log_type == 'error' %}bg-danger{% elif log.log_type == 'warning' %}bg-warning{% else %}bg-info{% endif %}">
-                                                {{ log.log_type }}
-                                            </span>
-                                        </td>
-                                        <td>{{ log.message }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="alert alert-info">No recent system logs.</div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
+<style>
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+.timeline-item {
+    position: relative;
+    padding-bottom: 2rem;
+}
+.timeline-marker {
+    position: absolute;
+    left: -30px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    top: 5px;
+}
+.timeline-item:not(:last-child):before {
+    content: '';
+    position: absolute;
+    left: -23px;
+    top: 20px;
+    height: calc(100% - 10px);
+    width: 2px;
+    background-color: #e9ecef;
+}
+</style>
 {% endblock %}
