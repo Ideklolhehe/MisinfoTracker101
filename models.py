@@ -2,6 +2,7 @@ from datetime import datetime
 from app import db
 from flask_login import UserMixin
 import json
+import enum
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -179,6 +180,76 @@ class AdversarialEvaluation(db.Model):
     
     # Relationship
     evaluator = db.relationship('User', foreign_keys=[evaluated_by])
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class ContentType(enum.Enum):
+    """Enum for types of user-submitted content."""
+    TEXT = "text"
+    IMAGE = "image"
+    VIDEO = "video"
+    TEXT_IMAGE = "text_image"
+    TEXT_VIDEO = "text_video"
+
+
+class VerificationType(enum.Enum):
+    """Enum for types of verification performed."""
+    MISINFORMATION = "misinformation"
+    AI_GENERATED = "ai_generated"
+    AUTHENTICITY = "authenticity"
+    FACTUAL_ACCURACY = "factual_accuracy"
+
+
+class VerificationStatus(enum.Enum):
+    """Enum for status of verification process."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class UserSubmission(db.Model):
+    """Model for storing user-submitted content for verification."""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200))
+    description = db.Column(db.Text)
+    content_type = db.Column(db.String(20), nullable=False)  # text, image, video, text_image, text_video
+    text_content = db.Column(db.Text)
+    media_path = db.Column(db.String(500))  # Path to stored image/video
+    source_url = db.Column(db.String(1024))  # Original source if provided
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ip_address = db.Column(db.String(45))  # To track submission source
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Optional, for logged-in users
+    meta_data = db.Column(db.Text)  # JSON with additional submission metadata
+    
+    # Relationships
+    user = db.relationship('User', backref='submissions')
+    verification_results = db.relationship('VerificationResult', backref='submission', lazy='dynamic')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class VerificationResult(db.Model):
+    """Model for storing verification results for user-submitted content."""
+    id = db.Column(db.Integer, primary_key=True)
+    submission_id = db.Column(db.Integer, db.ForeignKey('user_submission.id'), nullable=False)
+    verification_type = db.Column(db.String(50), nullable=False)  # misinformation, ai_generated, authenticity, factual_accuracy
+    status = db.Column(db.String(20), default='pending')  # pending, processing, completed, failed
+    confidence_score = db.Column(db.Float)  # 0-1 confidence in the verification result
+    result_summary = db.Column(db.Text)  # Human-readable summary of the result
+    evidence = db.Column(db.Text)  # Supporting evidence for the verification
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+    meta_data = db.Column(db.Text)  # JSON with detailed verification results
     
     def set_meta_data(self, data):
         self.meta_data = json.dumps(data)
