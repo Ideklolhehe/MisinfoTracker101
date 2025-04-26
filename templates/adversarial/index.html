@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Adversarial Training Content Management{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h1>Adversarial Content Management</h1>
+            <p class="lead">Generate and manage adversarial misinformation content for system training.</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#generateModal">
+                Generate New Content
+            </button>
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#batchModal">
+                Batch Generate
+            </button>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Total Content:</strong> {{ stats.total_content }}</p>
+                    <p><strong>Total Evaluations:</strong> {{ stats.total_evaluations }}</p>
+                    <p><strong>Detection Rate:</strong> {{ "%.2f"|format(stats.detection_rate * 100) }}%</p>
+                    
+                    <h6 class="mt-3">By Misinformation Type:</h6>
+                    <ul class="list-group">
+                        {% for type, type_stats in stats.by_misinfo_type.items() %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ type }}
+                                <span class="badge bg-primary rounded-pill">{{ type_stats.content_count }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Generated Content</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Topic</th>
+                                    <th>Type</th>
+                                    <th>Generated</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for content in contents %}
+                                <tr>
+                                    <td>{{ content.title|truncate(30) }}</td>
+                                    <td>{{ content.topic }}</td>
+                                    <td>{{ content.misinfo_type }}</td>
+                                    <td>{{ content.generated_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('adversarial.view_content', content_id=content.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No content generated yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generate Content Modal -->
+<div class="modal fade" id="generateModal" tabindex="-1" aria-labelledby="generateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="generateModalLabel">Generate Adversarial Content</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('adversarial.generate_content') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="topic" class="form-label">Topic Area</label>
+                        <select class="form-select" id="topic" name="topic" required>
+                            <option value="">Select a topic...</option>
+                            {% for topic in topic_options %}
+                            <option value="{{ topic }}">{{ topic|replace('_', ' ')|title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="misinfo_type" class="form-label">Misinformation Type</label>
+                        <select class="form-select" id="misinfo_type" name="misinfo_type" required>
+                            <option value="">Select a type...</option>
+                            {% for type in misinfo_options %}
+                            <option value="{{ type }}">{{ type|replace('_', ' ')|title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="real_content" class="form-label">Base on Real Content (Optional)</label>
+                        <textarea class="form-control" id="real_content" name="real_content" rows="4" placeholder="Paste real content to create adversarial variations..."></textarea>
+                        <div class="form-text">If provided, the system will create adversarial content based on this real content.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Generate Content</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Batch Generate Modal -->
+<div class="modal fade" id="batchModal" tabindex="-1" aria-labelledby="batchModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="batchModalLabel">Batch Generate Content</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('adversarial.generate_batch') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="batch_size" class="form-label">Batch Size</label>
+                        <input type="number" class="form-control" id="batch_size" name="batch_size" min="1" max="20" value="5" required>
+                        <div class="form-text">Number of content items to generate (1-20)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Topics (Optional)</label>
+                        <div class="row">
+                            {% for topic in topic_options %}
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="topics" value="{{ topic }}" id="topic-{{ topic }}">
+                                    <label class="form-check-label" for="topic-{{ topic }}">
+                                        {{ topic|replace('_', ' ')|title }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text">If none selected, random topics will be used.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Misinformation Types (Optional)</label>
+                        <div class="row">
+                            {% for type in misinfo_options %}
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="misinfo_types" value="{{ type }}" id="type-{{ type }}">
+                                    <label class="form-check-label" for="type-{{ type }}">
+                                        {{ type|replace('_', ' ')|title }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text">If none selected, random types will be used.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Generate Batch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
