@@ -31,9 +31,11 @@ def add_rss_sources():
     total_added = 0
     for category, sources in config.items():
         print(f"Processing category: {category}")
-        for source_name, source_config in sources.items():
+        for source_config in sources:
+            # Get the source name from the config
+            source_name = source_config["name"]
             # Create a properly formatted name for the source
-            full_name = f"RSS: {source_name} ({category})"
+            full_name = f"RSS: {source_name} ({source_config['category']})"
             
             # Check if the source already exists
             existing = db.session.query(DataSource).filter_by(name=full_name).first()
