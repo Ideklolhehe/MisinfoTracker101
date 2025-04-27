@@ -1,94 +1,97 @@
-#!/usr/bin/env python
 """
 Script to temporarily fix authentication issues in the CIVILIAN system.
 This should be used during development to disable login requirements.
 """
 
-import re
 import os
-import glob
+import re
+import importlib
+import logging
 
-def fix_adversarial_route():
-    """Remove login_required decorators from adversarial route."""
-    # Path to the file
-    file_path = 'routes/adversarial.py'
-    
-    if not os.path.exists(file_path):
-        print(f"Warning: {file_path} not found")
-        return
-    
-    print(f"Processing {file_path}...")
-    
-    # Read the file content
-    with open(file_path, 'r') as file:
-        content = file.read()
-    
-    # Remove all @login_required decorators
-    old_content = content
-    content = re.sub(r'@login_required\n', '', content)
-    
-    # Replace current_user.id with None
-    content = re.sub(r'user_id=current_user\.id', 'user_id=None', content)
-    
-    # Write the modified content back to the file if changed
-    if content != old_content:
-        with open(file_path, 'w') as file:
-            file.write(content)
-        print(f"- Fixed login_required decorators and current_user references")
-    else:
-        print(f"- No changes needed")
+logger = logging.getLogger(__name__)
 
-def fix_route_imports():
-    """Add missing flask_login imports to route files."""
-    # Find all route files
-    route_files = glob.glob('routes/*.py')
-    
-    for file_path in route_files:
-        if not os.path.exists(file_path):
-            continue
-            
-        print(f"Processing {file_path}...")
+def patch_replit_auth():
+    """
+    Apply a monkey patch to the Replit Auth module to bypass authentication for development.
+    """
+    try:
+        # Import the replit_auth module
+        import replit_auth
+        from functools import wraps
         
-        # Read the file content
-        with open(file_path, 'r') as file:
-            content = file.read()
+        # Create a replacement for the require_login decorator
+        def dev_login_decorator(f):
+            @wraps(f)
+            def decorated_function(*args, **kwargs):
+                # Just call the function directly without any auth checks
+                return f(*args, **kwargs)
+            return decorated_function
         
-        # Check if login_required is used but not imported
-        if 'login_required' in content and 'from flask_login import' not in content:
-            if 'from flask import' in content:
-                # Add import to existing flask import
-                content = re.sub(
-                    r'from flask import (.*)',
-                    r'from flask import \1\nfrom flask_login import login_required, current_user',
-                    content
-                )
-            else:
-                # Add new import at the top of the file
-                content = re.sub(
-                    r'(import .*?\n\n|import .*?\n|#!/usr/bin/env python\n)',
-                    r'\1from flask_login import login_required, current_user\n\n',
-                    content,
-                    count=1
-                )
+        # Replace the require_login decorator
+        replit_auth.require_login = dev_login_decorator
+        
+        # Add a mock replit token
+        import werkzeug.local
+        from flask import g
+        
+        class MockReplit:
+            def __init__(self):
+                self.token = {"expires_in": 3600}
+        
+        # Monkey patch the replit proxy
+        old_replit = replit_auth.replit
+        if isinstance(old_replit, werkzeug.local.LocalProxy):
+            replit_auth.replit = werkzeug.local.LocalProxy(lambda: MockReplit())
+        
+        logger.warning("Applied monkey patch to replit_auth for development")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to patch replit_auth: {e}")
+        return False
+
+def update_route_files():
+    """Update route files to import flask_login properly."""
+    try:
+        # Add missing flask_login import to any route files that need it
+        routes_dir = os.path.join(os.path.dirname(__file__), 'routes')
+        for filename in os.listdir(routes_dir):
+            if filename.endswith('.py'):
+                filepath = os.path.join(routes_dir, filename)
+                with open(filepath, 'r') as f:
+                    content = f.read()
                 
-            # Write the modified content back to the file
-            with open(file_path, 'w') as file:
-                file.write(content)
-            print(f"- Added flask_login imports")
-        else:
-            print(f"- No changes needed")
-
-def main():
-    """Main function to fix authentication issues."""
-    print("Fixing authentication issues in CIVILIAN system...")
-    
-    # Fix adversarial route login requirements
-    fix_adversarial_route()
-    
-    # Fix route imports
-    fix_route_imports()
-    
-    print("Authentication fixes complete!")
+                # Skip if it already has the import
+                if 'from flask_login import current_user' in content:
+                    continue
+                
+                # Add the import if it's missing
+                if 'current_user' in content and 'from flask_login import' not in content:
+                    logger.info(f"Adding flask_login import to {filename}")
+                    new_content = re.sub(
+                        r'from flask import (.*)',
+                        r'from flask import \1\nfrom flask_login import current_user',
+                        content
+                    )
+                    with open(filepath, 'w') as f:
+                        f.write(new_content)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update route files: {e}")
+        return False
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO)
+    print("Applying authentication fixes for development...")
+    
+    # Apply Replit Auth patch
+    if patch_replit_auth():
+        print("✓ Successfully patched Replit Auth")
+    else:
+        print("✗ Failed to patch Replit Auth")
+    
+    # Update route files
+    if update_route_files():
+        print("✓ Successfully updated route files")
+    else:
+        print("✗ Failed to update route files")
