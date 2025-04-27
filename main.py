@@ -19,6 +19,7 @@ from data_sources.rss_source import RSSSource
 from data_sources.youtube_source import YouTubeSource
 from data_sources.darkweb_source import DarkWebSource
 from storage.evidence_store import EvidenceStore
+from storage.ipfs_evidence_store import IPFSEvidenceStore
 from storage.graph_store import GraphStore
 from routes.agents import agents_bp, set_coordinator
 
@@ -409,7 +410,30 @@ def initialize_app():
     web_scraper = WebScraper()
     
     # Initialize storage components
+    
+    # Initialize traditional evidence store
     evidence_store = EvidenceStore()
+    logger.info("Traditional evidence store initialized")
+    
+    # Initialize IPFS-based evidence store
+    ipfs_host = os.environ.get('IPFS_HOST', 'localhost')
+    ipfs_port = int(os.environ.get('IPFS_PORT', '5001'))
+    ipfs_evidence_store = None
+    
+    try:
+        # Try to initialize the IPFS evidence store
+        ipfs_evidence_store = IPFSEvidenceStore(
+            ipfs_host=ipfs_host,
+            ipfs_port=ipfs_port
+        )
+        logger.info(f"IPFS evidence store initialized (host: {ipfs_host}, port: {ipfs_port})")
+    except Exception as e:
+        # Fall back to local-only mode if IPFS daemon is not available
+        logger.warning(f"Failed to connect to IPFS daemon: {e}")
+        ipfs_evidence_store = IPFSEvidenceStore()  # Will operate in local fallback mode
+        logger.info("IPFS evidence store initialized in local-only mode")
+    
+    # Initialize graph store
     graph_store = GraphStore()
     
     # Initialize legacy agent components (for backward compatibility)
