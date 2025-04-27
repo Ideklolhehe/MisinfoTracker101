@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Evidence List{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Evidence List</h1>
+        <a href="{{ url_for('evidence.index') }}" class="btn btn-outline-primary">Back to Evidence Management</a>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="mb-0">Stored Evidence</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Hash</th>
+                            <th>Storage Type</th>
+                            <th>Instance ID</th>
+                            <th>Timestamp</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if evidence_list %}
+                            {% for evidence in evidence_list %}
+                                <tr>
+                                    <td>
+                                        <code class="d-inline-block text-truncate" style="max-width: 200px;">{{ evidence.hash }}</code>
+                                    </td>
+                                    <td>
+                                        {% if evidence.storage_type == 'ipfs' %}
+                                            <span class="badge bg-primary">IPFS</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">File</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ evidence.instance_id }}</td>
+                                    <td>{{ evidence.timestamp }}</td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <a href="{{ url_for('evidence.view_evidence', evidence_hash=evidence.hash) }}" class="btn btn-sm btn-primary">View</a>
+                                            <button class="btn btn-sm btn-outline-secondary verify-btn" data-hash="{{ evidence.hash }}">Verify</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">No evidence items found</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-3">
+                {% if offset > 0 %}
+                    <a href="{{ url_for('evidence.list_evidence', offset=offset-limit, limit=limit) }}" class="btn btn-outline-primary">Previous</a>
+                {% else %}
+                    <button class="btn btn-outline-primary" disabled>Previous</button>
+                {% endif %}
+                
+                {% if has_more %}
+                    <a href="{{ url_for('evidence.list_evidence', offset=offset+limit, limit=limit) }}" class="btn btn-outline-primary">Next</a>
+                {% else %}
+                    <button class="btn btn-outline-primary" disabled>Next</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal fade" id="verifyModal" tabindex="-1" aria-labelledby="verifyModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="verifyModalLabel">Evidence Verification</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="verifyModalBody">
+                    <div class="alert alert-info">Verifying evidence integrity...</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <a id="viewEvidenceLink" href="#" class="btn btn-primary">View Evidence</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set up verification buttons
+    const verifyButtons = document.querySelectorAll('.verify-btn');
+    const verifyModal = new bootstrap.Modal(document.getElementById('verifyModal'));
+    const verifyModalBody = document.getElementById('verifyModalBody');
+    const viewEvidenceLink = document.getElementById('viewEvidenceLink');
+    
+    verifyButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const hash = this.getAttribute('data-hash');
+            
+            viewEvidenceLink.href = `/evidence/view/${hash}`;
+            verifyModalBody.innerHTML = '<div class="alert alert-info">Verifying evidence integrity...</div>';
+            verifyModal.show();
+            
+            // Send request to verify evidence
+            fetch(`/evidence/verify/${hash}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.valid) {
+                        verifyModalBody.innerHTML = `
+                            <div class="alert alert-success">
+                                <strong>Verification Successful</strong>
+                                <p>${data.message}</p>
+                            </div>
+                        `;
+                    } else {
+                        verifyModalBody.innerHTML = `
+                            <div class="alert alert-danger">
+                                <strong>Verification Failed</strong>
+                                <p>${data.message}</p>
+                            </div>
+                        `;
+                    }
+                } else {
+                    verifyModalBody.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Verification Error</strong>
+                            <p>${data.message}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                verifyModalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Verification Error</strong>
+                        <p>Error: ${error}</p>
+                    </div>
+                `;
+            });
+        });
+    });
+});
+</script>
+{% endblock %}
