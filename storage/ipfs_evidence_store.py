@@ -118,16 +118,35 @@ class IPFSEvidenceStore:
                 with open(backup_filepath, 'w', encoding='utf-8') as f:
                     f.write(evidence_json)
                 
-                # Update instance with evidence hash
-                with db.session.begin():
-                    # Store both the IPFS hash and local hash for verification
-                    instance.evidence_hash = ipfs_hash
-                    if instance.meta_data:
-                        meta_data = json.loads(instance.meta_data)
-                        meta_data['local_hash'] = local_hash
-                        instance.meta_data = json.dumps(meta_data)
+                # Update instance with evidence hash - handle transaction management safely
+                try:
+                    # First check if there's already a transaction in progress
+                    has_active_transaction = db.session.in_transaction()
+                    
+                    if not has_active_transaction:
+                        # Safe to begin a new transaction
+                        with db.session.begin():
+                            # Store both the IPFS hash and local hash for verification
+                            instance.evidence_hash = ipfs_hash
+                            if instance.meta_data:
+                                meta_data = json.loads(instance.meta_data)
+                                meta_data['local_hash'] = local_hash
+                                instance.meta_data = json.dumps(meta_data)
+                            else:
+                                instance.meta_data = json.dumps({'local_hash': local_hash})
                     else:
-                        instance.meta_data = json.dumps({'local_hash': local_hash})
+                        # Transaction already in progress, just update without beginning a new one
+                        instance.evidence_hash = ipfs_hash
+                        if instance.meta_data:
+                            meta_data = json.loads(instance.meta_data)
+                            meta_data['local_hash'] = local_hash
+                            instance.meta_data = json.dumps(meta_data)
+                        else:
+                            instance.meta_data = json.dumps({'local_hash': local_hash})
+                        # We don't commit here as we're inside an existing transaction
+                except Exception as e:
+                    logger.error(f"Error updating instance with IPFS hash: {e}")
+                    # If we can't update the database, at least we saved the file locally
                 
                 logger.info(f"Stored evidence for instance {instance_id} on IPFS with CID {ipfs_hash}")
                 return ipfs_hash
@@ -142,15 +161,34 @@ class IPFSEvidenceStore:
                 with open(fallback_filepath, 'w', encoding='utf-8') as f:
                     f.write(evidence_json)
                 
-                # Update instance with local hash
-                with db.session.begin():
-                    instance.evidence_hash = f"local:{local_hash}"
-                    if instance.meta_data:
-                        meta_data = json.loads(instance.meta_data)
-                        meta_data['storage_type'] = 'local_fallback'
-                        instance.meta_data = json.dumps(meta_data)
+                # Update instance with local hash - handle transaction management safely
+                try:
+                    # First check if there's already a transaction in progress
+                    has_active_transaction = db.session.in_transaction()
+                    
+                    if not has_active_transaction:
+                        # Safe to begin a new transaction
+                        with db.session.begin():
+                            instance.evidence_hash = f"local:{local_hash}"
+                            if instance.meta_data:
+                                meta_data = json.loads(instance.meta_data)
+                                meta_data['storage_type'] = 'local_fallback'
+                                instance.meta_data = json.dumps(meta_data)
+                            else:
+                                instance.meta_data = json.dumps({'storage_type': 'local_fallback'})
                     else:
-                        instance.meta_data = json.dumps({'storage_type': 'local_fallback'})
+                        # Transaction already in progress, just update without beginning a new one
+                        instance.evidence_hash = f"local:{local_hash}"
+                        if instance.meta_data:
+                            meta_data = json.loads(instance.meta_data)
+                            meta_data['storage_type'] = 'local_fallback'
+                            instance.meta_data = json.dumps(meta_data)
+                        else:
+                            instance.meta_data = json.dumps({'storage_type': 'local_fallback'})
+                        # We don't commit here as we're inside an existing transaction
+                except Exception as e:
+                    logger.error(f"Error updating instance with local hash: {e}")
+                    # If we can't update the database, at least we saved the file locally
                 
                 logger.warning(f"Fell back to local storage for instance {instance_id} with hash {local_hash}")
                 return f"local:{local_hash}"
