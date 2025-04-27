@@ -1,0 +1,851 @@
+{% extends "base.html" %}
+
+{% block title %}RSS Feed Management - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="mb-3">RSS Feed Management</h1>
+            <p class="lead">Manage and monitor RSS feed sources for the CIVILIAN system.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">RSS Sources</h4>
+                    <div>
+                        <button class="btn btn-sm btn-light me-2" id="checkAllFeeds">
+                            <i class="bi bi-check-circle"></i> Check All Feeds
+                        </button>
+                        <button class="btn btn-sm btn-light" id="addSourceBtn" data-bs-toggle="modal" data-bs-target="#addSourceModal">
+                            <i class="bi bi-plus-circle"></i> Add Source
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="sourcesAccordion">
+                        {% for source in sources %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="source-heading-{{ source.id }}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#source-collapse-{{ source.id }}" aria-expanded="false" aria-controls="source-collapse-{{ source.id }}">
+                                        <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                                            <div>
+                                                <strong>{{ source.name }}</strong>
+                                                <span class="badge {% if source.is_active %}bg-success{% else %}bg-secondary{% endif %} ms-2">
+                                                    {{ 'Active' if source.is_active else 'Inactive' }}
+                                                </span>
+                                            </div>
+                                            <div class="small text-muted">
+                                                {{ source.feed_count }} feeds | Last ingestion: {{ source.last_ingestion }}
+                                            </div>
+                                        </div>
+                                    </button>
+                                </h2>
+                                <div id="source-collapse-{{ source.id }}" class="accordion-collapse collapse" aria-labelledby="source-heading-{{ source.id }}" data-bs-parent="#sourcesAccordion">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <button class="btn btn-sm btn-success add-feed-btn" data-source-id="{{ source.id }}" data-bs-toggle="modal" data-bs-target="#addFeedModal">
+                                                <i class="bi bi-plus-circle"></i> Add Feed
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Feed URL</th>
+                                                        <th>Status</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% if source.feeds %}
+                                                        {% for feed in source.feeds %}
+                                                            <tr>
+                                                                <td>
+                                                                    <a href="{{ feed }}" target="_blank" class="text-truncate d-inline-block" style="max-width: 350px;">
+                                                                        {{ feed }}
+                                                                    </a>
+                                                                </td>
+                                                                <td>
+                                                                    <button class="btn btn-sm btn-outline-primary check-feed-btn" data-feed-url="{{ feed }}" data-source-id="{{ source.id }}">
+                                                                        <i class="bi bi-check-circle"></i> Check
+                                                                    </button>
+                                                                </td>
+                                                                <td>
+                                                                    <button class="btn btn-sm btn-outline-danger remove-feed-btn" 
+                                                                            data-feed-url="{{ feed }}" 
+                                                                            data-source-id="{{ source.id }}"
+                                                                            data-bs-toggle="modal" 
+                                                                            data-bs-target="#removeFeedModal">
+                                                                        <i class="bi bi-trash"></i> Remove
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        <tr>
+                                                            <td colspan="3" class="text-center">No feeds defined for this source.</td>
+                                                        </tr>
+                                                    {% endif %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="mb-0">Recent Feed Events</h4>
+                </div>
+                <div class="card-body">
+                    {% if logs %}
+                        <ul class="list-group list-group-flush">
+                            {% for log in logs %}
+                                <li class="list-group-item">
+                                    <div class="d-flex align-items-center">
+                                        {% if log.log_type == 'error' %}
+                                            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                                        {% elif log.log_type == 'warning' %}
+                                            <i class="bi bi-exclamation-circle-fill text-warning me-2"></i>
+                                        {% else %}
+                                            <i class="bi bi-info-circle-fill text-info me-2"></i>
+                                        {% endif %}
+                                        <div>
+                                            <div>{{ log.message }}</div>
+                                            <small class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted mb-0">No recent feed events.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">Instructions</h4>
+                </div>
+                <div class="card-body">
+                    <p>RSS feeds are used to collect information from news and data sources. This interface allows you to manage and monitor the RSS feeds used by the CIVILIAN system.</p>
+                    
+                    <h5 class="mt-3">Working with Feeds</h5>
+                    <ol>
+                        <li>Click on a source to expand its details and see the associated feeds.</li>
+                        <li>Use the "Check" button to validate if a feed is accessible.</li>
+                        <li>You can add new feeds to a source using the "Add Feed" button.</li>
+                        <li>Invalid or outdated feeds can be removed or updated as needed.</li>
+                        <li>Use "Check All Feeds" to identify any broken feeds across all sources.</li>
+                    </ol>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i> <strong>Tip:</strong>
+                        If a feed is not working, the system will attempt to find an alternative URL.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm" id="feedStatusCard" style="display: none;">
+                <div class="card-header bg-warning text-white">
+                    <h4 class="mb-0">Feed Status</h4>
+                </div>
+                <div class="card-body">
+                    <div id="feedStatusContent">
+                        <!-- Feed status information will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Feed Modal -->
+<div class="modal fade" id="addFeedModal" tabindex="-1" aria-labelledby="addFeedModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addFeedModalLabel">Add Feed URL</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addFeedForm">
+                    <input type="hidden" id="addFeedSourceId" name="source_id">
+                    <div class="mb-3">
+                        <label for="addFeedUrl" class="form-label">Feed URL</label>
+                        <input type="url" class="form-control" id="addFeedUrl" name="feed_url" required placeholder="https://example.com/feed">
+                    </div>
+                    <div id="addFeedValidationResult" class="mb-3" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="validateFeedBtn">Validate</button>
+                <button type="button" class="btn btn-success" id="addFeedSubmitBtn" style="display: none;">Add Feed</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Remove Feed Modal -->
+<div class="modal fade" id="removeFeedModal" tabindex="-1" aria-labelledby="removeFeedModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="removeFeedModalLabel">Remove Feed URL</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to remove this feed URL?</p>
+                <p id="removeFeedUrl" class="text-break"></p>
+                <input type="hidden" id="removeFeedSourceId">
+                <input type="hidden" id="removeFeedUrlValue">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="removeFeedConfirmBtn">Remove</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feed Status Modal -->
+<div class="modal fade" id="feedStatusModal" tabindex="-1" aria-labelledby="feedStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="feedStatusModalLabel">Feed Status Check</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="feedStatusLoading" class="text-center p-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Checking all feeds, this may take a moment...</p>
+                </div>
+                <div id="feedStatusResults" style="display: none;">
+                    <div class="alert alert-info mb-3">
+                        <div id="feedStatusSummary"></div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Feed URL</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="feedStatusTable">
+                                <!-- Feed status results will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Source Modal -->
+<div class="modal fade" id="addSourceModal" tabindex="-1" aria-labelledby="addSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addSourceModalLabel">Add RSS Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addSourceForm">
+                    <div class="mb-3">
+                        <label for="addSourceName" class="form-label">Source Name</label>
+                        <input type="text" class="form-control" id="addSourceName" name="name" required placeholder="News: Example Source">
+                    </div>
+                    <div class="mb-3">
+                        <label for="addSourceUrl" class="form-label">Initial Feed URL (Optional)</label>
+                        <input type="url" class="form-control" id="addSourceUrl" name="feed_url" placeholder="https://example.com/feed">
+                        <div class="form-text">You can add more feeds after creating the source.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="addSourceSubmitBtn">Add Source</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check feed button
+        const checkFeedBtns = document.querySelectorAll('.check-feed-btn');
+        checkFeedBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const feedUrl = this.getAttribute('data-feed-url');
+                const sourceId = this.getAttribute('data-source-id');
+                
+                // Show loading state
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Checking...';
+                this.disabled = true;
+                
+                // Show the feed status card
+                const feedStatusCard = document.getElementById('feedStatusCard');
+                const feedStatusContent = document.getElementById('feedStatusContent');
+                feedStatusContent.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Checking feed...</p></div>';
+                feedStatusCard.style.display = 'block';
+                
+                // Scroll to the card
+                feedStatusCard.scrollIntoView({ behavior: 'smooth' });
+                
+                // Validate the feed
+                fetch('{{ url_for("rss_feeds.validate_feed") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        feed_url: feedUrl
+                    }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Reset button state
+                    this.disabled = false;
+                    
+                    if (data.valid) {
+                        this.innerHTML = '<i class="bi bi-check-circle"></i> Check';
+                        feedStatusContent.innerHTML = `
+                            <div class="alert alert-success">
+                                <h5><i class="bi bi-check-circle-fill me-2"></i> Feed is Valid</h5>
+                                <p class="mb-0">${data.message}</p>
+                            </div>
+                            <p class="text-break"><strong>URL:</strong> ${data.feed_url}</p>
+                        `;
+                    } else {
+                        this.innerHTML = '<i class="bi bi-check-circle"></i> Check';
+                        
+                        let html = `
+                            <div class="alert alert-danger">
+                                <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Feed is Invalid</h5>
+                                <p class="mb-0">${data.message}</p>
+                            </div>
+                            <p class="text-break"><strong>URL:</strong> ${data.feed_url}</p>
+                        `;
+                        
+                        if (data.alternative) {
+                            html += `
+                                <div class="alert alert-success mt-3">
+                                    <h5><i class="bi bi-lightbulb-fill me-2"></i> Alternative Found</h5>
+                                    <p class="mb-0">An alternative feed URL was found for this domain.</p>
+                                </div>
+                                <p class="text-break"><strong>Alternative URL:</strong> ${data.alternative}</p>
+                                <button class="btn btn-primary btn-sm update-feed-btn" 
+                                        data-source-id="${sourceId}" 
+                                        data-old-url="${feedUrl}" 
+                                        data-new-url="${data.alternative}">
+                                    <i class="bi bi-arrow-repeat"></i> Update to Alternative URL
+                                </button>
+                            `;
+                        }
+                        
+                        feedStatusContent.innerHTML = html;
+                        
+                        // Add event listener for update button if it exists
+                        const updateBtn = feedStatusContent.querySelector('.update-feed-btn');
+                        if (updateBtn) {
+                            updateBtn.addEventListener('click', function() {
+                                updateFeedUrl(
+                                    this.getAttribute('data-source-id'),
+                                    this.getAttribute('data-old-url'),
+                                    this.getAttribute('data-new-url')
+                                );
+                            });
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking feed:', error);
+                    this.innerHTML = '<i class="bi bi-check-circle"></i> Check';
+                    this.disabled = false;
+                    
+                    feedStatusContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Error</h5>
+                            <p class="mb-0">An error occurred while checking the feed.</p>
+                        </div>
+                    `;
+                });
+            });
+        });
+        
+        // Function to update feed URL
+        function updateFeedUrl(sourceId, oldUrl, newUrl) {
+            fetch('{{ url_for("rss_feeds.update_feed") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    source_id: sourceId,
+                    old_url: oldUrl,
+                    new_url: newUrl
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const feedStatusContent = document.getElementById('feedStatusContent');
+                    feedStatusContent.innerHTML = `
+                        <div class="alert alert-success">
+                            <h5><i class="bi bi-check-circle-fill me-2"></i> Feed URL Updated</h5>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                        <p>Reload the page to see the updated feed.</p>
+                        <button class="btn btn-primary" onclick="location.reload()">Reload Page</button>
+                    `;
+                } else {
+                    // Show error message
+                    const feedStatusContent = document.getElementById('feedStatusContent');
+                    feedStatusContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Error</h5>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error updating feed URL:', error);
+                const feedStatusContent = document.getElementById('feedStatusContent');
+                feedStatusContent.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Error</h5>
+                        <p class="mb-0">An error occurred while updating the feed URL.</p>
+                    </div>
+                `;
+            });
+        }
+        
+        // Check All Feeds button
+        const checkAllFeedsBtn = document.getElementById('checkAllFeeds');
+        checkAllFeedsBtn.addEventListener('click', function() {
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('feedStatusModal'));
+            modal.show();
+            
+            // Show loading state
+            document.getElementById('feedStatusLoading').style.display = 'block';
+            document.getElementById('feedStatusResults').style.display = 'none';
+            
+            // Check all feeds
+            fetch('{{ url_for("rss_feeds.check_all_feeds") }}')
+                .then(response => response.json())
+                .then(data => {
+                    // Hide loading state
+                    document.getElementById('feedStatusLoading').style.display = 'none';
+                    document.getElementById('feedStatusResults').style.display = 'block';
+                    
+                    // Count valid and invalid feeds
+                    const validFeeds = data.feeds.filter(feed => feed.valid).length;
+                    const invalidFeeds = data.feeds.length - validFeeds;
+                    
+                    // Update summary
+                    document.getElementById('feedStatusSummary').innerHTML = `
+                        <p class="mb-0">
+                            <strong>Total Feeds:</strong> ${data.feed_count}<br>
+                            <strong>Valid Feeds:</strong> ${validFeeds}<br>
+                            <strong>Invalid Feeds:</strong> ${invalidFeeds}
+                        </p>
+                    `;
+                    
+                    // Populate table
+                    const tableBody = document.getElementById('feedStatusTable');
+                    tableBody.innerHTML = '';
+                    
+                    data.feeds.forEach(feed => {
+                        const row = document.createElement('tr');
+                        
+                        // Add source name
+                        const sourceCell = document.createElement('td');
+                        sourceCell.textContent = feed.source_name;
+                        row.appendChild(sourceCell);
+                        
+                        // Add feed URL
+                        const urlCell = document.createElement('td');
+                        const urlLink = document.createElement('a');
+                        urlLink.href = feed.feed_url;
+                        urlLink.target = '_blank';
+                        urlLink.classList.add('text-truncate', 'd-inline-block');
+                        urlLink.style.maxWidth = '300px';
+                        urlLink.textContent = feed.feed_url;
+                        urlCell.appendChild(urlLink);
+                        row.appendChild(urlCell);
+                        
+                        // Add status
+                        const statusCell = document.createElement('td');
+                        if (feed.valid) {
+                            statusCell.innerHTML = '<span class="badge bg-success">Valid</span>';
+                        } else {
+                            statusCell.innerHTML = '<span class="badge bg-danger">Invalid</span>';
+                        }
+                        row.appendChild(statusCell);
+                        
+                        // Add actions
+                        const actionsCell = document.createElement('td');
+                        if (!feed.valid && feed.alternative) {
+                            actionsCell.innerHTML = `
+                                <button class="btn btn-sm btn-primary update-all-feed-btn"
+                                        data-source-id="${feed.source_id}"
+                                        data-old-url="${feed.feed_url}"
+                                        data-new-url="${feed.alternative}">
+                                    <i class="bi bi-arrow-repeat"></i> Update
+                                </button>
+                            `;
+                        } else if (!feed.valid) {
+                            actionsCell.innerHTML = `
+                                <button class="btn btn-sm btn-danger remove-all-feed-btn"
+                                        data-source-id="${feed.source_id}"
+                                        data-feed-url="${feed.feed_url}">
+                                    <i class="bi bi-trash"></i> Remove
+                                </button>
+                            `;
+                        } else {
+                            actionsCell.innerHTML = '<span class="text-muted">No action needed</span>';
+                        }
+                        row.appendChild(actionsCell);
+                        
+                        tableBody.appendChild(row);
+                    });
+                    
+                    // Add event listeners for update buttons
+                    const updateBtns = document.querySelectorAll('.update-all-feed-btn');
+                    updateBtns.forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            updateFeedUrl(
+                                this.getAttribute('data-source-id'),
+                                this.getAttribute('data-old-url'),
+                                this.getAttribute('data-new-url')
+                            );
+                            
+                            // Disable the button
+                            this.disabled = true;
+                            this.innerHTML = '<i class="bi bi-check-circle"></i> Updated';
+                        });
+                    });
+                    
+                    // Add event listeners for remove buttons
+                    const removeBtns = document.querySelectorAll('.remove-all-feed-btn');
+                    removeBtns.forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            if (confirm('Are you sure you want to remove this feed URL?')) {
+                                const sourceId = this.getAttribute('data-source-id');
+                                const feedUrl = this.getAttribute('data-feed-url');
+                                
+                                fetch('{{ url_for("rss_feeds.remove_feed") }}', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        source_id: sourceId,
+                                        url: feedUrl
+                                    }),
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        // Disable the button
+                                        this.disabled = true;
+                                        this.innerHTML = '<i class="bi bi-check-circle"></i> Removed';
+                                    } else {
+                                        alert('Failed to remove feed URL: ' + data.message);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error removing feed URL:', error);
+                                    alert('An error occurred while removing the feed URL.');
+                                });
+                            }
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.error('Error checking all feeds:', error);
+                    document.getElementById('feedStatusLoading').style.display = 'none';
+                    document.getElementById('feedStatusResults').style.display = 'block';
+                    document.getElementById('feedStatusSummary').innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Error</h5>
+                            <p class="mb-0">An error occurred while checking all feeds.</p>
+                        </div>
+                    `;
+                });
+        });
+        
+        // Add Feed modal
+        const addFeedBtns = document.querySelectorAll('.add-feed-btn');
+        addFeedBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const sourceId = this.getAttribute('data-source-id');
+                document.getElementById('addFeedSourceId').value = sourceId;
+                document.getElementById('addFeedValidationResult').style.display = 'none';
+                document.getElementById('addFeedSubmitBtn').style.display = 'none';
+            });
+        });
+        
+        // Validate Feed button
+        const validateFeedBtn = document.getElementById('validateFeedBtn');
+        validateFeedBtn.addEventListener('click', function() {
+            const feedUrl = document.getElementById('addFeedUrl').value;
+            if (!feedUrl) {
+                alert('Please enter a feed URL');
+                return;
+            }
+            
+            // Show loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Validating...';
+            this.disabled = true;
+            
+            // Hide the submit button
+            document.getElementById('addFeedSubmitBtn').style.display = 'none';
+            
+            // Validate the feed
+            fetch('{{ url_for("rss_feeds.validate_feed") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    feed_url: feedUrl
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button state
+                this.innerHTML = 'Validate';
+                this.disabled = false;
+                
+                const validationResult = document.getElementById('addFeedValidationResult');
+                validationResult.style.display = 'block';
+                
+                if (data.valid) {
+                    validationResult.innerHTML = `
+                        <div class="alert alert-success">
+                            <h5><i class="bi bi-check-circle-fill me-2"></i> Feed is Valid</h5>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                    `;
+                    
+                    // Show the submit button
+                    document.getElementById('addFeedSubmitBtn').style.display = 'inline-block';
+                } else {
+                    validationResult.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Feed is Invalid</h5>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                    `;
+                    
+                    if (data.alternative) {
+                        validationResult.innerHTML += `
+                            <div class="alert alert-success mt-3">
+                                <h5><i class="bi bi-lightbulb-fill me-2"></i> Alternative Found</h5>
+                                <p class="mb-0">An alternative feed URL was found:</p>
+                                <p class="text-break mb-0">${data.alternative}</p>
+                                <button class="btn btn-primary btn-sm mt-2" id="useAlternativeBtn">
+                                    <i class="bi bi-arrow-repeat"></i> Use Alternative URL
+                                </button>
+                            </div>
+                        `;
+                        
+                        // Add event listener for the use alternative button
+                        document.getElementById('useAlternativeBtn').addEventListener('click', function() {
+                            document.getElementById('addFeedUrl').value = data.alternative;
+                            validateFeedBtn.click();
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error validating feed:', error);
+                this.innerHTML = 'Validate';
+                this.disabled = false;
+                
+                const validationResult = document.getElementById('addFeedValidationResult');
+                validationResult.style.display = 'block';
+                validationResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Error</h5>
+                        <p class="mb-0">An error occurred while validating the feed.</p>
+                    </div>
+                `;
+            });
+        });
+        
+        // Add Feed Submit button
+        const addFeedSubmitBtn = document.getElementById('addFeedSubmitBtn');
+        addFeedSubmitBtn.addEventListener('click', function() {
+            const sourceId = document.getElementById('addFeedSourceId').value;
+            const feedUrl = document.getElementById('addFeedUrl').value;
+            
+            if (!sourceId || !feedUrl) {
+                alert('Please provide both source ID and feed URL');
+                return;
+            }
+            
+            // Show loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
+            this.disabled = true;
+            
+            // Add the feed
+            fetch('{{ url_for("rss_feeds.add_feed") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    source_id: sourceId,
+                    new_url: feedUrl
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Hide the modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addFeedModal'));
+                    modal.hide();
+                    
+                    // Reload the page
+                    location.reload();
+                } else {
+                    // Reset button state
+                    this.innerHTML = 'Add Feed';
+                    this.disabled = false;
+                    
+                    // Show error message
+                    const validationResult = document.getElementById('addFeedValidationResult');
+                    validationResult.style.display = 'block';
+                    validationResult.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Error</h5>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error adding feed:', error);
+                this.innerHTML = 'Add Feed';
+                this.disabled = false;
+                
+                const validationResult = document.getElementById('addFeedValidationResult');
+                validationResult.style.display = 'block';
+                validationResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Error</h5>
+                        <p class="mb-0">An error occurred while adding the feed.</p>
+                    </div>
+                `;
+            });
+        });
+        
+        // Remove Feed modal
+        const removeFeedBtns = document.querySelectorAll('.remove-feed-btn');
+        removeFeedBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const sourceId = this.getAttribute('data-source-id');
+                const feedUrl = this.getAttribute('data-feed-url');
+                
+                document.getElementById('removeFeedSourceId').value = sourceId;
+                document.getElementById('removeFeedUrlValue').value = feedUrl;
+                document.getElementById('removeFeedUrl').textContent = feedUrl;
+            });
+        });
+        
+        // Remove Feed Confirm button
+        const removeFeedConfirmBtn = document.getElementById('removeFeedConfirmBtn');
+        removeFeedConfirmBtn.addEventListener('click', function() {
+            const sourceId = document.getElementById('removeFeedSourceId').value;
+            const feedUrl = document.getElementById('removeFeedUrlValue').value;
+            
+            if (!sourceId || !feedUrl) {
+                alert('Missing source ID or feed URL');
+                return;
+            }
+            
+            // Show loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Removing...';
+            this.disabled = true;
+            
+            // Remove the feed
+            fetch('{{ url_for("rss_feeds.remove_feed") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    source_id: sourceId,
+                    url: feedUrl
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Hide the modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('removeFeedModal'));
+                    modal.hide();
+                    
+                    // Reload the page
+                    location.reload();
+                } else {
+                    // Reset button state
+                    this.innerHTML = 'Remove';
+                    this.disabled = false;
+                    
+                    // Show error message
+                    alert('Failed to remove feed: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error removing feed:', error);
+                this.innerHTML = 'Remove';
+                this.disabled = false;
+                
+                alert('An error occurred while removing the feed.');
+            });
+        });
+    });
+</script>
+{% endblock %}

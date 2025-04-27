@@ -1,0 +1,701 @@
+{% extends "base.html" %}
+
+{% block title %}API Credential Management - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="mb-3">API Credential Management</h1>
+            <p class="lead">Manage API credentials for external services used by the CIVILIAN system.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">API Credentials</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row row-cols-1 row-cols-md-2 g-4">
+                        <!-- OpenAI API -->
+                        <div class="col">
+                            <div class="card h-100">
+                                <div class="card-header {% if credential_status.get('openai') %}bg-success{% else %}bg-secondary{% endif %} text-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">OpenAI API</h5>
+                                        <span class="badge bg-light text-dark">
+                                            {% if credential_status.get('openai') %}
+                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Configured
+                                            {% else %}
+                                                <i class="bi bi-x-circle-fill text-danger me-1"></i> Not Configured
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">Used for verification, analysis, and content generation tasks.</p>
+                                    <div class="d-grid gap-2">
+                                        <button type="button" class="btn btn-sm btn-primary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#credentialModal"
+                                                data-credential-type="openai">
+                                            {% if credential_status.get('openai') %}
+                                                Update Credentials
+                                            {% else %}
+                                                Add Credentials
+                                            {% endif %}
+                                        </button>
+                                        {% if credential_status.get('openai') %}
+                                            <button type="button" class="btn btn-sm btn-danger delete-credentials-btn" 
+                                                    data-credential-type="openai">
+                                                Remove Credentials
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- YouTube API -->
+                        <div class="col">
+                            <div class="card h-100">
+                                <div class="card-header {% if credential_status.get('youtube') %}bg-success{% else %}bg-secondary{% endif %} text-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">YouTube API</h5>
+                                        <span class="badge bg-light text-dark">
+                                            {% if credential_status.get('youtube') %}
+                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Configured
+                                            {% else %}
+                                                <i class="bi bi-x-circle-fill text-danger me-1"></i> Not Configured
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">Used for monitoring YouTube channels and videos for misinformation.</p>
+                                    <div class="d-grid gap-2">
+                                        <button type="button" class="btn btn-sm btn-primary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#credentialModal"
+                                                data-credential-type="youtube">
+                                            {% if credential_status.get('youtube') %}
+                                                Update Credentials
+                                            {% else %}
+                                                Add Credentials
+                                            {% endif %}
+                                        </button>
+                                        {% if credential_status.get('youtube') %}
+                                            <button type="button" class="btn btn-sm btn-danger delete-credentials-btn" 
+                                                    data-credential-type="youtube">
+                                                Remove Credentials
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Twitter API -->
+                        <div class="col">
+                            <div class="card h-100">
+                                <div class="card-header {% if credential_status.get('twitter') %}bg-success{% else %}bg-secondary{% endif %} text-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">Twitter API</h5>
+                                        <span class="badge bg-light text-dark">
+                                            {% if credential_status.get('twitter') %}
+                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Configured
+                                            {% else %}
+                                                <i class="bi bi-x-circle-fill text-danger me-1"></i> Not Configured
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">Used for monitoring Twitter accounts and hashtags for misinformation.</p>
+                                    <div class="d-grid gap-2">
+                                        <button type="button" class="btn btn-sm btn-primary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#credentialModal"
+                                                data-credential-type="twitter">
+                                            {% if credential_status.get('twitter') %}
+                                                Update Credentials
+                                            {% else %}
+                                                Add Credentials
+                                            {% endif %}
+                                        </button>
+                                        {% if credential_status.get('twitter') %}
+                                            <button type="button" class="btn btn-sm btn-danger delete-credentials-btn" 
+                                                    data-credential-type="twitter">
+                                                Remove Credentials
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Telegram API -->
+                        <div class="col">
+                            <div class="card h-100">
+                                <div class="card-header {% if credential_status.get('telegram') %}bg-success{% else %}bg-secondary{% endif %} text-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">Telegram API</h5>
+                                        <span class="badge bg-light text-dark">
+                                            {% if credential_status.get('telegram') %}
+                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Configured
+                                            {% else %}
+                                                <i class="bi bi-x-circle-fill text-danger me-1"></i> Not Configured
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">Used for monitoring Telegram channels and groups for misinformation.</p>
+                                    <div class="d-grid gap-2">
+                                        <button type="button" class="btn btn-sm btn-primary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#credentialModal"
+                                                data-credential-type="telegram">
+                                            {% if credential_status.get('telegram') %}
+                                                Update Credentials
+                                            {% else %}
+                                                Add Credentials
+                                            {% endif %}
+                                        </button>
+                                        {% if credential_status.get('telegram') %}
+                                            <button type="button" class="btn btn-sm btn-danger delete-credentials-btn" 
+                                                    data-credential-type="telegram">
+                                                Remove Credentials
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Dark Web -->
+                        <div class="col">
+                            <div class="card h-100">
+                                <div class="card-header {% if credential_status.get('dark_web') %}bg-success{% else %}bg-secondary{% endif %} text-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">Dark Web</h5>
+                                        <span class="badge bg-light text-dark">
+                                            {% if credential_status.get('dark_web') %}
+                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Configured
+                                            {% else %}
+                                                <i class="bi bi-x-circle-fill text-danger me-1"></i> Not Configured
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">Used for monitoring dark web sources for emerging threats and misinformation.</p>
+                                    <div class="d-grid gap-2">
+                                        <button type="button" class="btn btn-sm btn-primary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#credentialModal"
+                                                data-credential-type="dark_web">
+                                            {% if credential_status.get('dark_web') %}
+                                                Update Credentials
+                                            {% else %}
+                                                Add Credentials
+                                            {% endif %}
+                                        </button>
+                                        {% if credential_status.get('dark_web') %}
+                                            <button type="button" class="btn btn-sm btn-danger delete-credentials-btn" 
+                                                    data-credential-type="dark_web">
+                                                Remove Credentials
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="mb-0">Recent Credential Events</h4>
+                </div>
+                <div class="card-body">
+                    {% if logs %}
+                        <ul class="list-group list-group-flush">
+                            {% for log in logs %}
+                                <li class="list-group-item">
+                                    <div class="d-flex align-items-center">
+                                        {% if log.log_type == 'error' %}
+                                            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                                        {% elif log.log_type == 'warning' %}
+                                            <i class="bi bi-exclamation-circle-fill text-warning me-2"></i>
+                                        {% else %}
+                                            <i class="bi bi-info-circle-fill text-info me-2"></i>
+                                        {% endif %}
+                                        <div>
+                                            <div>{{ log.message }}</div>
+                                            <small class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted mb-0">No recent credential events.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">Instructions</h4>
+                </div>
+                <div class="card-body">
+                    <p>API credentials are used to connect to external services for data gathering and analysis. This interface allows you to manage the credentials used by the CIVILIAN system.</p>
+                    
+                    <h5 class="mt-3">Managing Credentials</h5>
+                    <ol>
+                        <li>Click on the "Add Credentials" button for a service to configure it.</li>
+                        <li>Fill in the required fields for each service.</li>
+                        <li>Test the credentials before saving to ensure they work properly.</li>
+                        <li>You can update or remove credentials at any time.</li>
+                    </ol>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i> <strong>Note:</strong>
+                        Credentials are securely stored and only used for authorized CIVILIAN operations.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm" id="apiStatusCard" style="display: none;">
+                <div class="card-header bg-warning text-white">
+                    <h4 class="mb-0">API Status</h4>
+                </div>
+                <div class="card-body">
+                    <div id="apiStatusContent">
+                        <!-- API status information will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Credential Modal -->
+<div class="modal fade" id="credentialModal" tabindex="-1" aria-labelledby="credentialModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="credentialModalLabel">API Credentials</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="credentialForm">
+                    <input type="hidden" id="credentialType" name="credential_type" value="">
+                    
+                    <!-- OpenAI API fields -->
+                    <div id="openai-fields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="openai-api-key" class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="openai-api-key" name="api_key" required>
+                            <div class="form-text">Your OpenAI API key. Get one at <a href="https://platform.openai.com/account/api-keys" target="_blank">platform.openai.com</a>.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- YouTube API fields -->
+                    <div id="youtube-fields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="youtube-api-key" class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="youtube-api-key" name="api_key" required>
+                            <div class="form-text">Your YouTube Data API key. Get one at <a href="https://console.developers.google.com/" target="_blank">Google Developers Console</a>.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Twitter API fields -->
+                    <div id="twitter-fields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="twitter-api-key" class="form-label">API Key (Consumer Key)</label>
+                            <input type="password" class="form-control" id="twitter-api-key" name="api_key" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="twitter-api-secret" class="form-label">API Secret (Consumer Secret)</label>
+                            <input type="password" class="form-control" id="twitter-api-secret" name="api_secret" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="twitter-access-token" class="form-label">Access Token</label>
+                            <input type="password" class="form-control" id="twitter-access-token" name="access_token" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="twitter-access-secret" class="form-label">Access Token Secret</label>
+                            <input type="password" class="form-control" id="twitter-access-secret" name="access_secret" required>
+                            <div class="form-text">Twitter API credentials. Get them at <a href="https://developer.twitter.com/en/portal/dashboard" target="_blank">Twitter Developer Portal</a>.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Telegram API fields -->
+                    <div id="telegram-fields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="telegram-api-id" class="form-label">API ID</label>
+                            <input type="text" class="form-control" id="telegram-api-id" name="api_id" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="telegram-api-hash" class="form-label">API Hash</label>
+                            <input type="password" class="form-control" id="telegram-api-hash" name="api_hash" required>
+                            <div class="form-text">Telegram API credentials. Get them at <a href="https://my.telegram.org/apps" target="_blank">my.telegram.org</a>.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dark Web fields -->
+                    <div id="dark_web-fields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="dark-web-proxy-host" class="form-label">Tor Proxy Host</label>
+                            <input type="text" class="form-control" id="dark-web-proxy-host" name="proxy_host" required value="127.0.0.1">
+                        </div>
+                        <div class="mb-3">
+                            <label for="dark-web-proxy-port" class="form-label">Tor Proxy Port</label>
+                            <input type="text" class="form-control" id="dark-web-proxy-port" name="proxy_port" required value="9050">
+                        </div>
+                        <div class="mb-3">
+                            <label for="dark-web-control-password" class="form-label">Control Password (Optional)</label>
+                            <input type="password" class="form-control" id="dark-web-control-password" name="control_password">
+                            <div class="form-text">Tor proxy configuration for dark web monitoring. Requires a running Tor service.</div>
+                        </div>
+                    </div>
+                    
+                    <div id="testResult" class="mb-3" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" id="testCredentialsBtn">Test Credentials</button>
+                <button type="button" class="btn btn-primary" id="saveCredentialsBtn">Save Credentials</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteCredentialModal" tabindex="-1" aria-labelledby="deleteCredentialModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteCredentialModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to remove the credentials for <span id="deleteCredentialType"></span>?</p>
+                <p>This will disable functionality that depends on this API.</p>
+                <input type="hidden" id="deleteCredentialTypeValue">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete Credentials</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show appropriate fields when modal is opened
+        const credentialModal = document.getElementById('credentialModal');
+        credentialModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const credentialType = button.getAttribute('data-credential-type');
+            
+            document.getElementById('credentialType').value = credentialType;
+            document.getElementById(`${credentialType}-fields`).style.display = 'block';
+            
+            // Update modal title
+            const modalTitle = document.getElementById('credentialModalLabel');
+            modalTitle.textContent = `${credentialType.charAt(0).toUpperCase() + credentialType.slice(1)} API Credentials`;
+            
+            // Hide test result
+            document.getElementById('testResult').style.display = 'none';
+        });
+        
+        // Hide all fields when modal is closed
+        credentialModal.addEventListener('hide.bs.modal', function() {
+            const credentialType = document.getElementById('credentialType').value;
+            document.getElementById(`${credentialType}-fields`).style.display = 'none';
+            document.getElementById('credentialForm').reset();
+        });
+        
+        // Test credentials button
+        const testCredentialsBtn = document.getElementById('testCredentialsBtn');
+        testCredentialsBtn.addEventListener('click', function() {
+            const credentialType = document.getElementById('credentialType').value;
+            const form = document.getElementById('credentialForm');
+            const formData = new FormData(form);
+            const credentials = {};
+            
+            // Get form values based on credential type
+            if (credentialType === 'openai') {
+                credentials.api_key = document.getElementById('openai-api-key').value;
+            } else if (credentialType === 'youtube') {
+                credentials.api_key = document.getElementById('youtube-api-key').value;
+            } else if (credentialType === 'twitter') {
+                credentials.api_key = document.getElementById('twitter-api-key').value;
+                credentials.api_secret = document.getElementById('twitter-api-secret').value;
+                credentials.access_token = document.getElementById('twitter-access-token').value;
+                credentials.access_secret = document.getElementById('twitter-access-secret').value;
+            } else if (credentialType === 'telegram') {
+                credentials.api_id = document.getElementById('telegram-api-id').value;
+                credentials.api_hash = document.getElementById('telegram-api-hash').value;
+            } else if (credentialType === 'dark_web') {
+                credentials.proxy_host = document.getElementById('dark-web-proxy-host').value;
+                credentials.proxy_port = document.getElementById('dark-web-proxy-port').value;
+                const controlPassword = document.getElementById('dark-web-control-password').value;
+                if (controlPassword) {
+                    credentials.control_password = controlPassword;
+                }
+            }
+            
+            // Show loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Testing...';
+            this.disabled = true;
+            
+            // Test credentials
+            fetch('/api-credentials/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    credential_type: credentialType,
+                    credentials: credentials
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button state
+                this.innerHTML = 'Test Credentials';
+                this.disabled = false;
+                
+                // Show test result
+                const testResult = document.getElementById('testResult');
+                testResult.style.display = 'block';
+                
+                if (data.valid) {
+                    testResult.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle-fill me-2"></i> <strong>Success!</strong>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                    `;
+                } else {
+                    testResult.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Error!</strong>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error testing credentials:', error);
+                this.innerHTML = 'Test Credentials';
+                this.disabled = false;
+                
+                const testResult = document.getElementById('testResult');
+                testResult.style.display = 'block';
+                testResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Error!</strong>
+                        <p class="mb-0">An error occurred while testing the credentials.</p>
+                    </div>
+                `;
+            });
+        });
+        
+        // Save credentials button
+        const saveCredentialsBtn = document.getElementById('saveCredentialsBtn');
+        saveCredentialsBtn.addEventListener('click', function() {
+            const credentialType = document.getElementById('credentialType').value;
+            const credentials = {};
+            
+            // Get form values based on credential type
+            if (credentialType === 'openai') {
+                credentials.api_key = document.getElementById('openai-api-key').value;
+                
+                if (!credentials.api_key) {
+                    alert('Please enter the API key');
+                    return;
+                }
+            } else if (credentialType === 'youtube') {
+                credentials.api_key = document.getElementById('youtube-api-key').value;
+                
+                if (!credentials.api_key) {
+                    alert('Please enter the API key');
+                    return;
+                }
+            } else if (credentialType === 'twitter') {
+                credentials.api_key = document.getElementById('twitter-api-key').value;
+                credentials.api_secret = document.getElementById('twitter-api-secret').value;
+                credentials.access_token = document.getElementById('twitter-access-token').value;
+                credentials.access_secret = document.getElementById('twitter-access-secret').value;
+                
+                if (!credentials.api_key || !credentials.api_secret || !credentials.access_token || !credentials.access_secret) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+            } else if (credentialType === 'telegram') {
+                credentials.api_id = document.getElementById('telegram-api-id').value;
+                credentials.api_hash = document.getElementById('telegram-api-hash').value;
+                
+                if (!credentials.api_id || !credentials.api_hash) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+            } else if (credentialType === 'dark_web') {
+                credentials.proxy_host = document.getElementById('dark-web-proxy-host').value;
+                credentials.proxy_port = document.getElementById('dark-web-proxy-port').value;
+                const controlPassword = document.getElementById('dark-web-control-password').value;
+                if (controlPassword) {
+                    credentials.control_password = controlPassword;
+                }
+                
+                if (!credentials.proxy_host || !credentials.proxy_port) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+            }
+            
+            // Show loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+            this.disabled = true;
+            
+            // Save credentials
+            fetch('/api-credentials/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    credential_type: credentialType,
+                    credentials: credentials
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Hide the modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('credentialModal'));
+                    modal.hide();
+                    
+                    // Reload the page
+                    location.reload();
+                } else {
+                    // Reset button state
+                    this.innerHTML = 'Save Credentials';
+                    this.disabled = false;
+                    
+                    // Show error message
+                    const testResult = document.getElementById('testResult');
+                    testResult.style.display = 'block';
+                    testResult.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Error!</strong>
+                            <p class="mb-0">${data.message}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error saving credentials:', error);
+                this.innerHTML = 'Save Credentials';
+                this.disabled = false;
+                
+                const testResult = document.getElementById('testResult');
+                testResult.style.display = 'block';
+                testResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Error!</strong>
+                        <p class="mb-0">An error occurred while saving the credentials.</p>
+                    </div>
+                `;
+            });
+        });
+        
+        // Delete credentials button
+        const deleteCredentialsBtns = document.querySelectorAll('.delete-credentials-btn');
+        deleteCredentialsBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const credentialType = this.getAttribute('data-credential-type');
+                
+                // Set values for delete confirmation modal
+                document.getElementById('deleteCredentialType').textContent = credentialType.charAt(0).toUpperCase() + credentialType.slice(1);
+                document.getElementById('deleteCredentialTypeValue').value = credentialType;
+                
+                // Show the modal
+                const modal = new bootstrap.Modal(document.getElementById('deleteCredentialModal'));
+                modal.show();
+            });
+        });
+        
+        // Confirm delete button
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        confirmDeleteBtn.addEventListener('click', function() {
+            const credentialType = document.getElementById('deleteCredentialTypeValue').value;
+            
+            // Show loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Deleting...';
+            this.disabled = true;
+            
+            // Delete credentials
+            fetch('/api-credentials/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    credential_type: credentialType
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Hide the modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('deleteCredentialModal'));
+                    modal.hide();
+                    
+                    // Reload the page
+                    location.reload();
+                } else {
+                    // Reset button state
+                    this.innerHTML = 'Delete Credentials';
+                    this.disabled = false;
+                    
+                    // Show error message
+                    alert('Failed to delete credentials: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting credentials:', error);
+                this.innerHTML = 'Delete Credentials';
+                this.disabled = false;
+                
+                alert('An error occurred while deleting the credentials.');
+            });
+        });
+    });
+</script>
+{% endblock %}
