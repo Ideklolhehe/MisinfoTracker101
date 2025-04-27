@@ -142,8 +142,9 @@ class CounterAgent(BaseAgent):
                 counter_message = self._generate_template_counter(narrative_text, narrative.language)
                 strategy = 'factual_correction'
             
-            # Create counter-message in database
-            with db.session.begin():
+            # Create counter-message in database - transaction-safe approach
+            try:
+                # Create the counter message object
                 counter = CounterMessage(
                     narrative_id=narrative_id,
                     content=counter_message,
@@ -151,10 +152,27 @@ class CounterAgent(BaseAgent):
                     status='draft',  # Requires human approval
                     created_at=datetime.utcnow()
                 )
-                db.session.add(counter)
-                db.session.flush()
                 
-                counter_id = counter.id
+                # Use try-except to safely handle potential transaction issues
+                try:
+                    # First try adding directly without transaction management
+                    db.session.add(counter)
+                    # Flush to get the ID (if we're not in a transaction)
+                    db.session.flush()
+                    counter_id = counter.id
+                except Exception as e:
+                    if 'transaction is already begun' in str(e):
+                        # If we're in a transaction, add but don't force flush
+                        db.session.add(counter)
+                        # We can't get the ID yet, parent transaction will handle it
+                        counter_id = None
+                        logger.warning(f"Added counter message in existing transaction, ID not yet available")
+                    else:
+                        # Re-raise other errors
+                        raise
+            except Exception as e:
+                logger.error(f"Error creating counter message in database: {e}")
+                raise  # Re-raise to be caught by outer try/except
             
             logger.info(f"Generated counter-message for narrative {narrative_id}: ID {counter_id}")
             
