@@ -1,13 +1,16 @@
 import logging
 import json
 from typing import Dict, Any, List
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, send_file, Response, make_response
 from flask_login import login_required, current_user
+from io import BytesIO
 
 from app import app, db
 from models import DetectedNarrative, User
 from services.complexity_analyzer import ComplexityAnalyzer
 from services.complexity_scheduler import ComplexityScheduler
+from services.export_service import ComplexityReportExporter
+from services.complexity_alerts import ComplexityAlertService
 from utils.app_context import ensure_app_context
 
 # Initialize services
@@ -320,6 +323,218 @@ def get_complexity_trends():
     except Exception as e:
         logger.error(f"Error in complexity trends API endpoint: {e}")
         return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/export/<int:narrative_id>/pdf', methods=['GET'])
+@login_required
+def export_complexity_to_pdf(narrative_id):
+    """
+    Export complexity analysis for a specific narrative to PDF.
+    
+    Args:
+        narrative_id: ID of the narrative to export
+        
+    Returns:
+        PDF file download
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get narrative data
+        narrative = DetectedNarrative.query.get(narrative_id)
+        if not narrative:
+            return jsonify({"error": f"Narrative with ID {narrative_id} not found"}), 404
+        
+        # Generate PDF
+        pdf_data = ComplexityReportExporter.export_to_pdf(narrative_id)
+        if not pdf_data:
+            return jsonify({"error": "Failed to generate PDF report"}), 500
+        
+        # Prepare filename
+        filename = f"narrative_{narrative_id}_complexity_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        # Return the file
+        return send_file(
+            pdf_data,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting narrative {narrative_id} to PDF: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/export/<int:narrative_id>/csv', methods=['GET'])
+@login_required
+def export_complexity_to_csv(narrative_id):
+    """
+    Export complexity analysis for a specific narrative to CSV.
+    
+    Args:
+        narrative_id: ID of the narrative to export
+        
+    Returns:
+        CSV file download
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get narrative data
+        narrative = DetectedNarrative.query.get(narrative_id)
+        if not narrative:
+            return jsonify({"error": f"Narrative with ID {narrative_id} not found"}), 404
+        
+        # Generate CSV
+        csv_data = ComplexityReportExporter.export_to_csv(narrative_id)
+        if not csv_data:
+            return jsonify({"error": "Failed to generate CSV report"}), 500
+        
+        # Prepare filename
+        filename = f"narrative_{narrative_id}_complexity_{datetime.now().strftime('%Y%m%d')}.csv"
+        
+        # Return the file
+        return send_file(
+            csv_data,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting narrative {narrative_id} to CSV: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/export/comparison/pdf', methods=['POST'])
+@login_required
+def export_comparison_to_pdf():
+    """
+    Export comparison of multiple narratives to PDF.
+    
+    Returns:
+        PDF file download
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get narrative IDs from request
+        narrative_ids = request.json.get('narrative_ids', [])
+        if not narrative_ids or len(narrative_ids) < 2:
+            return jsonify({"error": "At least two narrative IDs are required"}), 400
+        
+        # Generate PDF
+        pdf_data = ComplexityReportExporter.export_comparison_to_pdf(narrative_ids)
+        if not pdf_data:
+            return jsonify({"error": "Failed to generate comparison PDF report"}), 500
+        
+        # Prepare filename
+        narrative_id_str = '_'.join(str(nid) for nid in narrative_ids[:3])
+        if len(narrative_ids) > 3:
+            narrative_id_str += f"_plus_{len(narrative_ids) - 3}_more"
+        
+        filename = f"narrative_comparison_{narrative_id_str}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        # Return the file
+        return send_file(
+            pdf_data,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting comparison to PDF: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/export/trends/csv', methods=['GET'])
+@login_required
+def export_trends_to_csv():
+    """
+    Export complexity trends to CSV.
+    
+    Returns:
+        CSV file download
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get time period from request
+        days = request.args.get('days', 30, type=int)
+        
+        # Generate CSV
+        csv_data = ComplexityReportExporter.export_trends_to_csv(days)
+        if not csv_data:
+            return jsonify({"error": "Failed to generate trends CSV report"}), 500
+        
+        # Prepare filename
+        filename = f"complexity_trends_{days}days_{datetime.now().strftime('%Y%m%d')}.csv"
+        
+        # Return the file
+        return send_file(
+            csv_data,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting trends to CSV: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/trends', methods=['GET'])
+@login_required
+def complexity_trends():
+    """
+    Display time-series trends of narrative complexity.
+    
+    Returns:
+        HTML page with complexity trends visualization
+    """
+    try:
+        # Get recently analyzed narratives for initial stats
+        narratives_with_complexity = []
+        
+        narratives = DetectedNarrative.query.filter(
+            DetectedNarrative.status == 'active'
+        ).order_by(DetectedNarrative.last_updated.desc()).limit(50).all()
+        
+        for narrative in narratives:
+            complexity_data = {}
+            if narrative.meta_data:
+                try:
+                    metadata = json.loads(narrative.meta_data)
+                    complexity_data = metadata.get('complexity_analysis', {})
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            if complexity_data and 'overall_complexity_score' in complexity_data:
+                narratives_with_complexity.append({
+                    'id': narrative.id,
+                    'title': narrative.title,
+                    'status': narrative.status,
+                    'last_updated': narrative.last_updated,
+                    'overall_score': complexity_data.get('overall_complexity_score'),
+                    'linguistic_score': complexity_data.get('linguistic_complexity', {}).get('score'),
+                    'logical_score': complexity_data.get('logical_structure', {}).get('score'),
+                    'rhetorical_score': complexity_data.get('rhetorical_techniques', {}).get('score'),
+                    'emotional_score': complexity_data.get('emotional_manipulation', {}).get('score'),
+                })
+        
+        return render_template(
+            'complexity/trends.html',
+            narratives=narratives_with_complexity
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in complexity trends endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
 
 # Register blueprint
 app.register_blueprint(complexity_bp)
