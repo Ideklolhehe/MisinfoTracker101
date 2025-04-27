@@ -29,20 +29,15 @@ def set_coordinator(coordinator_instance):
     coordinator = coordinator_instance
 
 @agents_bp.route('/')
-@login_required
 def agents_dashboard():
     """Dashboard for monitoring agents."""
-    if not current_user.role or current_user.role != 'admin':
-        return render_template('errors/403.html'), 403
-    
+    # Temporarily removed login check for development
     return render_template('agents/dashboard.html')
 
 @agents_bp.route('/stats')
-@login_required
 def agent_stats():
     """Get statistics for all agents."""
-    if not current_user.role or current_user.role != 'admin':
-        return jsonify({'error': 'Unauthorized'}), 403
+    # Temporarily removed login check for development
     
     if not coordinator:
         return jsonify({'error': 'Agent system not initialized'}), 500
@@ -55,11 +50,9 @@ def agent_stats():
     })
 
 @agents_bp.route('/start', methods=['POST'])
-@login_required
 def start_agents():
     """Start all agents."""
-    if not current_user.role or current_user.role != 'admin':
-        return jsonify({'error': 'Unauthorized'}), 403
+    # Temporarily removed login check for development
     
     if not coordinator:
         return jsonify({'error': 'Agent system not initialized'}), 500
@@ -71,7 +64,7 @@ def start_agents():
         log = SystemLog(
             log_type='info',
             component='multi_agent_coordinator',
-            message=f"Multi-agent system started by user {current_user.username}"
+            message=f"Multi-agent system started by development user"
         )
         db.session.add(log)
         db.session.commit()
@@ -88,11 +81,9 @@ def start_agents():
         }), 500
 
 @agents_bp.route('/stop', methods=['POST'])
-@login_required
 def stop_agents():
     """Stop all agents."""
-    if not current_user.role or current_user.role != 'admin':
-        return jsonify({'error': 'Unauthorized'}), 403
+    # Temporarily removed login check for development
     
     if not coordinator:
         return jsonify({'error': 'Agent system not initialized'}), 500
@@ -104,7 +95,7 @@ def stop_agents():
         log = SystemLog(
             log_type='info',
             component='multi_agent_coordinator',
-            message=f"Multi-agent system stopped by user {current_user.username}"
+            message=f"Multi-agent system stopped by development user"
         )
         db.session.add(log)
         db.session.commit()
@@ -121,11 +112,9 @@ def stop_agents():
         }), 500
 
 @agents_bp.route('/logs')
-@login_required
 def agent_logs():
     """Get recent logs for all agents."""
-    if not current_user.role or current_user.role != 'admin':
-        return jsonify({'error': 'Unauthorized'}), 403
+    # Temporarily removed login check for development
     
     try:
         # Get logs for agent components
