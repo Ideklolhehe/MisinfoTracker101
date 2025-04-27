@@ -22,6 +22,9 @@ from storage.evidence_store import EvidenceStore
 from storage.ipfs_evidence_store import IPFSEvidenceStore
 from storage.graph_store import GraphStore
 from routes.agents import agents_bp, set_coordinator
+from services.complexity_analyzer import ComplexityAnalyzer
+from services.complexity_scheduler import ComplexityScheduler
+import utils.jinja_filters  # noqa: F401, import to register filters
 
 # Configure logging
 logging.basicConfig(
