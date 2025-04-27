@@ -61,6 +61,17 @@ def store_instance_evidence(instance_id):
             print(f"  Instance ID: {instance_id}")
             print(f"  Evidence hash: {ipfs_hash}")
             print(f"  IPFS Gateway URL: {store.get_ipfs_gateway_url(ipfs_hash)}")
+            
+            # Verify the evidence after storing
+            is_valid = store.verify_evidence(ipfs_hash)
+            print(f"  Verification result: {'Valid' if is_valid else 'Invalid'}")
+            
+            # Also retrieve the evidence to confirm it's accessible
+            evidence_data = store.retrieve_evidence(ipfs_hash)
+            if evidence_data:
+                print("  Evidence is retrievable")
+            else:
+                print("  Warning: Evidence could not be retrieved")
         else:
             logger.error(f"Failed to store evidence for instance {instance_id}")
             print(f"\nError: Failed to store evidence for instance {instance_id}")
@@ -119,25 +130,46 @@ def verify_evidence(evidence_hash):
             print(f"\nError: Failed to verify evidence hash {evidence_hash}")
             print(f"  The evidence may have been tampered with or does not exist.")
 
-def store_all_pending():
-    """Store all pending narrative instances without evidence hash."""
+def store_all_pending(limit=5):
+    """Store all pending narrative instances without evidence hash.
+    
+    Args:
+        limit: Maximum number of instances to process (default=5)
+    """
     with app.app_context():
         # Create IPFS evidence store
         store = IPFSEvidenceStore(ipfs_host='localhost', ipfs_port=5001)
         
-        # Use the store_all_pending method to handle all pending instances at once
-        result = store.store_all_pending()
+        # Get instances without evidence hash
+        instances = NarrativeInstance.query.filter(
+            NarrativeInstance.evidence_hash.is_(None),
+            NarrativeInstance.narrative_id.isnot(None)  # Only store confirmed misinformation
+        ).limit(limit).all()
         
-        if result:
-            print(f"\nEvidence storing completed:")
-            print(f"  Total instances: {result.get('total', 0)}")
-            print(f"  Successful: {result.get('success', 0)}")
-            print(f"  Failed: {result.get('failed', 0)}")
-            print(f"  Stored on IPFS: {result.get('ipfs_stored', 0)}")
-            print(f"  Stored locally: {result.get('local_stored', 0)}")
-        else:
-            logger.error("Failed to store pending evidence")
-            print("\nError: Failed to store pending evidence")
+        print(f"\nFound {len(instances)} instances for evidence storage (limited to {limit})")
+        
+        # Process each instance manually
+        success_count = 0
+        failed_count = 0
+        for instance in instances:
+            print(f"Processing instance {instance.id}...")
+            evidence_hash = store.store_evidence(instance_id=instance.id)
+            
+            if evidence_hash:
+                success_count += 1
+                print(f"  Success: Evidence stored with hash {evidence_hash[:10]}...")
+                
+                # Verify after storing
+                is_valid = store.verify_evidence(evidence_hash)
+                print(f"  Verification: {'Valid' if is_valid else 'Invalid'}")
+            else:
+                failed_count += 1
+                print(f"  Failed: Could not store evidence")
+        
+        print(f"\nEvidence storing completed:")
+        print(f"  Total processed: {len(instances)}")
+        print(f"  Successful: {success_count}")
+        print(f"  Failed: {failed_count}")
 
 def main():
     """Main function for IPFS evidence test."""
