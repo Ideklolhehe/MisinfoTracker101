@@ -78,6 +78,7 @@ with app.app_context():
     from routes.api_credentials import api_credentials_bp
     from routes.rss_feeds import rss_feeds_bp
     from routes.agents import agents_bp
+    from routes.dev_auth import dev_auth_bp  # Development-only
     
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -90,6 +91,7 @@ with app.app_context():
     app.register_blueprint(agents_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(home_bp)
+    app.register_blueprint(dev_auth_bp)  # Development-only
     
     # Initialize external API clients
     from services.api_credential_manager import APICredentialManager
