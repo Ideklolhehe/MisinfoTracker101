@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, render_template, send_file, Respo
 from flask_login import login_required, current_user
 from io import BytesIO
 
-from app import app, db
+from app import db
 from models import DetectedNarrative, User
 from services.complexity_analyzer import ComplexityAnalyzer
 from services.complexity_scheduler import ComplexityScheduler
@@ -952,5 +952,4 @@ def features():
         # Return simple error
         return render_template('error.html', message=str(e)), 500
 
-# Register blueprint
-app.register_blueprint(complexity_bp)
+# Blueprint is registered in app.py
