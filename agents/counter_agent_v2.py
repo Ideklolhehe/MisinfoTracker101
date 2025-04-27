@@ -159,14 +159,23 @@ class CounterAgent(BaseAgent):
                     db.session.add(counter)
                     # Flush to get the ID (if we're not in a transaction)
                     db.session.flush()
+                    # Try to commit explicitly to ensure the counter message is saved
+                    db.session.commit()
                     counter_id = counter.id
                 except Exception as e:
                     if 'transaction is already begun' in str(e):
                         # If we're in a transaction, add but don't force flush
                         db.session.add(counter)
-                        # We can't get the ID yet, parent transaction will handle it
-                        counter_id = None
-                        logger.warning(f"Added counter message in existing transaction, ID not yet available")
+                        try:
+                            # Try to force a commit to make sure the counter message is saved
+                            db.session.commit()
+                            counter_id = counter.id
+                            logger.info(f"Committed counter message in existing transaction, ID: {counter_id}")
+                        except Exception as commit_error:
+                            # If commit fails, we're still in a parent transaction
+                            logger.warning(f"Could not commit counter message in existing transaction: {commit_error}")
+                            counter_id = None
+                            logger.warning(f"Added counter message in existing transaction, ID not yet available")
                     else:
                         # Re-raise other errors
                         raise
