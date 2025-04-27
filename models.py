@@ -127,7 +127,7 @@ class CounterMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     narrative_id = db.Column(db.Integer, db.ForeignKey('detected_narrative.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    strategy = db.Column(db.String(100))  # fact-checking, prebunking, etc.
+    strategy = db.Column(db.Text)  # Detailed description of the counter-message approach
     status = db.Column(db.String(50), default='draft')  # draft, approved, deployed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.String, db.ForeignKey('users.id'))
