@@ -1,0 +1,345 @@
+{% extends 'base.html' %}
+
+{% block title %}Narrative Complexity Analysis{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .complexity-card {
+        margin-bottom: 1.5rem;
+    }
+    .score-pill {
+        font-size: 0.9rem;
+        padding: 0.3rem 0.5rem;
+        border-radius: 1rem;
+    }
+    .score-high {
+        background-color: var(--bs-danger-bg-subtle);
+        color: var(--bs-danger);
+    }
+    .score-medium {
+        background-color: var(--bs-warning-bg-subtle);
+        color: var(--bs-warning-text);
+    }
+    .score-low {
+        background-color: var(--bs-success-bg-subtle);
+        color: var(--bs-success);
+    }
+    .complexity-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .dimension-card {
+        margin-bottom: 1rem;
+        border-left: 4px solid;
+    }
+    .dimension-linguistic {
+        border-color: var(--bs-info);
+    }
+    .dimension-logical {
+        border-color: var(--bs-success);
+    }
+    .dimension-rhetorical {
+        border-color: var(--bs-warning);
+    }
+    .dimension-emotional {
+        border-color: var(--bs-danger);
+    }
+    .examples-block {
+        font-style: italic;
+        padding: 0.5rem;
+        background-color: var(--bs-tertiary-bg);
+        border-radius: 0.25rem;
+        margin-top: 0.5rem;
+    }
+    .analyze-btn {
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item"><a href="/narratives">Narratives</a></li>
+            <li class="breadcrumb-item"><a href="/narratives/view/{{ narrative.id }}">Narrative {{ narrative.id }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Complexity Analysis</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Narrative Information</h4>
+                </div>
+                <div class="card-body">
+                    <h5>{{ narrative.title }}</h5>
+                    <p class="text-muted">ID: {{ narrative.id }} | Status: {{ narrative.status }} | First Detected: {{ narrative.first_detected.strftime('%Y-%m-%d') }}</p>
+                    <p>{{ narrative.description }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="complexity-header">
+                <h2>Complexity Analysis</h2>
+                {% if current_user.role in ['admin', 'analyst', 'researcher'] %}
+                <button id="analyze-btn" class="btn btn-primary" data-narrative-id="{{ narrative.id }}">
+                    {% if has_complexity_data %}Re-analyze Complexity{% else %}Analyze Complexity{% endif %}
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div id="loading-indicator" style="display: none;">
+        <div class="d-flex justify-content-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+        <p class="text-center mt-2">Analyzing narrative complexity. This may take a minute...</p>
+    </div>
+
+    <div id="complexity-content" {% if not has_complexity_data %}style="display: none;"{% endif %}>
+        {% if has_complexity_data %}
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Overall Complexity</h5>
+                        <span class="score-pill 
+                            {% if complexity_data.overall_complexity_score >= 7 %}score-high
+                            {% elif complexity_data.overall_complexity_score >= 4 %}score-medium
+                            {% else %}score-low{% endif %}">
+                            Score: {{ complexity_data.overall_complexity_score }}/10
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ complexity_data.summary }}</p>
+                        
+                        {% if complexity_data.potential_impact %}
+                        <h6 class="mt-3">Potential Impact:</h6>
+                        <p>{{ complexity_data.potential_impact }}</p>
+                        {% endif %}
+                        
+                        {% if complexity_data.analyzed_at %}
+                        <p class="text-muted mt-3">
+                            <small>Analysis timestamp: {{ complexity_data.analyzed_at | int | strftime }}</small>
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">Complexity Dimensions</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="complexityRadarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card dimension-card dimension-linguistic">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Linguistic Complexity</h5>
+                        <span class="score-pill 
+                            {% if complexity_data.linguistic_complexity.score >= 7 %}score-high
+                            {% elif complexity_data.linguistic_complexity.score >= 4 %}score-medium
+                            {% else %}score-low{% endif %}">
+                            Score: {{ complexity_data.linguistic_complexity.score }}/10
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ complexity_data.linguistic_complexity.observations }}</p>
+                        {% if complexity_data.linguistic_complexity.examples %}
+                        <div class="examples-block">
+                            <strong>Examples:</strong> {{ complexity_data.linguistic_complexity.examples }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card dimension-card dimension-logical">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Logical Structure</h5>
+                        <span class="score-pill 
+                            {% if complexity_data.logical_structure.score >= 7 %}score-high
+                            {% elif complexity_data.logical_structure.score >= 4 %}score-medium
+                            {% else %}score-low{% endif %}">
+                            Score: {{ complexity_data.logical_structure.score }}/10
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ complexity_data.logical_structure.observations }}</p>
+                        {% if complexity_data.logical_structure.examples %}
+                        <div class="examples-block">
+                            <strong>Examples:</strong> {{ complexity_data.logical_structure.examples }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card dimension-card dimension-rhetorical">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Rhetorical Techniques</h5>
+                        <span class="score-pill 
+                            {% if complexity_data.rhetorical_techniques.score >= 7 %}score-high
+                            {% elif complexity_data.rhetorical_techniques.score >= 4 %}score-medium
+                            {% else %}score-low{% endif %}">
+                            Score: {{ complexity_data.rhetorical_techniques.score }}/10
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ complexity_data.rhetorical_techniques.observations }}</p>
+                        {% if complexity_data.rhetorical_techniques.examples %}
+                        <div class="examples-block">
+                            <strong>Examples:</strong> {{ complexity_data.rhetorical_techniques.examples }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card dimension-card dimension-emotional">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Emotional Manipulation</h5>
+                        <span class="score-pill 
+                            {% if complexity_data.emotional_manipulation.score >= 7 %}score-high
+                            {% elif complexity_data.emotional_manipulation.score >= 4 %}score-medium
+                            {% else %}score-low{% endif %}">
+                            Score: {{ complexity_data.emotional_manipulation.score }}/10
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ complexity_data.emotional_manipulation.observations }}</p>
+                        {% if complexity_data.emotional_manipulation.examples %}
+                        <div class="examples-block">
+                            <strong>Examples:</strong> {{ complexity_data.emotional_manipulation.examples }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="row" id="no-data-message">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <p>No complexity analysis data is available for this narrative yet.</p>
+                    {% if current_user.role in ['admin', 'analyst', 'researcher'] %}
+                    <p>Click the "Analyze Complexity" button to generate a complexity analysis.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if has_complexity_data %}
+        // Initialize radar chart
+        const ctx = document.getElementById('complexityRadarChart').getContext('2d');
+        const complexityChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: [
+                    'Linguistic Complexity', 
+                    'Logical Structure', 
+                    'Rhetorical Techniques', 
+                    'Emotional Manipulation'
+                ],
+                datasets: [{
+                    label: 'Complexity Scores',
+                    data: [
+                        {{ complexity_data.linguistic_complexity.score }},
+                        {{ complexity_data.logical_structure.score }},
+                        {{ complexity_data.rhetorical_techniques.score }},
+                        {{ complexity_data.emotional_manipulation.score }}
+                    ],
+                    fill: true,
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgb(54, 162, 235)',
+                    pointBackgroundColor: 'rgb(54, 162, 235)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgb(54, 162, 235)'
+                }]
+            },
+            options: {
+                scales: {
+                    r: {
+                        min: 0,
+                        max: 10,
+                        ticks: {
+                            stepSize: 2
+                        }
+                    }
+                }
+            }
+        });
+        {% endif %}
+        
+        // Analyze button click handler
+        const analyzeBtn = document.getElementById('analyze-btn');
+        if (analyzeBtn) {
+            analyzeBtn.addEventListener('click', function() {
+                const narrativeId = this.getAttribute('data-narrative-id');
+                
+                // Show loading indicator
+                document.getElementById('loading-indicator').style.display = 'block';
+                document.getElementById('complexity-content').style.display = 'none';
+                
+                // Call API to analyze complexity
+                fetch(`/complexity/analyze/${narrativeId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error || 'Analysis failed'); });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Reload the page to show updated results
+                    window.location.reload();
+                })
+                .catch(error => {
+                    alert('Error analyzing complexity: ' + error.message);
+                    // Hide loading indicator
+                    document.getElementById('loading-indicator').style.display = 'none';
+                    document.getElementById('complexity-content').style.display = 'block';
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}
