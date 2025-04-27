@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """
-Test script for IPFS evidence storage in the CIVILIAN system.
-This script tests the IPFSEvidenceStore class and demonstrates its usage.
+Test IPFS evidence storage system by storing a test narrative instance.
 """
 
 import os
@@ -9,192 +8,200 @@ import sys
 import json
 import logging
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger('IPFSTest')
+logger = logging.getLogger('IPFSEvidenceTest')
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import application components
 from app import app, db
-from models import NarrativeInstance, DetectedNarrative
+from models import NarrativeInstance
 from storage.ipfs_evidence_store import IPFSEvidenceStore
 
-def display_narrative_instances(limit=5):
-    """Display recent narrative instances for testing."""
-    with app.app_context():
-        instances = NarrativeInstance.query.order_by(
-            NarrativeInstance.detected_at.desc()
-        ).limit(limit).all()
-        
-        print(f"\n=== Recent Narrative Instances ({len(instances)}) ===")
-        for i, instance in enumerate(instances):
-            narrative = DetectedNarrative.query.get(instance.narrative_id) if instance.narrative_id else None
-            narrative_title = narrative.title if narrative else "No narrative"
-            print(f"{i+1}. ID: {instance.id}, Narrative: {narrative_title}")
-            print(f"   Content: {instance.content[:100]}...")
-            print(f"   Evidence Hash: {instance.evidence_hash or 'None'}")
-            print("")
-        
-        return instances
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description='Test IPFS evidence storage system.')
+    parser.add_argument('--instance', type=int, help='ID of the narrative instance to store as evidence')
+    parser.add_argument('--list', action='store_true', help='List all stored evidence')
+    parser.add_argument('--verify', type=str, help='Verify an evidence hash')
+    parser.add_argument('--all-pending', action='store_true', help='Store all pending narrative instances')
+    return parser.parse_args()
 
-def test_store_evidence(store, instance_id):
-    """Test storing evidence for a specific instance."""
+def store_instance_evidence(instance_id):
+    """Store evidence for a specific narrative instance."""
     with app.app_context():
-        print(f"\n=== Testing Evidence Storage for Instance {instance_id} ===")
-        
-        # Get the instance before storage
+        # Retrieve the instance
         instance = NarrativeInstance.query.get(instance_id)
         if not instance:
-            print(f"Error: Instance {instance_id} not found")
-            return None
+            logger.error(f"No instance found with ID {instance_id}")
+            print(f"Error: No instance found with ID {instance_id}")
+            return
         
-        print(f"Before: Evidence Hash = {instance.evidence_hash or 'None'}")
+        # Create IPFS evidence store
+        store = IPFSEvidenceStore(host='localhost', port=5001)
         
-        # Store evidence
-        evidence_hash = store.store_evidence(instance_id)
+        # Store the evidence
+        metadata = {
+            'source': instance.source.name if instance.source else 'Unknown',
+            'detected_at': instance.detected_at.isoformat(),
+            'claim': instance.get_meta_data().get('claim', 'Unknown claim'),
+            'truth': instance.get_meta_data().get('truth', 'Unknown truth'),
+            'verified_false': instance.get_meta_data().get('verified_false', False),
+            'narrative_id': instance.narrative_id,
+            'narrative_title': instance.narrative.title if instance.narrative else 'Unknown',
+            'stored_at': datetime.utcnow().isoformat()
+        }
         
-        # Get the updated instance
-        instance = NarrativeInstance.query.get(instance_id)
+        result = store.store_evidence(
+            content=instance.content,
+            metadata=metadata,
+            source_url=instance.url
+        )
         
-        print(f"After: Evidence Hash = {instance.evidence_hash or 'None'}")
-        print(f"Result: {'Success' if evidence_hash else 'Failed'}")
-        
-        if evidence_hash:
-            if evidence_hash.startswith('local:'):
-                print(f"Stored locally with hash: {evidence_hash}")
-            else:
-                gateway_url = store.get_ipfs_gateway_url(evidence_hash)
-                print(f"Stored on IPFS with CID: {evidence_hash}")
-                print(f"Gateway URL: {gateway_url}")
-        
-        return evidence_hash
-
-def test_retrieve_evidence(store, evidence_hash):
-    """Test retrieving evidence by hash."""
-    with app.app_context():
-        print(f"\n=== Testing Evidence Retrieval for Hash {evidence_hash} ===")
-        
-        # Retrieve evidence
-        evidence_data = store.retrieve_evidence(evidence_hash)
-        
-        if evidence_data:
-            print("Evidence retrieved successfully:")
-            print(f"Instance ID: {evidence_data.get('instance_id')}")
-            print(f"Narrative ID: {evidence_data.get('narrative_id')}")
-            print(f"Detected At: {evidence_data.get('detected_at')}")
-            print(f"Content: {evidence_data.get('content', '')[:100]}...")
-        else:
-            print("Failed to retrieve evidence.")
-        
-        return evidence_data
-
-def test_verify_evidence(store, evidence_hash):
-    """Test verifying evidence integrity."""
-    with app.app_context():
-        print(f"\n=== Testing Evidence Verification for Hash {evidence_hash} ===")
-        
-        # Verify evidence
-        is_valid = store.verify_evidence(evidence_hash)
-        
-        print(f"Evidence is {'valid' if is_valid else 'invalid or tampered'}")
-        
-        return is_valid
-
-def test_list_evidence(store, limit=10):
-    """Test listing evidence items."""
-    with app.app_context():
-        print(f"\n=== Listing Evidence Items (max {limit}) ===")
-        
-        # List evidence
-        evidence_list = store.list_evidence(limit=limit)
-        
-        for i, evidence in enumerate(evidence_list):
-            print(f"{i+1}. Hash: {evidence.get('hash')}")
-            print(f"   Storage Type: {evidence.get('storage_type')}")
-            print(f"   Instance ID: {evidence.get('instance_id')}")
-            print(f"   Timestamp: {evidence.get('timestamp')}")
-            if evidence.get('url'):
-                print(f"   URL: {evidence.get('url')}")
-            print("")
-        
-        return evidence_list
-
-def test_store_all_pending(store):
-    """Test storing all pending evidence."""
-    with app.app_context():
-        print("\n=== Testing Storage of All Pending Evidence ===")
-        
-        # Count instances without evidence hash
-        count = NarrativeInstance.query.filter(
-            NarrativeInstance.evidence_hash.is_(None),
-            NarrativeInstance.narrative_id.isnot(None)
-        ).count()
-        
-        print(f"Found {count} instances without evidence hash")
-        
-        if count > 0:
-            # Store all pending
-            result = store.store_all_pending()
+        if result and result.get('success', False):
+            # Update the instance with the evidence hash
+            instance.evidence_hash = result.get('hash')
+            db.session.commit()
             
-            print("Storage complete:")
-            for key, value in result.items():
-                print(f"  {key}: {value}")
+            logger.info(f"Evidence stored successfully for instance {instance_id}")
+            logger.info(f"Evidence hash: {result.get('hash')}")
+            
+            print(f"\nEvidence stored successfully:")
+            print(f"  Instance ID: {instance_id}")
+            print(f"  Evidence hash: {result.get('hash')}")
+            print(f"  IPFS Gateway URL: {store.get_ipfs_gateway_url(result.get('hash'))}")
+        else:
+            logger.error(f"Failed to store evidence for instance {instance_id}")
+            print(f"\nError: Failed to store evidence for instance {instance_id}")
+            if result:
+                print(f"Reason: {result.get('error', 'Unknown error')}")
+
+def list_evidence():
+    """List all stored evidence."""
+    with app.app_context():
+        # Create IPFS evidence store
+        store = IPFSEvidenceStore(host='localhost', port=5001)
         
-        return count
+        # Get all evidence
+        result = store.list_evidence()
+        
+        if result and result.get('success', False):
+            evidence_list = result.get('evidence', [])
+            
+            print(f"\nStored Evidence ({len(evidence_list)} items):")
+            for i, evidence in enumerate(evidence_list, 1):
+                print(f"\n{i}. Hash: {evidence.get('hash')}")
+                print(f"   Date: {evidence.get('date', 'Unknown')}")
+                print(f"   Type: {evidence.get('type', 'Unknown')}")
+                print(f"   Size: {evidence.get('size', 'Unknown')} bytes")
+                print(f"   Gateway URL: {store.get_ipfs_gateway_url(evidence.get('hash'))}")
+        else:
+            logger.error("Failed to list evidence")
+            print("\nError: Failed to list evidence")
+            if result:
+                print(f"Reason: {result.get('error', 'Unknown error')}")
+
+def verify_evidence(evidence_hash):
+    """Verify an evidence hash."""
+    with app.app_context():
+        # Create IPFS evidence store
+        store = IPFSEvidenceStore(host='localhost', port=5001)
+        
+        # Verify the evidence
+        result = store.verify_evidence(evidence_hash)
+        
+        if result and result.get('success', False):
+            print(f"\nEvidence verified successfully:")
+            print(f"  Hash: {evidence_hash}")
+            print(f"  Original: {result.get('original_hash')}")
+            print(f"  Current: {result.get('current_hash')}")
+            print(f"  Verified: {result.get('verified')}")
+            print(f"  Content: {result.get('content')[:100]}...") if result.get('content') else None
+            print(f"  IPFS Gateway URL: {store.get_ipfs_gateway_url(evidence_hash)}")
+        else:
+            logger.error(f"Failed to verify evidence hash {evidence_hash}")
+            print(f"\nError: Failed to verify evidence hash {evidence_hash}")
+            if result:
+                print(f"Reason: {result.get('error', 'Unknown error')}")
+
+def store_all_pending():
+    """Store all pending narrative instances without evidence hash."""
+    with app.app_context():
+        # Get all instances without evidence hash
+        instances = NarrativeInstance.query.filter(NarrativeInstance.evidence_hash.is_(None)).all()
+        
+        if not instances:
+            logger.info("No pending narrative instances found")
+            print("\nNo pending narrative instances found")
+            return
+        
+        # Create IPFS evidence store
+        store = IPFSEvidenceStore(host='localhost', port=5001)
+        
+        print(f"\nFound {len(instances)} pending narrative instances")
+        
+        successful = 0
+        failed = 0
+        
+        for instance in instances:
+            # Store the evidence
+            metadata = {
+                'source': instance.source.name if instance.source else 'Unknown',
+                'detected_at': instance.detected_at.isoformat(),
+                'claim': instance.get_meta_data().get('claim', 'Unknown'),
+                'narrative_id': instance.narrative_id,
+                'narrative_title': instance.narrative.title if instance.narrative else 'Unknown',
+                'stored_at': datetime.utcnow().isoformat()
+            }
+            
+            result = store.store_evidence(
+                content=instance.content,
+                metadata=metadata,
+                source_url=instance.url
+            )
+            
+            if result and result.get('success', False):
+                # Update the instance with the evidence hash
+                instance.evidence_hash = result.get('hash')
+                db.session.commit()
+                
+                logger.info(f"Evidence stored successfully for instance {instance.id}")
+                print(f"  Stored evidence for instance {instance.id}, hash: {result.get('hash')[:10]}...")
+                successful += 1
+            else:
+                logger.error(f"Failed to store evidence for instance {instance.id}")
+                failed += 1
+        
+        print(f"\nEvidence storing completed:")
+        print(f"  Successful: {successful}")
+        print(f"  Failed: {failed}")
 
 def main():
-    """Main function to test IPFS evidence storage."""
-    parser = argparse.ArgumentParser(description='Test IPFS evidence storage.')
-    parser.add_argument('--host', default='localhost', help='IPFS API host')
-    parser.add_argument('--port', type=int, default=5001, help='IPFS API port')
-    parser.add_argument('--instance', type=int, help='Specific instance ID to test')
-    parser.add_argument('--hash', help='Specific evidence hash to test')
-    parser.add_argument('--all', action='store_true', help='Store all pending evidence')
-    parser.add_argument('--list', action='store_true', help='List evidence items')
-    parser.add_argument('--limit', type=int, default=5, help='Limit for listing items')
-    args = parser.parse_args()
-    
-    # Initialize the IPFS evidence store
-    store = IPFSEvidenceStore(ipfs_host=args.host, ipfs_port=args.port)
-    
+    """Main function for IPFS evidence test."""
     try:
-        # Display some recent instances
-        instances = display_narrative_instances(limit=args.limit)
+        args = parse_args()
         
-        # Test storing a specific instance
         if args.instance:
-            evidence_hash = test_store_evidence(store, args.instance)
-            if evidence_hash:
-                test_retrieve_evidence(store, evidence_hash)
-                test_verify_evidence(store, evidence_hash)
-        
-        # Test retrieving and verifying a specific hash
-        if args.hash:
-            test_retrieve_evidence(store, args.hash)
-            test_verify_evidence(store, args.hash)
-        
-        # Test storing all pending evidence
-        if args.all:
-            test_store_all_pending(store)
-        
-        # Test listing evidence
-        if args.list or not (args.instance or args.hash or args.all):
-            test_list_evidence(store, limit=args.limit)
-        
+            store_instance_evidence(args.instance)
+        elif args.list:
+            list_evidence()
+        elif args.verify:
+            verify_evidence(args.verify)
+        elif args.all_pending:
+            store_all_pending()
+        else:
+            print("Please specify an action. Use --help for available options.")
+            
     except Exception as e:
-        logger.error(f"Test failed: {e}")
+        logger.error(f"Error testing IPFS evidence: {e}")
         print(f"\nError: {e}")
-        print("\nNote: If you're getting connection errors, make sure IPFS daemon is running.")
-        print("You can start it with: ipfs daemon")
-        print("If IPFS is not installed, you can install it from: https://docs.ipfs.io/install/")
-        print("The script will still work in local fallback mode without IPFS.")
 
 if __name__ == "__main__":
     main()
