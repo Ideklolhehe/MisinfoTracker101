@@ -8,6 +8,7 @@
     .complexity-card {
         margin-bottom: 1.5rem;
         transition: all 0.3s ease;
+        overflow-x: auto;
     }
     .complexity-card:hover {
         transform: translateY(-5px);
@@ -196,6 +197,29 @@
         visibility: visible;
         opacity: 1;
     }
+    @media (max-width: 768px) {
+        .complexity-card {
+            margin-bottom: 1rem;
+        }
+        .complexity-header {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .score-pill {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.6rem;
+        }
+        .dimension-card {
+            margin-bottom: 1rem;
+        }
+        .analyze-btn {
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .narrative-info-banner {
+            padding: 1rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -268,14 +292,14 @@
                     </div>
                     <div class="card-body">
                         <p>{{ complexity_data.summary }}</p>
-                        
+
                         {% if complexity_data.potential_impact %}
                         <div class="alert alert-secondary mt-3">
                             <h6 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Potential Impact:</h6>
                             <p class="mb-0">{{ complexity_data.potential_impact }}</p>
                         </div>
                         {% endif %}
-                        
+
                         {% if complexity_data.analyzed_at %}
                         <div class="timestamp">
                             <i class="bi bi-clock me-1"></i>
@@ -285,7 +309,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="col-md-6 mb-4">
                 <div class="card h-100 complexity-card">
                     <div class="card-header bg-dark text-white">
@@ -318,7 +342,7 @@
                 </div>
             </div>
         </div>
-        
+
         <h4 class="mt-2 mb-4">
             <i class="bi bi-diagram-3-fill me-2"></i>
             Detailed Dimension Analysis
@@ -327,7 +351,7 @@
                 <span class="tooltiptext">Click on any dimension card to view examples from the text</span>
             </span>
         </h4>
-        
+
         <div class="row">
             <div class="col-md-6 mb-4">
                 <div class="card dimension-card dimension-linguistic js-dimension-card">
@@ -356,7 +380,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="col-md-6 mb-4">
                 <div class="card dimension-card dimension-logical js-dimension-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -385,7 +409,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="row">
             <div class="col-md-6 mb-4">
                 <div class="card dimension-card dimension-rhetorical js-dimension-card">
@@ -415,7 +439,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="col-md-6 mb-4">
                 <div class="card dimension-card dimension-emotional js-dimension-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -482,7 +506,7 @@
                 </div>
             </div>
         </div>
-        
+
         {% else %}
         <div class="row" id="no-data-message">
             <div class="col-12">
@@ -532,7 +556,7 @@
                     backgroundColor: 'rgba(54, 162, 235, 0.3)',
                     borderColor: 'rgb(54, 162, 235)',
                     pointBackgroundColor: [
-                        'rgba(13, 110, 253, 0.8)',
+                        'rgba(13, 110,253, 0.8)',
                         'rgba(25, 135, 84, 0.8)',
                         'rgba(255, 193, 7, 0.8)',
                         'rgba(220, 53, 69, 0.8)'
@@ -612,32 +636,32 @@
             });
         });
         {% endif %}
-        
+
         // Analyze button click handler with improved feedback
         const analyzeBtn = document.getElementById('analyze-btn');
         if (analyzeBtn) {
             analyzeBtn.addEventListener('click', handleAnalyzeClick);
         }
-        
+
         const analyzeBtnAlt = document.getElementById('analyze-btn-alt');
         if (analyzeBtnAlt) {
             analyzeBtnAlt.addEventListener('click', handleAnalyzeClick);
         }
-        
+
         function handleAnalyzeClick() {
             const narrativeId = this.getAttribute('data-narrative-id');
-            
+
             // Disable button and show loading
             this.disabled = true;
             this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Analyzing...';
-            
+
             // Show loading indicator
             document.getElementById('loading-indicator').style.display = 'block';
             document.getElementById('complexity-content').style.display = 'none';
-            
+
             // Add progress simulation
             const progressBar = document.querySelector('.progress-bar');
-            
+
             // Call API to analyze complexity
             fetch(`/complexity/analyze/${narrativeId}`, {
                 method: 'POST',
@@ -666,7 +690,7 @@
                         </div>
                     </div>
                 `;
-                
+
                 // Reload after 2 seconds
                 setTimeout(() => {
                     window.location.reload();

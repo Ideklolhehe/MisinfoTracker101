@@ -75,9 +75,29 @@
         box-shadow: 0 5px 15px rgba(0,0,0,0.05);
         margin-bottom: 1.5rem;
     }
-    .dashboard-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    @media (max-width: 768px) {
+        .filter-toolbar {
+            flex-direction: column;
+        }
+        .search-container {
+            width: 100% !important;
+        }
+        .dashboard-card {
+            margin-bottom: 1rem;
+        }
+        .action-buttons {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .action-btn {
+            width: 100%;
+        }
+        .stat-card {
+            margin-bottom: 1rem;
+        }
+        .table-responsive {
+            font-size: 0.9rem;
+        }
     }
     .card-header-custom {
         background: var(--bs-dark);
@@ -262,7 +282,7 @@
         </h1>
         <p class="lead mb-0">Analyze and compare narrative complexity dimensions across active misinformation narratives. Identify patterns of sophistication in disinformation campaigns.</p>
     </div>
-    
+
     {% if narratives %}
     <div class="complexity-stats">
         <div class="row">
@@ -369,7 +389,7 @@
                     </select>
                 </div>
             </div>
-            
+
             <div class="table-container">
                 <div class="table-responsive">
                     <table class="table table-hover" id="narratives-table">
@@ -509,7 +529,7 @@
                 </div>
                 <div class="modal-body">
                     <p class="text-muted mb-4">This will analyze multiple narratives at once using OpenAI's AI models. Analysis may take several minutes depending on the number of narratives.</p>
-                    
+
                     <form id="batch-analysis-form">
                         <div class="mb-3">
                             <div class="form-floating">
@@ -518,7 +538,7 @@
                             </div>
                             <small class="text-muted">Only consider narratives created or updated in this time frame.</small>
                         </div>
-                        
+
                         <div class="mb-3">
                             <div class="form-floating">
                                 <input type="number" class="form-control" id="limit" name="limit" min="1" max="100" value="20">
@@ -526,7 +546,7 @@
                             </div>
                             <small class="text-muted">Set a limit to avoid excessive API usage. Each narrative requires one API call.</small>
                         </div>
-                        
+
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="priorityCheck" checked>
                             <label class="form-check-label" for="priorityCheck">
@@ -534,7 +554,7 @@
                             </label>
                         </div>
                     </form>
-                    
+
                     <div id="batch-loading" class="loading-animation" style="display: none;">
                         <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
                             <span class="visually-hidden">Loading...</span>
@@ -547,7 +567,7 @@
                             <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
                         </div>
                     </div>
-                    
+
                     <div id="batch-result" class="mt-3" style="display: none;"></div>
                 </div>
                 <div class="modal-footer">
@@ -572,13 +592,13 @@
         {% if narratives %}
         // Prepare data for charts
         const narrativesData = {{ narratives | tojson }};
-        
+
         // Overall complexity distribution
         const complexityScores = narrativesData.map(n => n.overall_score);
         const lowCount = complexityScores.filter(s => s < 4).length;
         const mediumCount = complexityScores.filter(s => s >= 4 && s < 7).length;
         const highCount = complexityScores.filter(s => s >= 7).length;
-        
+
         const ctxDistribution = document.getElementById('complexityDistributionChart').getContext('2d');
         new Chart(ctxDistribution, {
             type: 'doughnut',
@@ -631,13 +651,13 @@
                 }
             }
         });
-        
+
         // Dimension comparison chart
         const avgLinguistic = narrativesData.reduce((sum, n) => sum + n.linguistic_score, 0) / narrativesData.length;
         const avgLogical = narrativesData.reduce((sum, n) => sum + n.logical_score, 0) / narrativesData.length;
         const avgRhetorical = narrativesData.reduce((sum, n) => sum + n.rhetorical_score, 0) / narrativesData.length;
         const avgEmotional = narrativesData.reduce((sum, n) => sum + n.emotional_score, 0) / narrativesData.length;
-        
+
         const ctxDimension = document.getElementById('dimensionComparisonChart').getContext('2d');
         new Chart(ctxDimension, {
             type: 'bar',
@@ -725,36 +745,36 @@
                 }
             }
         });
-        
+
         // Filter functionality
         const searchInput = document.getElementById('narrative-search');
         const complexityFilter = document.getElementById('complexity-filter');
         const table = document.getElementById('narratives-table');
         const rows = table.querySelectorAll('tbody tr');
-        
+
         function filterTable() {
             const searchTerm = searchInput.value.toLowerCase();
             const filterValue = complexityFilter.value;
-            
+
             rows.forEach(row => {
                 const title = row.querySelector('.title-cell').textContent.toLowerCase();
                 const complexity = row.getAttribute('data-complexity');
-                
+
                 const matchesSearch = searchTerm === '' || title.includes(searchTerm);
                 const matchesFilter = filterValue === 'all' || complexity === filterValue;
-                
+
                 row.style.display = matchesSearch && matchesFilter ? '' : 'none';
             });
         }
-        
+
         if (searchInput) {
             searchInput.addEventListener('input', filterTable);
         }
-        
+
         if (complexityFilter) {
             complexityFilter.addEventListener('change', filterTable);
         }
-        
+
         // Make table rows clickable to go to analysis page
         rows.forEach(row => {
             row.addEventListener('click', function(e) {
@@ -769,29 +789,29 @@
             });
         });
         {% endif %}
-        
+
         // Batch analysis form handler with improved UI
         const batchBtn = document.getElementById('batch-analyze-btn');
         if (batchBtn) {
             batchBtn.addEventListener('click', function() {
                 const days = document.getElementById('days').value;
                 const limit = document.getElementById('limit').value;
-                
+
                 // Simple validation
                 if (!days || !limit || days < 1 || limit < 1) {
                     alert('Please enter valid values for days and limit');
                     return;
                 }
-                
+
                 // Update button state
                 this.disabled = true;
                 this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Processing...';
-                
+
                 // Hide form, show loading
                 document.getElementById('batch-analysis-form').style.display = 'none';
                 document.getElementById('batch-loading').style.display = 'block';
                 document.getElementById('batch-result').style.display = 'none';
-                
+
                 // Call API to run batch analysis
                 fetch('/complexity/batch', {
                     method: 'POST',
@@ -812,7 +832,7 @@
                 .then(data => {
                     // Hide loading, show result
                     document.getElementById('batch-loading').style.display = 'none';
-                    
+
                     // Show success result
                     const resultElement = document.getElementById('batch-result');
                     resultElement.style.display = 'block';
@@ -826,7 +846,7 @@
                             </button>
                         </div>
                     `;
-                    
+
                     // Reset button state
                     this.disabled = false;
                     this.innerHTML = '<i class="bi bi-lightning-charge-fill me-1"></i> Run Analysis';
@@ -834,7 +854,7 @@
                 .catch(error => {
                     // Hide loading, show error
                     document.getElementById('batch-loading').style.display = 'none';
-                    
+
                     // Show error result
                     const resultElement = document.getElementById('batch-result');
                     resultElement.style.display = 'block';
@@ -848,7 +868,7 @@
                             </button>
                         </div>
                     `;
-                    
+
                     // Reset button state
                     this.disabled = false;
                     this.innerHTML = '<i class="bi bi-lightning-charge-fill me-1"></i> Run Analysis';
