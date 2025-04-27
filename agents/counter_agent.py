@@ -176,7 +176,8 @@ class CounterAgent:
                 strategy = 'factual_correction'
             
             # Create counter-message in database
-            with db.session.begin():
+            try:
+                # Try with more robust transaction handling
                 counter = CounterMessage(
                     narrative_id=narrative_id,
                     content=counter_message,
@@ -184,10 +185,38 @@ class CounterAgent:
                     status='draft',  # Requires human approval
                     created_at=datetime.utcnow()
                 )
-                db.session.add(counter)
-                db.session.flush()
                 
+                # First try adding directly without transaction management
+                db.session.add(counter)
+                # Flush to get the ID (if we're not in a transaction)
+                db.session.flush()
+                # Try to commit explicitly to ensure the counter message is saved
+                db.session.commit()
                 counter_id = counter.id
+            except Exception as e:
+                if 'transaction is already begun' in str(e):
+                    # If we're in a transaction, add but don't force flush
+                    counter = CounterMessage(
+                        narrative_id=narrative_id,
+                        content=counter_message,
+                        strategy=strategy,
+                        status='draft',  # Requires human approval
+                        created_at=datetime.utcnow()
+                    )
+                    db.session.add(counter)
+                    try:
+                        # Try to force a commit to make sure the counter message is saved
+                        db.session.commit()
+                        counter_id = counter.id
+                        logger.info(f"Committed counter message in existing transaction, ID: {counter_id}")
+                    except Exception as commit_error:
+                        # If commit fails, we're still in a parent transaction
+                        logger.warning(f"Could not commit counter message in existing transaction: {commit_error}")
+                        counter_id = None
+                        logger.warning(f"Added counter message in existing transaction, ID not yet available")
+                else:
+                    # Re-raise other errors
+                    raise
             
             logger.info(f"Generated counter-message for narrative {narrative_id}: ID {counter_id}")
             
