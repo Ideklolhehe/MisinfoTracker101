@@ -6,10 +6,12 @@ This module handles secure storage and validation of API credentials.
 import logging
 import json
 import os
+import time
 from typing import Dict, Optional, Any, List, Tuple
 
 from app import db
 from models import SystemCredential, SystemLog
+from utils.encryption import encrypt_dict, decrypt_dict
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,9 @@ class APICredentialManager:
             cred = SystemCredential.query.filter_by(credential_type=credential_type).first()
             
             if cred and cred.credential_data:
-                return json.loads(cred.credential_data)
+                # Decrypt credentials before returning
+                encrypted_data = json.loads(cred.credential_data)
+                return decrypt_dict(encrypted_data)
             else:
                 logger.warning(f"No {credential_type} credentials found in database")
                 return {}
@@ -74,17 +78,23 @@ class APICredentialManager:
                     logger.error(f"Missing required field {field} for {credential_type} credentials")
                     return False
             
+            # Encrypt the credentials before storing
+            encrypted_credentials = encrypt_dict(credentials)
+            
             # Check if credentials already exist
             cred = SystemCredential.query.filter_by(credential_type=credential_type).first()
             
             if cred:
                 # Update existing credentials
-                cred.credential_data = json.dumps(credentials)
+                cred.credential_data = json.dumps(encrypted_credentials)
+                cred.updated_at = time.time()
             else:
                 # Create new credentials
                 cred = SystemCredential(
                     credential_type=credential_type,
-                    credential_data=json.dumps(credentials)
+                    credential_data=json.dumps(encrypted_credentials),
+                    created_at=time.time(),
+                    updated_at=time.time()
                 )
                 db.session.add(cred)
                 

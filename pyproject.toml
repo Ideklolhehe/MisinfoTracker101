@@ -38,6 +38,7 @@ dependencies = [
     "pyjwt>=2.10.1",
     "python-jwt>=4.1.0",
     "pillow>=11.2.1",
+    "cryptography>=44.0.2",
 ]
 
 [tool.uv.sources]
