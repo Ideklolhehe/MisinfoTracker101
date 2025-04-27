@@ -211,27 +211,34 @@ function initCharts() {
  * Set up event listeners for interactive elements
  */
 function setupEventListeners() {
-    // Toggle counter message form
-    const generateBtn = document.getElementById('generate-counter-btn');
-    if (generateBtn) {
-        generateBtn.addEventListener('click', function() {
-            document.getElementById('counter-message-form').classList.toggle('d-none');
+    // Initialize search feature for natural language queries
+    const searchInput = document.getElementById('natural-query-input');
+    const searchResults = document.getElementById('search-results');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = searchInput.value;
+            if (query.length > 3) { // Minimum character length for triggering the search
+                fetch(`/complexity/search?query=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        searchResults.innerHTML = ''; // Clear previous results
+                        data.forEach(item => {
+                            const resultItem = document.createElement('div');
+                            resultItem.className = 'search-result-item';
+                            resultItem.innerHTML = `<strong>${item.title}</strong> - Updated: ${item.last_updated}`;
+                            searchResults.appendChild(resultItem);
+                        });
+                    })
+                    .catch(error => console.error('Search Error:', error));
+            }
         });
     }
     
-    // Show/hide advanced filters
-    const advancedFiltersToggle = document.getElementById('toggle-advanced-filters');
-    if (advancedFiltersToggle) {
-        advancedFiltersToggle.addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('advanced-filters').classList.toggle('d-none');
-            this.textContent = this.textContent.includes('Show') 
-                ? 'Hide Advanced Filters' 
-                : 'Show Advanced Filters';
-        });
-    }
+    // Initialize charts
+    initCharts();
     
-    // Narrative analysis trigger
+    // Other interactive elements
     const analyzeButtons = document.querySelectorAll('.analyze-narrative-btn');
     analyzeButtons.forEach(button => {
         button.addEventListener('click', function() {

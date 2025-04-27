@@ -71,6 +71,16 @@ body {
     .main-content {
         margin-left: 0;
     }
+    
+    .dashboard-header, .search-container, .stat-card, .chart-container {
+        padding: 10px;
+        margin: 0;
+        width: 100%;
+    }
+    
+    .stat-card {
+        display: block; /* Ensures stat card blocks align vertically in mobile */
+    }
 }
 
 /* Dashboard components */
