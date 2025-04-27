@@ -1,0 +1,787 @@
+{% extends 'base.html' %}
+
+{% block title %}Compare Narrative Complexity{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .compare-header {
+        background: linear-gradient(135deg, var(--bs-dark-bg-subtle) 0%, var(--bs-tertiary-bg) 100%);
+        padding: 2rem;
+        border-radius: 0.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid var(--bs-border-color);
+    }
+    .score-pill {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        font-weight: 600;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .score-high {
+        background-color: var(--bs-danger-bg-subtle);
+        color: var(--bs-danger);
+        border: 1px solid var(--bs-danger);
+    }
+    .score-medium {
+        background-color: var(--bs-warning-bg-subtle);
+        color: var(--bs-warning-text);
+        border: 1px solid var(--bs-warning);
+    }
+    .score-low {
+        background-color: var(--bs-success-bg-subtle);
+        color: var(--bs-success);
+        border: 1px solid var(--bs-success);
+    }
+    .compare-card {
+        border-radius: 0.75rem;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+        height: 100%;
+    }
+    .compare-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .dimension-card {
+        border-left: 5px solid;
+        transition: all 0.3s ease;
+    }
+    .dimension-linguistic {
+        border-color: var(--bs-info);
+    }
+    .dimension-logical {
+        border-color: var(--bs-success);
+    }
+    .dimension-rhetorical {
+        border-color: var(--bs-warning);
+    }
+    .dimension-emotional {
+        border-color: var(--bs-danger);
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-bottom: 1.5rem;
+    }
+    .dimension-icon {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+    .dimension-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .narrative-selector {
+        background-color: var(--bs-tertiary-bg);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+        margin-bottom: 2rem;
+    }
+    .feature-comparison-table th {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+        background-color: var(--bs-dark-bg-subtle);
+    }
+    .feature-comparison-table td {
+        vertical-align: middle;
+        padding: 0.8rem 1rem;
+    }
+    .feature-comparison-table tr:nth-child(odd) {
+        background-color: var(--bs-tertiary-bg);
+    }
+    .feature-row-header {
+        font-weight: 600;
+    }
+    .insights-panel {
+        background-color: var(--bs-dark-bg-subtle);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .insights-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .insights-icon {
+        font-size: 1.5rem;
+        color: var(--bs-primary);
+    }
+    .badge-feature {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        background-color: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary);
+        border: 1px solid var(--bs-primary);
+        margin-left: 0.5rem;
+    }
+    .narrative-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="compare-header">
+        <h1 class="mb-3">
+            <i class="bi bi-sliders me-2"></i>
+            Compare Narrative Complexity
+        </h1>
+        <p class="lead mb-0">Compare complexity dimensions across different narratives to identify patterns and relationships in misinformation campaigns.</p>
+    </div>
+
+    <div class="narrative-selector">
+        <form id="compare-form">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="narrative1" class="form-label">First Narrative</label>
+                    <select class="form-select" id="narrative1">
+                        <option value="">Select a narrative...</option>
+                        {% for narrative in narratives %}
+                        <option value="{{ narrative.id }}">{{ narrative.id }}: {{ narrative.title|truncate(40) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="narrative2" class="form-label">Second Narrative</label>
+                    <select class="form-select" id="narrative2">
+                        <option value="">Select a narrative...</option>
+                        {% for narrative in narratives %}
+                        <option value="{{ narrative.id }}">{{ narrative.id }}: {{ narrative.title|truncate(40) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-bar-chart-steps me-2"></i>
+                        Compare Narratives
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div id="loading-indicator" style="display: none;">
+        <div class="d-flex justify-content-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+        <p class="text-center mt-2">Loading narrative data for comparison...</p>
+    </div>
+
+    <div id="comparison-results" style="display: none;">
+        <div class="insights-panel">
+            <div class="insights-header">
+                <i class="bi bi-lightbulb-fill insights-icon"></i>
+                <h4 class="mb-0">AI-Generated Insights <span class="badge-feature">BETA</span></h4>
+            </div>
+            <div id="insights-content">
+                <p class="text-muted">Select two narratives to see AI-generated insights about their comparative complexity dimensions.</p>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-graph-up me-2"></i>
+                            Complexity Comparison Chart
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="radarComparisonChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div id="narrative1-card" class="compare-card">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0 narrative1-title"></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6>Overall Complexity</h6>
+                            <span class="score-pill narrative1-overall-score"></span>
+                        </div>
+                        <p class="narrative1-summary"></p>
+                        
+                        <div class="card dimension-card dimension-linguistic mt-3 mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-fonts" viewBox="0 0 16 16">
+                                        <path d="M12.258 3h-8.51l-.083 2.46h.479c.26-1.544.758-1.783 2.693-1.845l.424-.013v7.827c0 .663-.144.82-1.3.923v.52h4.082v-.52c-1.162-.103-1.306-.26-1.306-.923V3.602l.43.013c1.935.062 2.434.301 2.694 1.846h.479L12.258 3z"/>
+                                    </svg>
+                                    Linguistic
+                                </h6>
+                                <span class="score-pill narrative1-linguistic-score"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="card dimension-card dimension-logical mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-diagram-2" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M6 3.5A1.5 1.5 0 0 1 7.5 2h1A1.5 1.5 0 0 1 10 3.5v1A1.5 1.5 0 0 1 8.5 6v1H11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0V8h-5v.5a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 5 7h2.5V6A1.5 1.5 0 0 1 6 4.5v-1zM8.5 5a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1zM3 11.5A1.5 1.5 0 0 1 4.5 10h1A1.5 1.5 0 0 1 7 11.5v1A1.5 1.5 0 0 1 5.5 14h-1A1.5 1.5 0 0 1 3 12.5v-1zm1.5-.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zm4.5.5a1.5 1.5 0 0 1 1.5-1.5h1a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 9 12.5v-1zm1.5-.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1z"/>
+                                    </svg>
+                                    Logical
+                                </h6>
+                                <span class="score-pill narrative1-logical-score"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="card dimension-card dimension-rhetorical mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-chat-quote" viewBox="0 0 16 16">
+                                        <path d="M2.678 11.894a1 1 0 0 1 .287.801 10.97 10.97 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8.06 8.06 0 0 0 8 14c3.996 0 7-2.807 7-6 0-3.192-3.004-6-7-6S1 4.808 1 8c0 1.468.617 2.83 1.678 3.894zm-.493 3.905a21.682 21.682 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a9.68 9.68 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9.06 9.06 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105z"/>
+                                        <path d="M7.066 6.76A1.665 1.665 0 0 0 4 7.668a1.667 1.667 0 0 0 2.561 1.406c-.131.389-.375.804-.777 1.22a.417.417 0 0 0 .6.58c1.486-1.54 1.293-3.214.682-4.112zm4 0A1.665 1.665 0 0 0 8 7.668a1.667 1.667 0 0 0 2.561 1.406c-.131.389-.375.804-.777 1.22a.417.417 0 0 0 .6.58c1.486-1.54 1.293-3.214.682-4.112z"/>
+                                    </svg>
+                                    Rhetorical
+                                </h6>
+                                <span class="score-pill narrative1-rhetorical-score"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="card dimension-card dimension-emotional">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-emoji-angry" viewBox="0 0 16 16">
+                                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                        <path d="M4.285 12.433a.5.5 0 0 0 .683-.183A3.498 3.498 0 0 1 8 10.5c1.295 0 2.426.703 3.032 1.75a.5.5 0 0 0 .866-.5A4.498 4.498 0 0 0 8 9.5a4.5 4.5 0 0 0-3.898 2.25.5.5 0 0 0 .183.683zm6.991-8.38a.5.5 0 1 1 .448.894l-1.009.504c.176.27.285.64.285 1.049 0 .828-.448 1.5-1 1.5s-1-.672-1-1.5c0-.247.04-.48.11-.686a.502.502 0 0 1 .166-.761l2-1zm-6.552 0a.5.5 0 0 0-.448.894l1.009.504A1.94 1.94 0 0 0 5 6.5C5 7.328 5.448 8 6 8s1-.672 1-1.5c0-.247-.04-.48-.11-.686a.502.502 0 0 0-.166-.761l-2-1z"/>
+                                    </svg>
+                                    Emotional
+                                </h6>
+                                <span class="score-pill narrative1-emotional-score"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div id="narrative2-card" class="compare-card">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0 narrative2-title"></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6>Overall Complexity</h6>
+                            <span class="score-pill narrative2-overall-score"></span>
+                        </div>
+                        <p class="narrative2-summary"></p>
+                        
+                        <div class="card dimension-card dimension-linguistic mt-3 mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-fonts" viewBox="0 0 16 16">
+                                        <path d="M12.258 3h-8.51l-.083 2.46h.479c.26-1.544.758-1.783 2.693-1.845l.424-.013v7.827c0 .663-.144.82-1.3.923v.52h4.082v-.52c-1.162-.103-1.306-.26-1.306-.923V3.602l.43.013c1.935.062 2.434.301 2.694 1.846h.479L12.258 3z"/>
+                                    </svg>
+                                    Linguistic
+                                </h6>
+                                <span class="score-pill narrative2-linguistic-score"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="card dimension-card dimension-logical mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-diagram-2" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M6 3.5A1.5 1.5 0 0 1 7.5 2h1A1.5 1.5 0 0 1 10 3.5v1A1.5 1.5 0 0 1 8.5 6v1H11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0V8h-5v.5a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 5 7h2.5V6A1.5 1.5 0 0 1 6 4.5v-1zM8.5 5a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1zM3 11.5A1.5 1.5 0 0 1 4.5 10h1A1.5 1.5 0 0 1 7 11.5v1A1.5 1.5 0 0 1 5.5 14h-1A1.5 1.5 0 0 1 3 12.5v-1zm1.5-.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zm4.5.5a1.5 1.5 0 0 1 1.5-1.5h1a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 9 12.5v-1zm1.5-.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1z"/>
+                                    </svg>
+                                    Logical
+                                </h6>
+                                <span class="score-pill narrative2-logical-score"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="card dimension-card dimension-rhetorical mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-chat-quote" viewBox="0 0 16 16">
+                                        <path d="M2.678 11.894a1 1 0 0 1 .287.801 10.97 10.97 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8.06 8.06 0 0 0 8 14c3.996 0 7-2.807 7-6 0-3.192-3.004-6-7-6S1 4.808 1 8c0 1.468.617 2.83 1.678 3.894zm-.493 3.905a21.682 21.682 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a9.68 9.68 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9.06 9.06 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105z"/>
+                                        <path d="M7.066 6.76A1.665 1.665 0 0 0 4 7.668a1.667 1.667 0 0 0 2.561 1.406c-.131.389-.375.804-.777 1.22a.417.417 0 0 0 .6.58c1.486-1.54 1.293-3.214.682-4.112zm4 0A1.665 1.665 0 0 0 8 7.668a1.667 1.667 0 0 0 2.561 1.406c-.131.389-.375.804-.777 1.22a.417.417 0 0 0 .6.58c1.486-1.54 1.293-3.214.682-4.112z"/>
+                                    </svg>
+                                    Rhetorical
+                                </h6>
+                                <span class="score-pill narrative2-rhetorical-score"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="card dimension-card dimension-emotional">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 dimension-label">
+                                    <svg class="dimension-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-emoji-angry" viewBox="0 0 16 16">
+                                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                        <path d="M4.285 12.433a.5.5 0 0 0 .683-.183A3.498 3.498 0 0 1 8 10.5c1.295 0 2.426.703 3.032 1.75a.5.5 0 0 0 .866-.5A4.498 4.498 0 0 0 8 9.5a4.5 4.5 0 0 0-3.898 2.25.5.5 0 0 0 .183.683zm6.991-8.38a.5.5 0 1 1 .448.894l-1.009.504c.176.27.285.64.285 1.049 0 .828-.448 1.5-1 1.5s-1-.672-1-1.5c0-.247.04-.48.11-.686a.502.502 0 0 1 .166-.761l2-1zm-6.552 0a.5.5 0 0 0-.448.894l1.009.504A1.94 1.94 0 0 0 5 6.5C5 7.328 5.448 8 6 8s1-.672 1-1.5c0-.247-.04-.48-.11-.686a.502.502 0 0 0-.166-.761l-2-1z"/>
+                                    </svg>
+                                    Emotional
+                                </h6>
+                                <span class="score-pill narrative2-emotional-score"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clipboard2-data me-2"></i>
+                            Feature-by-Feature Comparison
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-striped feature-comparison-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Narrative 1</th>
+                                    <th>Narrative 2</th>
+                                    <th>Difference</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="feature-row-header">Overall Complexity</td>
+                                    <td id="n1-overall"></td>
+                                    <td id="n2-overall"></td>
+                                    <td id="diff-overall"></td>
+                                </tr>
+                                <tr>
+                                    <td class="feature-row-header">Linguistic Complexity</td>
+                                    <td id="n1-linguistic"></td>
+                                    <td id="n2-linguistic"></td>
+                                    <td id="diff-linguistic"></td>
+                                </tr>
+                                <tr>
+                                    <td class="feature-row-header">Logical Structure</td>
+                                    <td id="n1-logical"></td>
+                                    <td id="n2-logical"></td>
+                                    <td id="diff-logical"></td>
+                                </tr>
+                                <tr>
+                                    <td class="feature-row-header">Rhetorical Techniques</td>
+                                    <td id="n1-rhetorical"></td>
+                                    <td id="n2-rhetorical"></td>
+                                    <td id="diff-rhetorical"></td>
+                                </tr>
+                                <tr>
+                                    <td class="feature-row-header">Emotional Manipulation</td>
+                                    <td id="n1-emotional"></td>
+                                    <td id="n2-emotional"></td>
+                                    <td id="diff-emotional"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let radarChart = null;
+        
+        // Form submission handler
+        const compareForm = document.getElementById('compare-form');
+        if (compareForm) {
+            compareForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const narrative1Id = document.getElementById('narrative1').value;
+                const narrative2Id = document.getElementById('narrative2').value;
+                
+                if (!narrative1Id || !narrative2Id) {
+                    alert('Please select two narratives to compare');
+                    return;
+                }
+                
+                if (narrative1Id === narrative2Id) {
+                    alert('Please select two different narratives to compare');
+                    return;
+                }
+                
+                // Show loading indicator
+                document.getElementById('loading-indicator').style.display = 'block';
+                document.getElementById('comparison-results').style.display = 'none';
+                
+                // Fetch data for both narratives
+                Promise.all([
+                    fetch(`/complexity/api/narrative/${narrative1Id}`).then(res => res.json()),
+                    fetch(`/complexity/api/narrative/${narrative2Id}`).then(res => res.json())
+                ])
+                .then(([narrative1Data, narrative2Data]) => {
+                    // Hide loading indicator
+                    document.getElementById('loading-indicator').style.display = 'none';
+                    document.getElementById('comparison-results').style.display = 'block';
+                    
+                    // Update narrative cards
+                    updateNarrativeCard('1', narrative1Data);
+                    updateNarrativeCard('2', narrative2Data);
+                    
+                    // Update comparison table
+                    updateComparisonTable(narrative1Data, narrative2Data);
+                    
+                    // Update radar chart
+                    updateRadarChart(narrative1Data, narrative2Data);
+                    
+                    // Update insights
+                    updateInsights(narrative1Data, narrative2Data);
+                })
+                .catch(error => {
+                    console.error('Error fetching narrative data:', error);
+                    alert('Error fetching narrative data. Please try again.');
+                    
+                    // Hide loading indicator
+                    document.getElementById('loading-indicator').style.display = 'none';
+                });
+            });
+        }
+        
+        function updateNarrativeCard(index, data) {
+            // Set title
+            document.querySelector(`.narrative${index}-title`).textContent = `Narrative ${data.id}: ${data.title}`;
+            
+            // Set overall score
+            const overallScoreEl = document.querySelector(`.narrative${index}-overall-score`);
+            overallScoreEl.textContent = data.complexity_analysis.overall_complexity_score;
+            overallScoreEl.className = 'score-pill';
+            if (data.complexity_analysis.overall_complexity_score >= 7) {
+                overallScoreEl.classList.add('score-high');
+            } else if (data.complexity_analysis.overall_complexity_score >= 4) {
+                overallScoreEl.classList.add('score-medium');
+            } else {
+                overallScoreEl.classList.add('score-low');
+            }
+            
+            // Set summary
+            document.querySelector(`.narrative${index}-summary`).textContent = data.complexity_analysis.summary;
+            
+            // Set dimension scores
+            updateDimensionScore(index, 'linguistic', data.complexity_analysis.linguistic_complexity.score);
+            updateDimensionScore(index, 'logical', data.complexity_analysis.logical_structure.score);
+            updateDimensionScore(index, 'rhetorical', data.complexity_analysis.rhetorical_techniques.score);
+            updateDimensionScore(index, 'emotional', data.complexity_analysis.emotional_manipulation.score);
+        }
+        
+        function updateDimensionScore(narrativeIndex, dimension, score) {
+            const scoreEl = document.querySelector(`.narrative${narrativeIndex}-${dimension}-score`);
+            scoreEl.textContent = score;
+            scoreEl.className = 'score-pill';
+            if (score >= 7) {
+                scoreEl.classList.add('score-high');
+            } else if (score >= 4) {
+                scoreEl.classList.add('score-medium');
+            } else {
+                scoreEl.classList.add('score-low');
+            }
+        }
+        
+        function updateComparisonTable(n1, n2) {
+            // Overall
+            const n1Overall = n1.complexity_analysis.overall_complexity_score;
+            const n2Overall = n2.complexity_analysis.overall_complexity_score;
+            const diffOverall = (n1Overall - n2Overall).toFixed(1);
+            
+            document.getElementById('n1-overall').textContent = n1Overall;
+            document.getElementById('n2-overall').textContent = n2Overall;
+            document.getElementById('diff-overall').textContent = formatDiff(diffOverall);
+            
+            // Linguistic
+            const n1Linguistic = n1.complexity_analysis.linguistic_complexity.score;
+            const n2Linguistic = n2.complexity_analysis.linguistic_complexity.score;
+            const diffLinguistic = (n1Linguistic - n2Linguistic).toFixed(1);
+            
+            document.getElementById('n1-linguistic').textContent = n1Linguistic;
+            document.getElementById('n2-linguistic').textContent = n2Linguistic;
+            document.getElementById('diff-linguistic').textContent = formatDiff(diffLinguistic);
+            
+            // Logical
+            const n1Logical = n1.complexity_analysis.logical_structure.score;
+            const n2Logical = n2.complexity_analysis.logical_structure.score;
+            const diffLogical = (n1Logical - n2Logical).toFixed(1);
+            
+            document.getElementById('n1-logical').textContent = n1Logical;
+            document.getElementById('n2-logical').textContent = n2Logical;
+            document.getElementById('diff-logical').textContent = formatDiff(diffLogical);
+            
+            // Rhetorical
+            const n1Rhetorical = n1.complexity_analysis.rhetorical_techniques.score;
+            const n2Rhetorical = n2.complexity_analysis.rhetorical_techniques.score;
+            const diffRhetorical = (n1Rhetorical - n2Rhetorical).toFixed(1);
+            
+            document.getElementById('n1-rhetorical').textContent = n1Rhetorical;
+            document.getElementById('n2-rhetorical').textContent = n2Rhetorical;
+            document.getElementById('diff-rhetorical').textContent = formatDiff(diffRhetorical);
+            
+            // Emotional
+            const n1Emotional = n1.complexity_analysis.emotional_manipulation.score;
+            const n2Emotional = n2.complexity_analysis.emotional_manipulation.score;
+            const diffEmotional = (n1Emotional - n2Emotional).toFixed(1);
+            
+            document.getElementById('n1-emotional').textContent = n1Emotional;
+            document.getElementById('n2-emotional').textContent = n2Emotional;
+            document.getElementById('diff-emotional').textContent = formatDiff(diffEmotional);
+        }
+        
+        function formatDiff(value) {
+            const num = parseFloat(value);
+            if (num > 0) {
+                return `+${num} <i class="bi bi-arrow-up-circle-fill text-danger"></i>`;
+            } else if (num < 0) {
+                return `${num} <i class="bi bi-arrow-down-circle-fill text-success"></i>`;
+            } else {
+                return `${num} <i class="bi bi-dash-circle-fill text-secondary"></i>`;
+            }
+        }
+        
+        function updateRadarChart(n1, n2) {
+            const ctx = document.getElementById('radarComparisonChart').getContext('2d');
+            
+            // Destroy previous chart if it exists
+            if (radarChart) {
+                radarChart.destroy();
+            }
+            
+            // Create new chart
+            radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: [
+                        'Linguistic Complexity', 
+                        'Logical Structure', 
+                        'Rhetorical Techniques', 
+                        'Emotional Manipulation'
+                    ],
+                    datasets: [
+                        {
+                            label: `Narrative ${n1.id}`,
+                            data: [
+                                n1.complexity_analysis.linguistic_complexity.score,
+                                n1.complexity_analysis.logical_structure.score,
+                                n1.complexity_analysis.rhetorical_techniques.score,
+                                n1.complexity_analysis.emotional_manipulation.score
+                            ],
+                            fill: true,
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgb(54, 162, 235)',
+                            pointBackgroundColor: 'rgb(54, 162, 235)',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: 'rgb(54, 162, 235)',
+                            pointRadius: 5
+                        },
+                        {
+                            label: `Narrative ${n2.id}`,
+                            data: [
+                                n2.complexity_analysis.linguistic_complexity.score,
+                                n2.complexity_analysis.logical_structure.score,
+                                n2.complexity_analysis.rhetorical_techniques.score,
+                                n2.complexity_analysis.emotional_manipulation.score
+                            ],
+                            fill: true,
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            borderColor: 'rgb(255, 99, 132)',
+                            pointBackgroundColor: 'rgb(255, 99, 132)',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: 'rgb(255, 99, 132)',
+                            pointRadius: 5
+                        }
+                    ]
+                },
+                options: {
+                    scales: {
+                        r: {
+                            min: 0,
+                            max: 10,
+                            ticks: {
+                                stepSize: 2,
+                                backdropColor: 'rgba(0, 0, 0, 0.04)'
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            angleLines: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.raw}/10`;
+                                }
+                            }
+                        }
+                    },
+                    elements: {
+                        line: {
+                            borderWidth: 2
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateInsights(n1, n2) {
+            const insightsContent = document.getElementById('insights-content');
+            
+            // Generate insights based on the narrative data
+            const insights = generateInsights(n1, n2);
+            
+            insightsContent.innerHTML = `
+                <div class="alert alert-primary">
+                    <p><strong>Narrative Comparison:</strong> ${insights.summary}</p>
+                    <hr>
+                    <ul class="mb-0">
+                        ${insights.points.map(point => `<li>${point}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        function generateInsights(n1, n2) {
+            // Calculate dimension differences
+            const diffLinguistic = n1.complexity_analysis.linguistic_complexity.score - n2.complexity_analysis.linguistic_complexity.score;
+            const diffLogical = n1.complexity_analysis.logical_structure.score - n2.complexity_analysis.logical_structure.score;
+            const diffRhetorical = n1.complexity_analysis.rhetorical_techniques.score - n2.complexity_analysis.rhetorical_techniques.score;
+            const diffEmotional = n1.complexity_analysis.emotional_manipulation.score - n2.complexity_analysis.emotional_manipulation.score;
+            const diffOverall = n1.complexity_analysis.overall_complexity_score - n2.complexity_analysis.overall_complexity_score;
+            
+            // Determine which narrative is more complex overall
+            const moreComplexNarrative = diffOverall > 0 ? n1.id : n2.id;
+            const lessComplexNarrative = diffOverall < 0 ? n1.id : n2.id;
+            
+            // Generate overall summary
+            let summary;
+            if (Math.abs(diffOverall) < 1) {
+                summary = `Narratives ${n1.id} and ${n2.id} have similar overall complexity scores, suggesting similar sophistication in their misinformation techniques.`;
+            } else {
+                summary = `Narrative ${moreComplexNarrative} demonstrates more sophisticated misinformation techniques overall compared to Narrative ${lessComplexNarrative}.`;
+            }
+            
+            // Generate detailed insights
+            const points = [];
+            
+            // Linguistic complexity insight
+            if (Math.abs(diffLinguistic) >= 2) {
+                const higherNarrative = diffLinguistic > 0 ? n1.id : n2.id;
+                points.push(`Narrative ${higherNarrative} uses significantly more complex language, vocabulary, and syntax.`);
+            }
+            
+            // Logical structure insight
+            if (Math.abs(diffLogical) >= 2) {
+                const higherNarrative = diffLogical > 0 ? n1.id : n2.id;
+                points.push(`Narrative ${higherNarrative} employs a more sophisticated logical structure with more complex reasoning patterns.`);
+            }
+            
+            // Rhetorical techniques insight
+            if (Math.abs(diffRhetorical) >= 2) {
+                const higherNarrative = diffRhetorical > 0 ? n1.id : n2.id;
+                points.push(`Narrative ${higherNarrative} utilizes more advanced rhetorical techniques and persuasive strategies.`);
+            }
+            
+            // Emotional manipulation insight
+            if (Math.abs(diffEmotional) >= 2) {
+                const higherNarrative = diffEmotional > 0 ? n1.id : n2.id;
+                points.push(`Narrative ${higherNarrative} demonstrates stronger emotional manipulation tactics and appeals.`);
+            }
+            
+            // Identify the dominant dimension for each narrative
+            const n1Dimensions = [
+                { name: 'linguistic', score: n1.complexity_analysis.linguistic_complexity.score },
+                { name: 'logical', score: n1.complexity_analysis.logical_structure.score },
+                { name: 'rhetorical', score: n1.complexity_analysis.rhetorical_techniques.score },
+                { name: 'emotional', score: n1.complexity_analysis.emotional_manipulation.score }
+            ];
+            
+            const n2Dimensions = [
+                { name: 'linguistic', score: n2.complexity_analysis.linguistic_complexity.score },
+                { name: 'logical', score: n2.complexity_analysis.logical_structure.score },
+                { name: 'rhetorical', score: n2.complexity_analysis.rhetorical_techniques.score },
+                { name: 'emotional', score: n2.complexity_analysis.emotional_manipulation.score }
+            ];
+            
+            n1Dimensions.sort((a, b) => b.score - a.score);
+            n2Dimensions.sort((a, b) => b.score - a.score);
+            
+            const n1TopDimension = n1Dimensions[0];
+            const n2TopDimension = n2Dimensions[0];
+            
+            const dimensionNames = {
+                linguistic: 'linguistic complexity',
+                logical: 'logical structure',
+                rhetorical: 'rhetorical techniques',
+                emotional: 'emotional manipulation'
+            };
+            
+            // Add insights about dominant dimensions
+            points.push(`Narrative ${n1.id}'s strongest dimension is ${dimensionNames[n1TopDimension.name]} (${n1TopDimension.score}/10).`);
+            points.push(`Narrative ${n2.id}'s strongest dimension is ${dimensionNames[n2TopDimension.name]} (${n2TopDimension.score}/10).`);
+            
+            // Potential coordination insight
+            if (n1TopDimension.name === n2TopDimension.name && Math.abs(diffOverall) < 2) {
+                points.push(`Both narratives share a strong emphasis on ${dimensionNames[n1TopDimension.name]}, suggesting potential coordination or similar origins.`);
+            }
+            
+            return {
+                summary: summary,
+                points: points
+            };
+        }
+    });
+</script>
+{% endblock %}

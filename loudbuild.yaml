@@ -1,0 +1,8 @@
+steps:
+- name: 'python:3.9'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    pip install -r requirements.txt
+    python -m unittest discover
