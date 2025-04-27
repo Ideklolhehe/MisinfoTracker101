@@ -79,6 +79,7 @@ with app.app_context():
     from routes.rss_feeds import rss_feeds_bp
     from routes.agents import agents_bp
     from routes.dev_auth import dev_auth_bp  # Development-only
+    from routes.evidence import evidence_bp
     
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')

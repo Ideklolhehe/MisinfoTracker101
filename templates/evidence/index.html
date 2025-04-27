@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Evidence Management{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Evidence Management</h1>
+    
+    <div class="alert alert-info">
+        <h4 class="alert-heading">About Immutable Evidence Storage</h4>
+        <p>
+            CIVILIAN stores immutable evidence of detected misinformation narratives to ensure integrity and provenance.
+            The system provides two types of evidence storage:
+        </p>
+        <ul>
+            <li><strong>Local file storage:</strong> Evidence is stored locally on the server's filesystem with hash verification.</li>
+            <li><strong>IPFS distributed storage:</strong> Evidence is stored on IPFS (InterPlanetary File System), a distributed and tamper-proof storage network.</li>
+        </ul>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">Store Evidence</h3>
+                </div>
+                <div class="card-body">
+                    <p>Store evidence for a specific narrative instance:</p>
+                    <form id="store-evidence-form" class="mb-3">
+                        <div class="mb-3">
+                            <label for="instance-id" class="form-label">Instance ID</label>
+                            <input type="number" class="form-control" id="instance-id" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Storage Type</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="storage-type" id="ipfs-storage" value="ipfs" checked>
+                                <label class="form-check-label" for="ipfs-storage">
+                                    IPFS (Distributed)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="storage-type" id="file-storage" value="file">
+                                <label class="form-check-label" for="file-storage">
+                                    Local File
+                                </label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Store Evidence</button>
+                    </form>
+                    <div id="store-result"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">Store All Pending</h3>
+                </div>
+                <div class="card-body">
+                    <p>Store evidence for all narrative instances that don't have evidence hash:</p>
+                    <form id="store-all-form" class="mb-3">
+                        <div class="mb-3">
+                            <label class="form-label">Storage Type</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="all-storage-type" id="all-ipfs-storage" value="ipfs" checked>
+                                <label class="form-check-label" for="all-ipfs-storage">
+                                    IPFS (Distributed)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="all-storage-type" id="all-file-storage" value="file">
+                                <label class="form-check-label" for="all-file-storage">
+                                    Local File
+                                </label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Store All Pending</button>
+                    </form>
+                    <div id="store-all-result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="mb-0">Verify Evidence</h3>
+        </div>
+        <div class="card-body">
+            <p>Verify the integrity of evidence by its hash:</p>
+            <form id="verify-form" class="mb-3">
+                <div class="mb-3">
+                    <label for="evidence-hash" class="form-label">Evidence Hash</label>
+                    <input type="text" class="form-control" id="evidence-hash" placeholder="IPFS CID or local hash" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Verify Integrity</button>
+            </form>
+            <div id="verify-result"></div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">Evidence List</h3>
+            <a href="{{ url_for('evidence.list_evidence') }}" class="btn btn-outline-primary">View All Evidence</a>
+        </div>
+        <div class="card-body">
+            <p>View all evidence items stored in the system:</p>
+            <div class="alert alert-light border">
+                <p>The evidence list displays both local file evidence and IPFS-stored evidence, showing:</p>
+                <ul>
+                    <li>Evidence hash (IPFS CID or SHA-256 hash)</li>
+                    <li>Storage type (IPFS or File)</li>
+                    <li>Associated narrative instance</li>
+                    <li>Timestamp</li>
+                </ul>
+                <p>For IPFS evidence, a public gateway URL is provided to access the evidence globally.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Store evidence form
+    const storeForm = document.getElementById('store-evidence-form');
+    const storeResult = document.getElementById('store-result');
+    
+    storeForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const instanceId = document.getElementById('instance-id').value;
+        const storageType = document.querySelector('input[name="storage-type"]:checked').value;
+        
+        storeResult.innerHTML = '<div class="alert alert-info">Storing evidence...</div>';
+        
+        // Send request to store evidence
+        fetch(`/evidence/store/${instanceId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `storage_type=${storageType}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                storeResult.innerHTML = `
+                    <div class="alert alert-success">
+                        <p>${data.message}</p>
+                        <p>Hash: <code>${data.hash}</code></p>
+                        <p><a href="/evidence/view/${data.hash}" class="btn btn-sm btn-primary">View Evidence</a></p>
+                    </div>
+                `;
+            } else {
+                storeResult.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+            }
+        })
+        .catch(error => {
+            storeResult.innerHTML = `<div class="alert alert-danger">Error: ${error}</div>`;
+        });
+    });
+    
+    // Store all form
+    const storeAllForm = document.getElementById('store-all-form');
+    const storeAllResult = document.getElementById('store-all-result');
+    
+    storeAllForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const storageType = document.querySelector('input[name="all-storage-type"]:checked').value;
+        
+        storeAllResult.innerHTML = '<div class="alert alert-info">Storing all pending evidence...</div>';
+        
+        // Send request to store all evidence
+        fetch('/evidence/store-all', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `storage_type=${storageType}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                storeAllResult.innerHTML = `
+                    <div class="alert alert-success">
+                        <p>${data.message}</p>
+                        <p>Total: ${data.result.total}, Success: ${data.result.success}, Failed: ${data.result.failed}</p>
+                        ${data.result.ipfs_stored ? `<p>IPFS: ${data.result.ipfs_stored}, Local: ${data.result.local_stored}</p>` : ''}
+                        <p><a href="/evidence/list" class="btn btn-sm btn-primary">View All Evidence</a></p>
+                    </div>
+                `;
+            } else {
+                storeAllResult.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+            }
+        })
+        .catch(error => {
+            storeAllResult.innerHTML = `<div class="alert alert-danger">Error: ${error}</div>`;
+        });
+    });
+    
+    // Verify form
+    const verifyForm = document.getElementById('verify-form');
+    const verifyResult = document.getElementById('verify-result');
+    
+    verifyForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const evidenceHash = document.getElementById('evidence-hash').value;
+        
+        verifyResult.innerHTML = '<div class="alert alert-info">Verifying evidence...</div>';
+        
+        // Send request to verify evidence
+        fetch(`/evidence/verify/${evidenceHash}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.valid) {
+                    verifyResult.innerHTML = `
+                        <div class="alert alert-success">
+                            <p>${data.message}</p>
+                            <p><a href="/evidence/view/${evidenceHash}" class="btn btn-sm btn-primary">View Evidence</a></p>
+                        </div>
+                    `;
+                } else {
+                    verifyResult.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                }
+            } else {
+                verifyResult.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+            }
+        })
+        .catch(error => {
+            verifyResult.innerHTML = `<div class="alert alert-danger">Error: ${error}</div>`;
+        });
+    });
+});
+</script>
+{% endblock %}
