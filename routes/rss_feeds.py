@@ -5,6 +5,7 @@ This module provides routes for managing RSS feed sources.
 
 import logging
 import json
+import time
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,6 +13,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from app import app, db
 from models import DataSource, SystemLog
 from services.rss_feed_manager import RSSFeedManager
+from utils.feed_parser import parse_feed_with_retry
+from utils.feed_batch_operations import (
+    test_all_feeds, 
+    test_feed_batch, 
+    update_feed_statuses,
+    test_alternative_feeds,
+    update_feed_urls
+)
 
 logger = logging.getLogger(__name__)
 
@@ -185,5 +194,188 @@ def remove_feed():
         return jsonify({'success': True, 'message': 'Feed URL removed successfully'})
     else:
         return jsonify({'success': False, 'message': 'Failed to remove feed URL'}), 500
+
+# Add batch operations routes
+@rss_feeds_bp.route('/batch/test-all', methods=['GET'])
+@login_required
+def batch_test_all_feeds():
+    """Test all RSS feeds in parallel and return their status."""
+    # Check if user has admin privileges
+    if not current_user.role or current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    # Get the max workers parameter
+    max_workers = int(request.args.get('max_workers', 5))
+    if max_workers < 1:
+        max_workers = 1
+    elif max_workers > 20:
+        max_workers = 20
+    
+    # Get the timeout parameter
+    timeout = int(request.args.get('timeout', 30))
+    if timeout < 5:
+        timeout = 5
+    elif timeout > 120:
+        timeout = 120
+        
+    # Test all feeds
+    try:
+        start_time = time.time()
+        results = test_all_feeds(max_workers=max_workers, timeout=timeout)
+        elapsed_time = time.time() - start_time
+        
+        # Update feed statuses in the database
+        updated_count = update_feed_statuses(results)
+        
+        # Log the operation
+        log = SystemLog(
+            log_type='info',
+            component='rss_feed_manager',
+            message=f"Batch tested {len(results)} feeds in {elapsed_time:.2f} seconds, updated {updated_count} feed statuses"
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'feed_count': len(results),
+            'elapsed_time': elapsed_time,
+            'updated_count': updated_count,
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"Error testing feeds: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@rss_feeds_bp.route('/batch/find-alternatives', methods=['GET'])
+@login_required
+def batch_find_alternatives():
+    """Find alternative URLs for broken feeds."""
+    # Check if user has admin privileges
+    if not current_user.role or current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    # Get all broken feeds
+    try:
+        broken_feeds = []
+        sources = DataSource.query.filter_by(source_type='rss').all()
+        
+        for source in sources:
+            if source.source_url:
+                # Check feed status from metadata
+                if hasattr(source, 'meta_data') and source.meta_data:
+                    meta_data = source.meta_data
+                    if isinstance(meta_data, str):
+                        try:
+                            meta_data = json.loads(meta_data)
+                        except:
+                            meta_data = {}
+                            
+                    if meta_data.get('last_status') == 'error':
+                        broken_feeds.append(source.source_url)
+        
+        # Find and update alternatives
+        start_time = time.time()
+        updates = update_feed_urls(broken_feeds)
+        elapsed_time = time.time() - start_time
+        
+        # Log the operation
+        log = SystemLog(
+            log_type='info',
+            component='rss_feed_manager',
+            message=f"Found alternatives for {len(updates)} out of {len(broken_feeds)} broken feeds in {elapsed_time:.2f} seconds"
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'broken_feed_count': len(broken_feeds),
+            'updated_count': len(updates),
+            'elapsed_time': elapsed_time,
+            'updates': updates
+        })
+    except Exception as e:
+        logger.error(f"Error finding alternatives: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@rss_feeds_bp.route('/batch/health-check', methods=['GET'])
+@login_required
+def batch_health_check():
+    """Get health status of all RSS feeds."""
+    # Check if user has admin privileges
+    if not current_user.role or current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    try:
+        sources = DataSource.query.filter_by(source_type='rss').all()
+        
+        total_count = len(sources)
+        active_count = 0
+        error_count = 0
+        never_checked = 0
+        
+        feed_status = {
+            'ok': [],
+            'error': [],
+            'never_checked': []
+        }
+        
+        for source in sources:
+            if source.source_url:
+                # Check feed status from metadata
+                meta_data = source.meta_data
+                if isinstance(meta_data, str):
+                    try:
+                        meta_data = json.loads(meta_data)
+                    except:
+                        meta_data = {}
+                
+                if not meta_data or 'last_status' not in meta_data:
+                    never_checked += 1
+                    feed_status['never_checked'].append({
+                        'id': source.id,
+                        'name': source.name,
+                        'url': source.source_url
+                    })
+                elif meta_data['last_status'] == 'ok':
+                    active_count += 1
+                    feed_status['ok'].append({
+                        'id': source.id,
+                        'name': source.name,
+                        'url': source.source_url,
+                        'entry_count': meta_data.get('entry_count', 0),
+                        'last_checked': meta_data.get('last_checked', 0)
+                    })
+                else:
+                    error_count += 1
+                    feed_status['error'].append({
+                        'id': source.id,
+                        'name': source.name,
+                        'url': source.source_url,
+                        'error': meta_data.get('error', 'Unknown error'),
+                        'last_checked': meta_data.get('last_checked', 0)
+                    })
+        
+        return jsonify({
+            'success': True,
+            'total_count': total_count,
+            'active_count': active_count,
+            'error_count': error_count, 
+            'never_checked': never_checked,
+            'feed_status': feed_status
+        })
+    except Exception as e:
+        logger.error(f"Error checking feed health: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # Blueprint will be registered in app.py

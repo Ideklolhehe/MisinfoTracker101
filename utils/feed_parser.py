@@ -14,6 +14,31 @@ import random
 
 logger = logging.getLogger(__name__)
 
+# Instantiate a global parser object that can be imported
+_parser = None
+
+def get_parser():
+    """Get the global parser instance."""
+    global _parser
+    if _parser is None:
+        _parser = FeedParser()
+    return _parser
+
+def parse_feed_with_retry(url, max_retries=3):
+    """
+    Parse a feed URL with retries.
+    
+    Args:
+        url: Feed URL to parse
+        max_retries: Maximum number of retry attempts
+        
+    Returns:
+        Parsed feed object or None if parsing failed
+    """
+    parser = get_parser()
+    parser.retries = max_retries
+    return parser.parse(url)
+
 class FeedParser:
     """Enhanced feed parser with error handling and rate limiting."""
     
