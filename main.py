@@ -8,6 +8,11 @@ from utils.web_scraper import WebScraper
 from agents.detector_agent import DetectorAgent
 from agents.analyzer_agent import AnalyzerAgent
 from agents.counter_agent import CounterAgent
+# Import V2 agent versions
+from agents.detector_agent_v2 import DetectorAgent as DetectorAgentV2
+from agents.analyzer_agent_v2 import AnalyzerAgent as AnalyzerAgentV2
+from agents.counter_agent_v2 import CounterAgent as CounterAgentV2
+from agents.multi_agent_coordinator import MultiAgentCoordinator
 from data_sources.twitter_source import TwitterSource
 from data_sources.telegram_source import TelegramSource
 from data_sources.rss_source import RSSSource
@@ -15,6 +20,7 @@ from data_sources.youtube_source import YouTubeSource
 from data_sources.darkweb_source import DarkWebSource
 from storage.evidence_store import EvidenceStore
 from storage.graph_store import GraphStore
+from routes.agents import agents_bp, set_coordinator
 
 # Configure logging
 logging.basicConfig(
@@ -406,7 +412,7 @@ def initialize_app():
     evidence_store = EvidenceStore()
     graph_store = GraphStore()
     
-    # Initialize agent components
+    # Initialize legacy agent components (for backward compatibility)
     detector_agent = DetectorAgent(text_processor, vector_store)
     analyzer_agent = AnalyzerAgent(text_processor)
     counter_agent = CounterAgent(text_processor)
@@ -425,10 +431,20 @@ def initialize_app():
     if not ai_processor.openai_available and not ai_processor.anthropic_available:
         logger.warning("Advanced AI capabilities are unavailable. Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variables to enable them.")
     
-    # Start background agents
+    # Initialize multi-agent system (V2)
+    coordinator = MultiAgentCoordinator()
+    coordinator.initialize_agents()
+    
+    # Set the coordinator in the routes
+    set_coordinator(coordinator)
+    
+    # Start legacy background agents
     detector_agent.start()
     analyzer_agent.start()
     counter_agent.start()
+    
+    # Start the multi-agent system
+    coordinator.start_all_agents()
     
     # Start data sources
     twitter_source.start()

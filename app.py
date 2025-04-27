@@ -77,6 +77,7 @@ with app.app_context():
     # Import new route blueprints
     from routes.api_credentials import api_credentials_bp
     from routes.rss_feeds import rss_feeds_bp
+    from routes.agents import agents_bp
     
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -86,6 +87,7 @@ with app.app_context():
     app.register_blueprint(verification_bp, url_prefix='/verify')
     app.register_blueprint(api_credentials_bp, url_prefix='/api-credentials')
     app.register_blueprint(rss_feeds_bp, url_prefix='/rss-feeds')
+    app.register_blueprint(agents_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(home_bp)
     

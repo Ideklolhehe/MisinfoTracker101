@@ -1,23 +1,23 @@
 """
 Agent factory for the CIVILIAN multi-agent system.
-Manages agent instantiation, configuration, and coordination.
+Manages creation and access to different types of agents.
 """
 
 import logging
-from typing import Dict, List, Any, Optional, Type
+from typing import Dict, Any, List, Optional, Type
 
 from utils.text_processor import TextProcessor
 from utils.vector_store import VectorStore
 from utils.ai_processor import AIProcessor
 from agents.base_agent import BaseAgent
-from agents.analyzer_agent import AnalyzerAgent
-from agents.detector_agent import DetectorAgent
-from agents.counter_agent import CounterAgent
+from agents.detector_agent_v2 import DetectorAgent
+from agents.analyzer_agent_v2 import AnalyzerAgent
+from agents.counter_agent_v2 import CounterAgent
 
 logger = logging.getLogger(__name__)
 
 class AgentFactory:
-    """Factory class for creating and managing CIVILIAN agents."""
+    """Factory for creating and managing agents in the CIVILIAN system."""
     
     def __init__(self, text_processor: TextProcessor, vector_store: VectorStore, ai_processor: AIProcessor):
         """Initialize the agent factory.
@@ -30,68 +30,56 @@ class AgentFactory:
         self.text_processor = text_processor
         self.vector_store = vector_store
         self.ai_processor = ai_processor
-        self.agents: Dict[str, BaseAgent] = {}
+        self._agents = {}
         
         logger.info("AgentFactory initialized")
     
-    def create_agent(self, agent_type: str, **kwargs) -> BaseAgent:
-        """Create a specific type of agent.
+    def create_agent(self, agent_type: str) -> BaseAgent:
+        """Create an agent of the specified type.
         
         Args:
-            agent_type: Type of agent to create ('analyzer', 'detector', 'counter', etc.)
-            **kwargs: Additional arguments to pass to the agent constructor
+            agent_type: Type of agent to create ('detector', 'analyzer', or 'counter')
             
         Returns:
             The created agent instance
             
         Raises:
-            ValueError: If the agent type is not supported
+            ValueError: If an invalid agent type is specified
         """
-        # Check for existing agent of this type
-        if agent_type in self.agents:
-            logger.info(f"Agent of type {agent_type} already exists, returning existing instance")
-            return self.agents[agent_type]
+        if agent_type in self._agents:
+            logger.warning(f"Agent of type {agent_type} already exists, returning existing instance")
+            return self._agents[agent_type]
+            
+        agent = None
         
-        # Create a new agent based on the type
-        if agent_type == 'analyzer':
-            agent = AnalyzerAgent(self.text_processor)
-        elif agent_type == 'detector':
+        if agent_type == 'detector':
             agent = DetectorAgent(self.text_processor, self.vector_store)
+            
+        elif agent_type == 'analyzer':
+            agent = AnalyzerAgent(self.text_processor)
+            
         elif agent_type == 'counter':
             agent = CounterAgent(self.text_processor)
+            
         else:
-            raise ValueError(f"Unsupported agent type: {agent_type}")
-        
-        # Store the agent reference
-        self.agents[agent_type] = agent
-        logger.info(f"Created new {agent_type} agent")
+            raise ValueError(f"Invalid agent type: {agent_type}")
+            
+        # Store and return the agent
+        self._agents[agent_type] = agent
+        logger.info(f"Created agent of type {agent_type}")
         
         return agent
     
-    def start_all_agents(self):
-        """Start all registered agents."""
-        for agent_type, agent in self.agents.items():
-            agent.start()
-        
-        logger.info(f"Started {len(self.agents)} agents")
-    
-    def stop_all_agents(self):
-        """Stop all registered agents."""
-        for agent_type, agent in self.agents.items():
-            agent.stop()
-        
-        logger.info(f"Stopped {len(self.agents)} agents")
-    
     def get_agent(self, agent_type: str) -> Optional[BaseAgent]:
-        """Get an agent by type.
+        """Get an existing agent by type.
         
         Args:
             agent_type: Type of agent to retrieve
             
         Returns:
-            The agent instance or None if not found
+            The agent instance, or None if not found
         """
-        return self.agents.get(agent_type)
+        return self._agents.get(agent_type)
     
     def get_all_agents(self) -> List[BaseAgent]:
         """Get all registered agents.
@@ -99,12 +87,39 @@ class AgentFactory:
         Returns:
             List of all agent instances
         """
-        return list(self.agents.values())
+        return list(self._agents.values())
+    
+    def start_all_agents(self) -> None:
+        """Start all registered agents."""
+        for agent_type, agent in self._agents.items():
+            if not agent.is_running:
+                agent.start()
+                logger.info(f"Started agent {agent_type}")
+    
+    def stop_all_agents(self) -> None:
+        """Stop all registered agents."""
+        for agent_type, agent in self._agents.items():
+            if agent.is_running:
+                agent.stop()
+                logger.info(f"Stopped agent {agent_type}")
     
     def get_agent_stats(self) -> Dict[str, Dict[str, Any]]:
         """Get statistics for all agents.
         
         Returns:
-            Dictionary mapping agent types to their statistics
+            Dictionary mapping agent types to statistics
         """
-        return {agent_type: agent.get_stats() for agent_type, agent in self.agents.items()}
+        stats = {}
+        
+        for agent_type, agent in self._agents.items():
+            agent_stats = {
+                'running': agent.is_running,
+                'cycle_count': agent.cycle_count,
+                'error_count': agent.error_count,
+                'last_cycle_duration': agent.last_cycle_duration,
+                'last_error': agent.last_error
+            }
+            
+            stats[agent_type] = agent_stats
+            
+        return stats
