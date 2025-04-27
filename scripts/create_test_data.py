@@ -39,16 +39,18 @@ def create_test_narrative():
         narrative = DetectedNarrative(
             title="Test Narrative for IPFS Evidence",
             description="This is a test narrative created for testing the IPFS evidence storage system.",
-            narrative_type="test",
-            threat_level=2,
-            propagation_score=0.5,
+            confidence_score=0.85,
             first_detected=datetime.datetime.utcnow() - timedelta(days=1),
             last_updated=datetime.datetime.utcnow(),
-            source_count=1,
+            status="active",
+            language="en",
             meta_data=json.dumps({
                 "test": True,
                 "created_by": "create_test_data.py",
-                "purpose": "IPFS evidence storage testing"
+                "purpose": "IPFS evidence storage testing",
+                "threat_level": 2,
+                "propagation_score": 0.5,
+                "source_count": 1
             })
         )
         
