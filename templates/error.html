@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}Error - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Error</h3>
+                </div>
+                <div class="card-body">
+                    <p class="lead">{{ message }}</p>
+                    <hr>
+                    <a href="/" class="btn btn-outline-primary">
+                        <i class="bi bi-house-door me-2"></i>Return to Home
+                    </a>
+                    <button class="btn btn-outline-secondary" onclick="window.history.back();">
+                        <i class="bi bi-arrow-left me-2"></i>Go Back
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
