@@ -1,7 +1,7 @@
 import logging
 import json
 from typing import Dict, Any, List
-from flask import Blueprint, request, jsonify, render_template, send_file, Response, make_response
+from flask import Blueprint, request, jsonify, render_template, send_file, Response, make_response, current_app
 from flask_login import login_required, current_user
 from io import BytesIO
 
@@ -925,6 +925,31 @@ def view_trending_narratives():
         
     except Exception as e:
         logger.error(f"Error in trending narratives endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
+
+@complexity_bp.route('/complexity/features', methods=['GET'])
+def features():
+    """
+    Display a page showcasing all features of the Narrative Complexity Analyzer.
+    
+    Returns:
+        HTML page with feature details
+    """
+    try:
+        # Debug messages
+        current_app.logger.info("Attempting to render the features page")
+        
+        # Use a simplified template to debug the issue
+        return render_template('complexity/features_simple.html')
+        
+    except Exception as e:
+        # Detailed error logging
+        import traceback
+        error_traceback = traceback.format_exc()
+        current_app.logger.error(f"Error in features page endpoint: {e}")
+        current_app.logger.error(f"Traceback: {error_traceback}")
+        
+        # Return simple error
         return render_template('error.html', message=str(e)), 500
 
 # Register blueprint
