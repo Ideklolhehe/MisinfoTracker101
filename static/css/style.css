@@ -3,11 +3,17 @@
  * Dashboard and application styles
  */
 
+:root {
+    --civilian-primary: #4caf50; /* Light Green */
+    --civilian-secondary: #ff9800; /* Orange */
+    --civilian-accent: #f44336; /* Red */
+}
+
 /* Core layout styles */
 html, body {
     height: 100%;
-    background-color: var(--bs-dark);
-    color: var(--bs-light);
+    background-color: #212121; /* Very dark gray */
+    color: #e0e0e0; /* Light grey */
 }
 
 body {
@@ -67,17 +73,17 @@ body {
         height: auto;
         position: relative;
     }
-    
+
     .main-content {
         margin-left: 0;
     }
-    
+
     .dashboard-header, .search-container, .stat-card, .chart-container {
         padding: 10px;
         margin: 0;
         width: 100%;
     }
-    
+
     .stat-card {
         display: block; /* Ensures stat card blocks align vertically in mobile */
     }
