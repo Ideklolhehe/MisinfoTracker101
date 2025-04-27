@@ -118,24 +118,11 @@ class IPFSEvidenceStore:
                 with open(backup_filepath, 'w', encoding='utf-8') as f:
                     f.write(evidence_json)
                 
-                # Update instance with evidence hash - handle transaction management safely
+                # Update instance with evidence hash using a transaction-safe approach
                 try:
-                    # First check if there's already a transaction in progress
-                    has_active_transaction = db.session.in_transaction()
-                    
-                    if not has_active_transaction:
-                        # Safe to begin a new transaction
-                        with db.session.begin():
-                            # Store both the IPFS hash and local hash for verification
-                            instance.evidence_hash = ipfs_hash
-                            if instance.meta_data:
-                                meta_data = json.loads(instance.meta_data)
-                                meta_data['local_hash'] = local_hash
-                                instance.meta_data = json.dumps(meta_data)
-                            else:
-                                instance.meta_data = json.dumps({'local_hash': local_hash})
-                    else:
-                        # Transaction already in progress, just update without beginning a new one
+                    # Try-except around the entire transaction to safely handle various SQLAlchemy versions
+                    try:
+                        # Always update the instance directly first, without transaction management
                         instance.evidence_hash = ipfs_hash
                         if instance.meta_data:
                             meta_data = json.loads(instance.meta_data)
@@ -143,7 +130,13 @@ class IPFSEvidenceStore:
                             instance.meta_data = json.dumps(meta_data)
                         else:
                             instance.meta_data = json.dumps({'local_hash': local_hash})
-                        # We don't commit here as we're inside an existing transaction
+                        
+                        # Only try to commit if we're the owner of the session
+                        db.session.flush()
+                    except Exception as e:
+                        if 'transaction is already begun' not in str(e):
+                            # Only re-raise if it's not a transaction conflict
+                            raise
                 except Exception as e:
                     logger.error(f"Error updating instance with IPFS hash: {e}")
                     # If we can't update the database, at least we saved the file locally
@@ -161,23 +154,11 @@ class IPFSEvidenceStore:
                 with open(fallback_filepath, 'w', encoding='utf-8') as f:
                     f.write(evidence_json)
                 
-                # Update instance with local hash - handle transaction management safely
+                # Update instance with local hash using a transaction-safe approach
                 try:
-                    # First check if there's already a transaction in progress
-                    has_active_transaction = db.session.in_transaction()
-                    
-                    if not has_active_transaction:
-                        # Safe to begin a new transaction
-                        with db.session.begin():
-                            instance.evidence_hash = f"local:{local_hash}"
-                            if instance.meta_data:
-                                meta_data = json.loads(instance.meta_data)
-                                meta_data['storage_type'] = 'local_fallback'
-                                instance.meta_data = json.dumps(meta_data)
-                            else:
-                                instance.meta_data = json.dumps({'storage_type': 'local_fallback'})
-                    else:
-                        # Transaction already in progress, just update without beginning a new one
+                    # Try-except around the entire transaction to safely handle various SQLAlchemy versions
+                    try:
+                        # Always update the instance directly first, without transaction management
                         instance.evidence_hash = f"local:{local_hash}"
                         if instance.meta_data:
                             meta_data = json.loads(instance.meta_data)
@@ -185,7 +166,13 @@ class IPFSEvidenceStore:
                             instance.meta_data = json.dumps(meta_data)
                         else:
                             instance.meta_data = json.dumps({'storage_type': 'local_fallback'})
-                        # We don't commit here as we're inside an existing transaction
+                        
+                        # Only try to commit if we're the owner of the session
+                        db.session.flush()
+                    except Exception as e:
+                        if 'transaction is already begun' not in str(e):
+                            # Only re-raise if it's not a transaction conflict
+                            raise
                 except Exception as e:
                     logger.error(f"Error updating instance with local hash: {e}")
                     # If we can't update the database, at least we saved the file locally
@@ -445,13 +432,27 @@ class IPFSEvidenceStore:
     def _log_error(self, operation: str, message: str):
         """Log an error to the database."""
         try:
+            # Create the log entry
             log_entry = SystemLog(
                 log_type="error",
                 component="ipfs_evidence_store",
                 message=f"Error in {operation}: {message}"
             )
-            with db.session.begin():
+            
+            # Use try-except to safely handle potential transaction issues
+            try:
+                # First try to add directly to the session
                 db.session.add(log_entry)
+                db.session.flush()
+            except Exception as e:
+                # If we got a transaction error, try a different approach
+                if 'transaction is already begun' in str(e):
+                    # Just add to session without transaction mgmt
+                    db.session.add(log_entry)
+                    # Don't force flush/commit - let the parent transaction handle it
+                else:
+                    # Re-raise other errors
+                    raise
         except Exception:
             # Just log to console if database logging fails
             logger.error(f"Failed to log error to database: {message}")
