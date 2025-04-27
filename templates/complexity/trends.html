@@ -1,0 +1,970 @@
+{% extends 'base.html' %}
+
+{% block title %}Narrative Complexity Trends{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .trends-header {
+        background: linear-gradient(135deg, var(--bs-dark-bg-subtle) 0%, var(--bs-tertiary-bg) 100%);
+        padding: 2rem;
+        border-radius: 0.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid var(--bs-border-color);
+    }
+    .dashboard-card {
+        border-radius: 0.75rem;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .card-header-custom {
+        background: var(--bs-dark);
+        color: var(--bs-white);
+        padding: 1rem 1.5rem;
+        font-weight: 600;
+        border-bottom: none;
+    }
+    .chart-container {
+        position: relative;
+        height: 400px;
+        margin-bottom: 1.5rem;
+    }
+    .filters-container {
+        background-color: var(--bs-tertiary-bg);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+    }
+    .dimension-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .dimension-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        background-color: var(--bs-tertiary-bg);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .dimension-legend-item:hover {
+        transform: translateY(-2px);
+    }
+    .dimension-legend-item.active {
+        font-weight: 600;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .dimension-color {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+    }
+    .time-range-selector {
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
+        gap: 0.5rem;
+    }
+    .range-btn {
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.85rem;
+        background-color: var(--bs-tertiary-bg);
+        border: 1px solid var(--bs-border-color);
+        transition: all 0.2s ease;
+    }
+    .range-btn:hover {
+        transform: translateY(-2px);
+    }
+    .range-btn.active {
+        background-color: var(--bs-primary);
+        color: var(--bs-white);
+        border-color: var(--bs-primary);
+        font-weight: 600;
+    }
+    .insights-panel {
+        background-color: var(--bs-dark-bg-subtle);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .insights-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .insights-icon {
+        font-size: 1.5rem;
+        color: var(--bs-primary);
+    }
+    .badge-feature {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        background-color: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary);
+        border: 1px solid var(--bs-primary);
+        margin-left: 0.5rem;
+    }
+    .trend-stats {
+        margin-bottom: 2rem;
+    }
+    .stat-card {
+        background-color: var(--bs-tertiary-bg);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+    }
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 1rem 0;
+        display: block;
+    }
+    .stat-label {
+        color: var(--bs-secondary);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .trend-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+    .trend-up {
+        color: var(--bs-danger);
+    }
+    .trend-down {
+        color: var(--bs-success);
+    }
+    .period-select {
+        width: auto;
+        display: inline-block;
+    }
+    .export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        margin-left: 1rem;
+    }
+    .export-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+    }
+    .tooltip-custom {
+        position: relative;
+        display: inline-block;
+    }
+    .tooltip-custom .tooltip-text {
+        visibility: hidden;
+        width: 200px;
+        background-color: var(--bs-dark);
+        color: var(--bs-white);
+        text-align: center;
+        border-radius: 6px;
+        padding: 0.5rem;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -100px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 0.8rem;
+        pointer-events: none;
+    }
+    .tooltip-custom .tooltip-text::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: var(--bs-dark) transparent transparent transparent;
+    }
+    .tooltip-custom:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="trends-header">
+        <h1 class="mb-3">
+            <i class="bi bi-graph-up-arrow me-2"></i>
+            Narrative Complexity Trends
+        </h1>
+        <p class="lead mb-0">Track complexity evolution over time to detect patterns and shifts in misinformation campaigns.</p>
+    </div>
+
+    <div class="filters-container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="timeRange" class="form-label">Time Period</label>
+                    <select class="form-select period-select" id="timeRange">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="90">Last 3 months</option>
+                        <option value="180">Last 6 months</option>
+                        <option value="365">Last year</option>
+                    </select>
+                    <div class="tooltip-custom ms-2">
+                        <i class="bi bi-info-circle text-muted"></i>
+                        <span class="tooltip-text">Select a time period to view complexity trends.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 text-md-end mt-md-0 mt-3">
+                <button class="btn btn-outline-primary export-btn" id="exportCSV">
+                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                    Export to CSV
+                </button>
+                <button class="btn btn-outline-primary export-btn" id="exportPDF">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                    Export to PDF
+                </button>
+            </div>
+        </div>
+
+        <div class="dimension-legend mt-3">
+            <h6 class="w-100 mb-2">Dimensions to Display:</h6>
+            <div class="dimension-legend-item active" data-dimension="overall">
+                <div class="dimension-color" style="background-color: rgba(75, 192, 192, 0.8);"></div>
+                <span>Overall Complexity</span>
+            </div>
+            <div class="dimension-legend-item active" data-dimension="linguistic">
+                <div class="dimension-color" style="background-color: rgba(54, 162, 235, 0.8);"></div>
+                <span>Linguistic Complexity</span>
+            </div>
+            <div class="dimension-legend-item active" data-dimension="logical">
+                <div class="dimension-color" style="background-color: rgba(75, 192, 192, 0.8);"></div>
+                <span>Logical Structure</span>
+            </div>
+            <div class="dimension-legend-item active" data-dimension="rhetorical">
+                <div class="dimension-color" style="background-color: rgba(255, 205, 86, 0.8);"></div>
+                <span>Rhetorical Techniques</span>
+            </div>
+            <div class="dimension-legend-item active" data-dimension="emotional">
+                <div class="dimension-color" style="background-color: rgba(255, 99, 132, 0.8);"></div>
+                <span>Emotional Manipulation</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="insights-panel">
+        <div class="insights-header">
+            <i class="bi bi-lightbulb-fill insights-icon"></i>
+            <h4 class="mb-0">Trend Insights <span class="badge-feature">AI-POWERED</span></h4>
+        </div>
+        <div id="insights-content">
+            <div class="alert alert-primary">
+                <h5><i class="bi bi-graph-up-arrow me-2"></i>Complexity Evolution Patterns</h5>
+                <p>Over the last 30 days, there has been a <strong>15% increase in overall complexity</strong> across active narratives. The most significant growth is in <strong>emotional manipulation techniques</strong>, suggesting a shift toward more emotionally charged misinformation.</p>
+                <p>Narratives related to topic clusters #245 and #372 show coordinated complexity patterns, indicating potential organized campaigns.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="trend-stats">
+        <div class="row">
+            <div class="col-md-3 col-sm-6 mb-4">
+                <div class="stat-card">
+                    <span class="stat-label">Avg Overall Complexity</span>
+                    <span class="stat-value">6.4</span>
+                    <div class="trend-indicator trend-up">
+                        <i class="bi bi-arrow-up-right"></i>
+                        <span>+15% this month</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-4">
+                <div class="stat-card">
+                    <span class="stat-label">Active Narratives</span>
+                    <span class="stat-value">287</span>
+                    <div class="trend-indicator trend-up">
+                        <i class="bi bi-arrow-up-right"></i>
+                        <span>+24 this month</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-4">
+                <div class="stat-card">
+                    <span class="stat-label">Most Used Technique</span>
+                    <span class="stat-value">Emotional</span>
+                    <div class="trend-indicator">
+                        <span>Avg score: 7.2/10</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-4">
+                <div class="stat-card">
+                    <span class="stat-label">Complexity Volatility</span>
+                    <span class="stat-value">Medium</span>
+                    <div class="trend-indicator trend-down">
+                        <i class="bi bi-arrow-down-right"></i>
+                        <span>More stable patterns</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card dashboard-card mb-4">
+        <div class="card-header card-header-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-graph-up-arrow me-2"></i>
+                Complexity Evolution Over Time
+            </h5>
+            <div class="time-range-selector d-none d-md-flex">
+                <button class="range-btn" data-days="7">Week</button>
+                <button class="range-btn active" data-days="30">Month</button>
+                <button class="range-btn" data-days="90">Quarter</button>
+                <button class="range-btn" data-days="180">6 Months</button>
+                <button class="range-btn" data-days="365">Year</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="complexityTrendsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card dashboard-card">
+                <div class="card-header card-header-custom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart-fill me-2"></i>
+                        Dimension Distribution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="dimensionDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card dashboard-card">
+                <div class="card-header card-header-custom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-heatmap me-2"></i>
+                        Complexity Heatmap
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="complexityHeatmapChart"></canvas>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <small class="text-muted">Shows patterns of complexity across days of the week and hours of the day</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card dashboard-card mb-4">
+        <div class="card-header card-header-custom">
+            <h5 class="mb-0">
+                <i class="bi bi-alarm me-2"></i>
+                Complexity Alerts
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-danger">
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="bi bi-exclamation-triangle-fill fs-3"></i>
+                    </div>
+                    <div>
+                        <h5 class="alert-heading">High Complexity Alert</h5>
+                        <p>5 narratives have exceeded the complexity threshold of 8.0 in the last 24 hours.</p>
+                        <p class="mb-0">
+                            <button class="btn btn-sm btn-outline-danger">View Narratives</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="alert alert-warning">
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="bi bi-graph-up-arrow fs-3"></i>
+                    </div>
+                    <div>
+                        <h5 class="alert-heading">Rapid Complexity Increase</h5>
+                        <p>Narrative cluster #245 shows a 35% increase in average complexity over the past week.</p>
+                        <p class="mb-0">
+                            <button class="btn btn-sm btn-outline-warning">Investigate Cluster</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize charts
+        setupTrendsChart();
+        setupDistributionChart();
+        setupHeatmapChart();
+        
+        // Set up event listeners
+        setupDimensionToggle();
+        setupTimeRangeSelector();
+        setupExportButtons();
+    });
+    
+    function setupTrendsChart() {
+        // Sample data - this would be replaced by data from the API
+        const dates = generateDates(30);
+        const data = {
+            overall: generateTrendData(30, 5, 7, 0.3),
+            linguistic: generateTrendData(30, 4, 6, 0.3),
+            logical: generateTrendData(30, 5, 6.5, 0.2),
+            rhetorical: generateTrendData(30, 5.5, 7.5, 0.4),
+            emotional: generateTrendData(30, 6, 8, 0.5)
+        };
+        
+        const ctx = document.getElementById('complexityTrendsChart').getContext('2d');
+        window.trendsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [
+                    {
+                        label: 'Overall Complexity',
+                        data: data.overall,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Linguistic Complexity',
+                        data: data.linguistic,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Logical Structure',
+                        data: data.logical,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Rhetorical Techniques',
+                        data: data.rhetorical,
+                        borderColor: 'rgba(255, 205, 86, 1)',
+                        backgroundColor: 'rgba(255, 205, 86, 0.2)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Emotional Manipulation',
+                        data: data.emotional,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.raw.toFixed(1) + '/10';
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    y: {
+                        beginAtZero: false,
+                        min: 0,
+                        max: 10,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            stepSize: 2
+                        }
+                    }
+                },
+                elements: {
+                    line: {
+                        borderWidth: 2
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    }
+    
+    function setupDistributionChart() {
+        const ctx = document.getElementById('dimensionDistributionChart').getContext('2d');
+        const distributionChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Linguistic', 'Logical', 'Rhetorical', 'Emotional'],
+                datasets: [{
+                    label: 'Average Score',
+                    data: [5.8, 6.3, 6.9, 7.2],
+                    backgroundColor: [
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(255, 205, 86, 0.7)',
+                        'rgba(255, 99, 132, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 205, 86, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1,
+                    borderRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Average: ' + context.raw.toFixed(1) + '/10';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 10,
+                        ticks: {
+                            stepSize: 2
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    function setupHeatmapChart() {
+        const ctx = document.getElementById('complexityHeatmapChart').getContext('2d');
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const hours = ['00:00', '06:00', '12:00', '18:00'];
+        
+        // Sample heatmap data
+        const data = [
+            [5.2, 5.8, 6.3, 5.5],  // Monday
+            [5.5, 6.2, 6.7, 5.9],  // Tuesday
+            [5.8, 6.5, 7.1, 6.3],  // Wednesday
+            [6.1, 6.8, 7.5, 6.7],  // Thursday
+            [6.4, 7.1, 7.9, 7.2],  // Friday
+            [5.9, 6.3, 6.8, 6.2],  // Saturday
+            [5.4, 5.9, 6.2, 5.7]   // Sunday
+        ];
+        
+        // Flatten the 2D array for Chart.js
+        const flattenedData = [];
+        for (let i = 0; i < days.length; i++) {
+            for (let j = 0; j < hours.length; j++) {
+                flattenedData.push({
+                    x: hours[j],
+                    y: days[i],
+                    v: data[i][j]
+                });
+            }
+        }
+        
+        const heatmapChart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Complexity by Time',
+                    data: flattenedData,
+                    backgroundColor: function(context) {
+                        const value = context.raw.v;
+                        const alpha = (value - 5) / 5; // Scale from 0 to 1 (for values 5-10)
+                        return `rgba(255, 99, 132, ${alpha})`;
+                    },
+                    borderColor: 'rgba(0, 0, 0, 0.1)',
+                    borderWidth: 1,
+                    radius: 20,
+                    pointStyle: 'rectRot',
+                    hoverRadius: 22
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'category',
+                        position: 'bottom',
+                        title: {
+                            display: true,
+                            text: 'Time of Day'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        type: 'category',
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Day of Week'
+                        },
+                        reverse: true,
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.raw.y} at ${context.raw.x}: ${context.raw.v.toFixed(1)}/10`;
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+    
+    function setupDimensionToggle() {
+        const legendItems = document.querySelectorAll('.dimension-legend-item');
+        legendItems.forEach(item => {
+            item.addEventListener('click', function() {
+                const dimension = this.getAttribute('data-dimension');
+                this.classList.toggle('active');
+                
+                // Get index of the dataset based on dimension
+                let datasetIndex;
+                switch(dimension) {
+                    case 'overall': datasetIndex = 0; break;
+                    case 'linguistic': datasetIndex = 1; break;
+                    case 'logical': datasetIndex = 2; break;
+                    case 'rhetorical': datasetIndex = 3; break;
+                    case 'emotional': datasetIndex = 4; break;
+                }
+                
+                // Toggle visibility
+                const isVisible = window.trendsChart.isDatasetVisible(datasetIndex);
+                if (isVisible) {
+                    window.trendsChart.hide(datasetIndex);
+                } else {
+                    window.trendsChart.show(datasetIndex);
+                }
+            });
+        });
+    }
+    
+    function setupTimeRangeSelector() {
+        // Time range selector (dropdown)
+        const timeRangeSelect = document.getElementById('timeRange');
+        if (timeRangeSelect) {
+            timeRangeSelect.addEventListener('change', function() {
+                updateChartTimeRange(this.value);
+            });
+        }
+        
+        // Quick time range buttons
+        const rangeButtons = document.querySelectorAll('.range-btn');
+        rangeButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Update active state
+                rangeButtons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Update chart
+                const days = this.getAttribute('data-days');
+                updateChartTimeRange(days);
+                
+                // Update dropdown to match
+                if (timeRangeSelect) {
+                    timeRangeSelect.value = days;
+                }
+            });
+        });
+    }
+    
+    function updateChartTimeRange(days) {
+        // Generate new data based on days
+        const dates = generateDates(parseInt(days));
+        const data = {
+            overall: generateTrendData(parseInt(days), 5, 7, 0.3),
+            linguistic: generateTrendData(parseInt(days), 4, 6, 0.3),
+            logical: generateTrendData(parseInt(days), 5, 6.5, 0.2),
+            rhetorical: generateTrendData(parseInt(days), 5.5, 7.5, 0.4),
+            emotional: generateTrendData(parseInt(days), 6, 8, 0.5)
+        };
+        
+        // Update chart data
+        window.trendsChart.data.labels = dates;
+        window.trendsChart.data.datasets[0].data = data.overall;
+        window.trendsChart.data.datasets[1].data = data.linguistic;
+        window.trendsChart.data.datasets[2].data = data.logical;
+        window.trendsChart.data.datasets[3].data = data.rhetorical;
+        window.trendsChart.data.datasets[4].data = data.emotional;
+        window.trendsChart.update();
+        
+        // Update insights content
+        updateInsightsForTimeRange(days);
+    }
+    
+    function updateInsightsForTimeRange(days) {
+        const insightsContent = document.getElementById('insights-content');
+        let timePeriod;
+        
+        if (days <= 7) timePeriod = 'week';
+        else if (days <= 30) timePeriod = 'month';
+        else if (days <= 90) timePeriod = 'quarter';
+        else if (days <= 180) timePeriod = '6 months';
+        else timePeriod = 'year';
+        
+        // Generate random stats for demonstration
+        const overallChange = (Math.random() * 30 - 10).toFixed(1);
+        const direction = overallChange > 0 ? 'increase' : 'decrease';
+        const topDimension = ['linguistic complexity', 'emotional manipulation', 'rhetorical techniques'][Math.floor(Math.random() * 3)];
+        
+        insightsContent.innerHTML = `
+            <div class="alert alert-primary">
+                <h5><i class="bi bi-graph-up-arrow me-2"></i>Complexity Evolution Patterns</h5>
+                <p>Over the last ${timePeriod}, there has been a <strong>${Math.abs(overallChange)}% ${direction} in overall complexity</strong> across active narratives. The most significant growth is in <strong>${topDimension}</strong>, suggesting a shift in misinformation strategies.</p>
+                <p>Narratives related to topic clusters #${Math.floor(Math.random() * 900 + 100)} and #${Math.floor(Math.random() * 900 + 100)} show coordinated complexity patterns, indicating potential organized campaigns.</p>
+            </div>
+        `;
+    }
+    
+    function setupExportButtons() {
+        // CSV Export
+        const exportCSVBtn = document.getElementById('exportCSV');
+        if (exportCSVBtn) {
+            exportCSVBtn.addEventListener('click', function() {
+                // Generate CSV content
+                const csvContent = generateCSVData();
+                
+                // Create and download file
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+                saveAs(blob, `narrative_complexity_trends_${formatDate(new Date())}.csv`);
+            });
+        }
+        
+        // PDF Export
+        const exportPDFBtn = document.getElementById('exportPDF');
+        if (exportPDFBtn) {
+            exportPDFBtn.addEventListener('click', function() {
+                generatePDF();
+            });
+        }
+    }
+    
+    function generateCSVData() {
+        // Get data from the trends chart
+        const labels = window.trendsChart.data.labels;
+        const overall = window.trendsChart.data.datasets[0].data;
+        const linguistic = window.trendsChart.data.datasets[1].data;
+        const logical = window.trendsChart.data.datasets[2].data;
+        const rhetorical = window.trendsChart.data.datasets[3].data;
+        const emotional = window.trendsChart.data.datasets[4].data;
+        
+        // Create CSV header
+        let csv = 'Date,Overall Complexity,Linguistic Complexity,Logical Structure,Rhetorical Techniques,Emotional Manipulation\n';
+        
+        // Add each row of data
+        for (let i = 0; i < labels.length; i++) {
+            csv += `${labels[i]},${overall[i]},${linguistic[i]},${logical[i]},${rhetorical[i]},${emotional[i]}\n`;
+        }
+        
+        return csv;
+    }
+    
+    function generatePDF() {
+        // Import jsPDF library
+        const { jsPDF } = window.jspdf;
+        
+        // Create PDF document
+        const doc = new jsPDF();
+        
+        // Set title
+        doc.setFontSize(18);
+        doc.text('Narrative Complexity Trends Report', 105, 15, { align: 'center' });
+        
+        // Add date
+        doc.setFontSize(10);
+        doc.text(`Generated on: ${formatDate(new Date())}`, 105, 22, { align: 'center' });
+        
+        // Add chart as image (if available in a deployed environment)
+        // Note: In a real implementation, would use canvas.toDataURL() to get chart image
+        doc.setFontSize(14);
+        doc.text('Complexity Evolution Over Time', 20, 35);
+        
+        // Add table with data
+        doc.setFontSize(12);
+        doc.text('Complexity Metrics Summary:', 20, 45);
+        
+        // Sample table data
+        const tableData = [
+            ['Dimension', 'Average Score', 'Trend'],
+            ['Overall', '6.4/10', '+15%'],
+            ['Linguistic', '5.8/10', '+12%'],
+            ['Logical', '6.3/10', '+9%'],
+            ['Rhetorical', '6.9/10', '+14%'],
+            ['Emotional', '7.2/10', '+24%']
+        ];
+        
+        // Generate the table
+        doc.autoTable({
+            startY: 50,
+            head: [tableData[0]],
+            body: tableData.slice(1),
+            theme: 'grid',
+            styles: { fontSize: 10 },
+            headStyles: { fillColor: [66, 66, 66] }
+        });
+        
+        // Add insights
+        doc.setFontSize(14);
+        doc.text('AI-Generated Insights:', 20, doc.autoTable.previous.finalY + 15);
+        
+        doc.setFontSize(10);
+        const insightText = 'Analysis indicates a significant increase in emotional manipulation techniques across active narratives over the past month. This suggests a strategic shift in misinformation campaigns toward more emotionally charged content.';
+        
+        // Add wrapped text
+        const splitInsight = doc.splitTextToSize(insightText, 170);
+        doc.text(splitInsight, 20, doc.autoTable.previous.finalY + 25);
+        
+        // Save PDF
+        doc.save(`narrative_complexity_report_${formatDate(new Date())}.pdf`);
+    }
+    
+    // Helper functions
+    function generateDates(numDays) {
+        const dates = [];
+        const today = new Date();
+        
+        for (let i = numDays - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(today.getDate() - i);
+            dates.push(formatDate(date));
+        }
+        
+        return dates;
+    }
+    
+    function formatDate(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+    
+    function generateTrendData(numDays, baseMin, baseMax, variance) {
+        const data = [];
+        let value = baseMin + Math.random() * (baseMax - baseMin);
+        
+        for (let i = 0; i < numDays; i++) {
+            // Add some randomness but maintain an overall trend
+            value += (Math.random() - 0.3) * variance; // Slight upward trend
+            
+            // Keep within bounds
+            value = Math.max(baseMin, Math.min(baseMax, value));
+            
+            data.push(value);
+        }
+        
+        return data;
+    }
+</script>
+{% endblock %}
