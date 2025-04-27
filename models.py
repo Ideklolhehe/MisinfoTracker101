@@ -275,3 +275,19 @@ class VerificationResult(db.Model):
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class SystemCredential(db.Model):
+    """Model for storing system API credentials securely."""
+    id = db.Column(db.Integer, primary_key=True)
+    credential_type = db.Column(db.String(50), unique=True, nullable=False)  # openai, youtube, twitter, telegram, dark_web
+    credential_data = db.Column(db.Text, nullable=False)  # JSON with encrypted credential data
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    meta_data = db.Column(db.Text)  # JSON with additional metadata
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}

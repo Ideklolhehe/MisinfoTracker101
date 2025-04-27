@@ -74,14 +74,75 @@ with app.app_context():
     from routes.home import home_bp
     from routes.profile import profile_bp
     
+    # Import new route blueprints
+    from routes.api_credentials import api_credentials_bp
+    from routes.rss_feeds import rss_feeds_bp
+    
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(data_sources_bp, url_prefix='/data-sources')
     app.register_blueprint(adversarial_bp, url_prefix='/adversarial')
     app.register_blueprint(verification_bp, url_prefix='/verify')
+    app.register_blueprint(api_credentials_bp, url_prefix='/api-credentials')
+    app.register_blueprint(rss_feeds_bp, url_prefix='/rss-feeds')
     app.register_blueprint(profile_bp)
     app.register_blueprint(home_bp)
+    
+    # Initialize external API clients
+    from services.api_credential_manager import APICredentialManager
+    from services.external_api_initializer import ExternalAPIInitializer
+    
+    # Check API credentials and initialize clients
+    api_status = APICredentialManager.get_all_credential_status()
+    for api_name, available in api_status.items():
+        if available:
+            logger.info(f"{api_name.capitalize()} API credentials are available")
+        else:
+            logger.warning(f"{api_name.capitalize()} API credentials are missing")
+    
+    # Initialize API clients
+    app.config['API_CLIENTS'] = {}
+    
+    # Try to initialize OpenAI client (required for verification service)
+    if api_status.get('openai', False):
+        app.config['API_CLIENTS']['openai'] = ExternalAPIInitializer.init_openai_client()
+        if app.config['API_CLIENTS']['openai']:
+            logger.info("OpenAI API client initialized successfully")
+        else:
+            logger.error("Failed to initialize OpenAI API client")
+    
+    # Try to initialize YouTube client
+    if api_status.get('youtube', False):
+        app.config['API_CLIENTS']['youtube'] = ExternalAPIInitializer.init_youtube_client()
+        if app.config['API_CLIENTS']['youtube']:
+            logger.info("YouTube API client initialized successfully")
+        else:
+            logger.error("Failed to initialize YouTube API client")
+    
+    # Try to initialize Twitter client
+    if api_status.get('twitter', False):
+        app.config['API_CLIENTS']['twitter'] = ExternalAPIInitializer.init_twitter_client()
+        if app.config['API_CLIENTS']['twitter']:
+            logger.info("Twitter API client initialized successfully")
+        else:
+            logger.error("Failed to initialize Twitter API client")
+    
+    # Try to initialize Telegram client
+    if api_status.get('telegram', False):
+        app.config['API_CLIENTS']['telegram'] = ExternalAPIInitializer.init_telegram_client()
+        if app.config['API_CLIENTS']['telegram']:
+            logger.info("Telegram API client initialized successfully")
+        else:
+            logger.error("Failed to initialize Telegram API client")
+    
+    # Try to initialize Tor client for dark web monitoring
+    if api_status.get('dark_web', False):
+        app.config['API_CLIENTS']['tor'] = ExternalAPIInitializer.init_tor_client()
+        if app.config['API_CLIENTS']['tor']:
+            logger.info("Tor client initialized successfully")
+        else:
+            logger.error("Failed to initialize Tor client")
     
     # Create database tables
     db.create_all()
