@@ -1,150 +1,168 @@
 """
-Base agent implementation for the CIVILIAN multi-agent system.
-Defines core functionality shared by all specialized agent types.
+Base agent for the CIVILIAN multi-agent system.
+Provides common functionality for all agent types.
 """
 
 import logging
 import time
 import threading
-import os
 import json
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
+from datetime import datetime
 
-from utils.app_context import ensure_app_context
-from models import SystemLog
 from app import db
+from models import SystemLog
 
 logger = logging.getLogger(__name__)
 
-class BaseAgent(ABC):
+class BaseAgent:
     """Base class for all CIVILIAN agents."""
     
     def __init__(self, agent_type: str, refresh_interval: int = 300):
         """Initialize the base agent.
         
         Args:
-            agent_type: Type of agent (e.g., 'detector', 'analyzer', 'counter')
-            refresh_interval: Seconds between processing cycles
+            agent_type: Type of agent ('detector', 'analyzer', 'counter', etc.)
+            refresh_interval: Time between agent cycles in seconds (default: 300)
         """
         self.agent_type = agent_type
-        self.running = False
+        self.refresh_interval = refresh_interval
+        self.is_running = False
         self.thread = None
-        self.refresh_interval = int(os.environ.get(f'{agent_type.upper()}_REFRESH_INTERVAL', refresh_interval))
-        self._initialized_at = time.time()
-        self._last_cycle_start = 0
-        self._last_cycle_end = 0
-        self._cycle_count = 0
-        self._successful_cycles = 0
-        self._error_count = 0
+        
+        # Stats tracking
+        self.cycle_count = 0
+        self.error_count = 0
+        self.last_cycle_time = None
+        self.last_cycle_duration = None
+        self.last_error = None
         
         logger.info(f"{self.__class__.__name__} initialized")
     
     def start(self):
-        """Start the agent in a background thread."""
-        if self.running:
+        """Start the agent's processing thread."""
+        if self.is_running:
             logger.warning(f"{self.__class__.__name__} is already running")
             return
             
-        self.running = True
-        self.thread = threading.Thread(target=self._run_loop)
-        self.thread.daemon = True
+        self.is_running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
         
         logger.info(f"{self.__class__.__name__} started")
-        
+    
     def stop(self):
-        """Stop the agent."""
-        self.running = False
-        if self.thread:
-            self.thread.join(timeout=5.0)
+        """Stop the agent's processing thread."""
+        if not self.is_running:
+            logger.warning(f"{self.__class__.__name__} is not running")
+            return
+            
+        self.is_running = False
+        
+        if self.thread and self.thread.is_alive():
+            try:
+                self.thread.join(timeout=5.0)  # Wait for thread to finish, with timeout
+            except Exception as e:
+                logger.error(f"Error stopping {self.__class__.__name__}: {e}")
+        
         logger.info(f"{self.__class__.__name__} stopped")
     
-    def _run_loop(self):
-        """Main processing loop that runs in background thread."""
-        while self.running:
+    def _run(self):
+        """Run the agent's processing loop."""
+        while self.is_running:
             try:
-                # Track cycle metrics
-                self._last_cycle_start = time.time()
-                self._cycle_count += 1
+                self.last_cycle_time = datetime.utcnow()
                 
-                # Log start of cycle
+                # Log cycle start
                 logger.debug(f"Starting {self.agent_type} cycle")
                 
-                # Run the agent's processing cycle
+                # Track cycle time
+                start_time = time.time()
+                
+                # Process the cycle
                 self._process_cycle()
                 
-                # Update cycle metrics
-                self._last_cycle_end = time.time()
-                self._successful_cycles += 1
+                # Track stats
+                self.cycle_count += 1
+                self.last_cycle_duration = time.time() - start_time
                 
-                # Wait for next cycle
-                cycle_duration = self._last_cycle_end - self._last_cycle_start
-                logger.debug(f"{self.agent_type} cycle complete in {cycle_duration:.2f}s, sleeping for {self.refresh_interval} seconds")
-                time.sleep(self.refresh_interval)
+                # Log cycle completion
+                logger.debug(f"{self.agent_type} cycle complete, sleeping for {self.refresh_interval} seconds")
                 
             except Exception as e:
-                self._error_count += 1
-                logger.error(f"Error in {self.agent_type} loop: {e}")
-                # Log error to database
-                self._log_error(f"{self.agent_type}_loop", str(e))
-                time.sleep(30)  # Short sleep on error
+                self.error_count += 1
+                self.last_error = str(e)
+                logger.error(f"Error in {self.agent_type} cycle: {e}")
+                self._log_error("cycle_error", str(e))
+            
+            # Sleep until next cycle
+            for _ in range(int(self.refresh_interval / 5)):
+                if not self.is_running:
+                    break
+                time.sleep(5)
     
-    @abstractmethod
     def _process_cycle(self):
-        """Process a single cycle of the agent's operation.
+        """Process a single agent cycle.
         
-        This method must be implemented by all agent subclasses.
+        This method should be overridden by subclasses.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement _process_cycle")
     
-    @ensure_app_context
-    def _log_error(self, operation: str, message: str):
-        """Log an error to the database."""
-        try:
-            log_entry = SystemLog(
-                log_type="error",
-                component=f"{self.agent_type}_agent",
-                message=f"Error in {operation}: {message}"
-            )
-            with db.session.begin():
-                db.session.add(log_entry)
-        except Exception:
-            # Just log to console if database logging fails
-            logger.error(f"Failed to log error to database: {message}")
-    
-    @ensure_app_context
-    def _log_info(self, message: str, metadata: Optional[Dict[str, Any]] = None):
-        """Log an informational message to the database."""
+    def _log_info(self, operation: str, details: Optional[Dict[str, Any]] = None):
+        """Log an informational event to the system log.
+        
+        Args:
+            operation: The operation being performed
+            details: Optional details as a dictionary
+        """
         try:
             log_entry = SystemLog(
                 log_type="info",
                 component=f"{self.agent_type}_agent",
-                message=message,
-                meta_data=json.dumps(metadata) if metadata else None
+                message=f"{operation} completed successfully",
+                meta_data=json.dumps(details) if details else None
             )
-            with db.session.begin():
-                db.session.add(log_entry)
-        except Exception:
-            # Just log to console if database logging fails
-            logger.info(f"[DB Log] {message}")
+            db.session.add(log_entry)
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Error logging info: {e}")
+    
+    def _log_error(self, operation: str, error_message: str, details: Optional[Dict[str, Any]] = None):
+        """Log an error event to the system log.
+        
+        Args:
+            operation: The operation being performed
+            error_message: Error message
+            details: Optional details as a dictionary
+        """
+        try:
+            if not details:
+                details = {}
+            details["error"] = error_message
+            
+            log_entry = SystemLog(
+                log_type="error",
+                component=f"{self.agent_type}_agent",
+                message=f"Error during {operation}",
+                meta_data=json.dumps(details)
+            )
+            db.session.add(log_entry)
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Error logging error: {e}")
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get agent statistics and performance metrics."""
-        uptime = time.time() - self._initialized_at
+        """Get statistics for this agent.
         
-        stats = {
+        Returns:
+            Dictionary with agent statistics
+        """
+        return {
             "agent_type": self.agent_type,
-            "uptime": uptime,
-            "cycle_count": self._cycle_count,
-            "successful_cycles": self._successful_cycles,
-            "error_count": self._error_count,
-            "refresh_interval": self.refresh_interval
+            "running": self.is_running,
+            "cycle_count": self.cycle_count,
+            "error_count": self.error_count,
+            "last_cycle_time": self.last_cycle_time.isoformat() if self.last_cycle_time else None,
+            "last_cycle_duration": self.last_cycle_duration,
+            "last_error": self.last_error
         }
-        
-        # Add last cycle time if we've completed at least one cycle
-        if self._last_cycle_end > 0:
-            stats["last_cycle_duration"] = self._last_cycle_end - self._last_cycle_start
-            stats["last_cycle_completed_at"] = self._last_cycle_end
-        
-        return stats
