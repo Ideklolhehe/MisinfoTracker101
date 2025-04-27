@@ -57,7 +57,8 @@ class IPFSEvidenceStore:
             except Exception as e:
                 logger.error(f"Failed to connect to IPFS daemon: {e}")
                 self._log_error("client_connection", f"Failed to connect to IPFS: {e}")
-                raise ConnectionError(f"Failed to connect to IPFS daemon: {e}")
+                # Return None instead of raising an error - this will trigger the fallback path
+                return None
         return self._client
     
     def store_evidence(self, instance_id: int) -> Optional[str]:
@@ -102,6 +103,9 @@ class IPFSEvidenceStore:
                     temp.write(evidence_json)
                 
                 # Add to IPFS
+                if self.client is None:
+                    raise ConnectionError("IPFS client not available")
+                    
                 result = self.client.add(temp_path)
                 ipfs_hash = result['Hash']
                 
@@ -178,6 +182,9 @@ class IPFSEvidenceStore:
                     temp_path = temp.name
                 
                 # Get the file from IPFS
+                if self.client is None:
+                    raise ConnectionError("IPFS client not available")
+                    
                 self.client.get(evidence_hash, temp_path)
                 
                 # Read the content
