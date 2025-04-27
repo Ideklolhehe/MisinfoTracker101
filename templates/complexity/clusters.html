@@ -1,0 +1,425 @@
+{% extends 'base.html' %}
+
+{% block title %}Narrative Complexity Clusters{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .clusters-header {
+        background: linear-gradient(135deg, var(--bs-dark-bg-subtle) 0%, var(--bs-tertiary-bg) 100%);
+        padding: 2rem;
+        border-radius: 0.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid var(--bs-border-color);
+    }
+    .dashboard-card {
+        border-radius: 0.75rem;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .card-header-custom {
+        background: var(--bs-dark);
+        color: var(--bs-white);
+        padding: 1rem 1.5rem;
+        font-weight: 600;
+        border-bottom: none;
+    }
+    .cluster-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .cluster-card {
+        flex: 1 1 300px;
+        background: var(--bs-tertiary-bg);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+    }
+    .cluster-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .cluster-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+    .cluster-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .cluster-count {
+        background: var(--bs-primary);
+        color: white;
+        width: 2.5rem;
+        height: 2.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-weight: 700;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+    .profile-container {
+        background: rgba(0,0,0,0.03);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .profile-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+    }
+    .profile-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .profile-chart {
+        height: 120px;
+        margin-bottom: 0.5rem;
+    }
+    .narratives-list {
+        margin-top: 1rem;
+        max-height: 200px;
+        overflow-y: auto;
+        padding-right: 0.5rem;
+    }
+    .narratives-list::-webkit-scrollbar {
+        width: 6px;
+    }
+    .narratives-list::-webkit-scrollbar-track {
+        background: var(--bs-tertiary-bg);
+    }
+    .narratives-list::-webkit-scrollbar-thumb {
+        background-color: var(--bs-secondary);
+        border-radius: 6px;
+    }
+    .narrative-item {
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        background: rgba(0,0,0,0.03);
+        margin-bottom: 0.5rem;
+        transition: all 0.2s ease;
+    }
+    .narrative-item:hover {
+        background: rgba(0,0,0,0.06);
+        transform: translateY(-2px);
+    }
+    .narrative-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .narrative-meta {
+        font-size: 0.8rem;
+        color: var(--bs-secondary);
+    }
+    .action-btns {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    .action-btn {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .insights-panel {
+        background-color: var(--bs-dark-bg-subtle);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .insights-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .insights-icon {
+        font-size: 1.5rem;
+        color: var(--bs-primary);
+    }
+    .badge-feature {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        background-color: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary);
+        border: 1px solid var(--bs-primary);
+        margin-left: 0.5rem;
+    }
+    .cluster-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 1rem;
+    }
+    .dimension-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 1rem 0;
+    }
+    .dimension-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.8rem;
+    }
+    .dimension-color {
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+    }
+    .empty-icon {
+        font-size: 3rem;
+        color: var(--bs-secondary);
+        margin-bottom: 1rem;
+    }
+    .filters-container {
+        background-color: var(--bs-tertiary-bg);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="clusters-header">
+        <h1 class="mb-3">
+            <i class="bi bi-diagram-3 me-2"></i>
+            Narrative Complexity Clusters
+        </h1>
+        <p class="lead mb-0">Groups of narratives with similar complexity profiles, potentially indicating coordinated campaigns.</p>
+    </div>
+
+    <div class="filters-container">
+        <div class="row">
+            <div class="col-12">
+                <div class="metrics-summary">
+                    <div class="row">
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="card bg-dark text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Total Narratives</h5>
+                                    <h2 class="display-5">{{ narratives_count }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Distinct Clusters</h5>
+                                    <h2 class="display-5">{{ clusters|length }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Largest Cluster</h5>
+                                    <h2 class="display-5">
+                                        {% if clusters %}
+                                            {{ clusters[0]|length }}
+                                        {% else %}
+                                            0
+                                        {% endif %}
+                                    </h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="insights-panel">
+        <div class="insights-header">
+            <i class="bi bi-lightbulb-fill insights-icon"></i>
+            <h4 class="mb-0">Clustering Insights <span class="badge-feature">AI-POWERED</span></h4>
+        </div>
+        <div>
+            {% if clusters and clusters|length > 0 %}
+                <p>Analysis has identified {{ clusters|length }} distinct narrative clusters with similar complexity profiles. The largest cluster contains {{ clusters[0]|length }} narratives, suggesting possible coordination or similar information tactics.</p>
+                
+                {% if clusters|length > 1 %}
+                    <p>Examining differences between clusters may reveal distinct misinformation strategies at work. Large clusters with high emotional manipulation scores are particularly noteworthy as potential coordinated campaigns.</p>
+                {% endif %}
+            {% else %}
+                <p>No significant narrative clusters have been detected. This could indicate a diverse set of narratives without obvious coordination, or insufficient data for clustering.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="dimension-legend">
+        <div class="dimension-item">
+            <div class="dimension-color" style="background-color: rgba(54, 162, 235, 0.8);"></div>
+            <span>Linguistic</span>
+        </div>
+        <div class="dimension-item">
+            <div class="dimension-color" style="background-color: rgba(75, 192, 192, 0.8);"></div>
+            <span>Logical</span>
+        </div>
+        <div class="dimension-item">
+            <div class="dimension-color" style="background-color: rgba(255, 205, 86, 0.8);"></div>
+            <span>Rhetorical</span>
+        </div>
+        <div class="dimension-item">
+            <div class="dimension-color" style="background-color: rgba(255, 99, 132, 0.8);"></div>
+            <span>Emotional</span>
+        </div>
+    </div>
+
+    {% if clusters and clusters|length > 0 %}
+        <div class="cluster-container">
+            {% for cluster in clusters %}
+                {% if cluster|length >= 3 %}  <!-- Only show meaningful clusters -->
+                <div class="cluster-card">
+                    <div class="cluster-header">
+                        <h3 class="cluster-title">Cluster #{{ loop.index }}</h3>
+                        <div class="cluster-count">{{ cluster|length }}</div>
+                    </div>
+                    
+                    <div class="profile-container">
+                        <div class="profile-header">
+                            <div class="profile-title">Complexity Profile</div>
+                        </div>
+                        <div class="profile-chart">
+                            <canvas id="clusterProfile{{ loop.index }}"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="narratives-list">
+                        {% for narrative in cluster %}
+                        <div class="narrative-item">
+                            <div class="narrative-title" title="{{ narrative.title }}">{{ narrative.title }}</div>
+                            <div class="narrative-meta">
+                                #{{ narrative.id }} | {{ narrative.overall_score|round(1) }}/10
+                            </div>
+                            <div class="action-btns">
+                                <a href="{{ url_for('complexity.view_complexity', narrative_id=narrative.id) }}" class="btn btn-sm btn-outline-primary action-btn">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                                <a href="{{ url_for('complexity.view_narrative_prediction', narrative_id=narrative.id) }}" class="btn btn-sm btn-outline-secondary action-btn">
+                                    <i class="bi bi-graph-up"></i> Predict
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="cluster-actions">
+                        <a href="{{ url_for('complexity.compare') }}?ids={{ cluster|map(attribute='id')|join(',') }}" class="btn btn-primary">
+                            <i class="bi bi-bar-chart"></i> Compare All
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="bi bi-diagram-3"></i>
+            </div>
+            <h3>No Significant Clusters Found</h3>
+            <p class="text-muted">There are currently no significant clusters of narratives with similar complexity profiles.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up cluster profile charts
+        {% for cluster in clusters %}
+            {% if cluster|length >= 3 %}
+                setupClusterProfile({{ loop.index }}, [
+                    {{ cluster|map(attribute='linguistic_score')|list|sum / cluster|length }},
+                    {{ cluster|map(attribute='logical_score')|list|sum / cluster|length }},
+                    {{ cluster|map(attribute='rhetorical_score')|list|sum / cluster|length }},
+                    {{ cluster|map(attribute='emotional_score')|list|sum / cluster|length }}
+                ]);
+            {% endif %}
+        {% endfor %}
+    });
+    
+    function setupClusterProfile(index, scores) {
+        const ctx = document.getElementById(`clusterProfile${index}`).getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Linguistic', 'Logical', 'Rhetorical', 'Emotional'],
+                datasets: [{
+                    label: 'Average Score',
+                    data: scores,
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    pointBackgroundColor: [
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 205, 86, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgba(54, 162, 235, 1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 10,
+                        ticks: {
+                            stepSize: 2,
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.raw.toFixed(1) + '/10';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

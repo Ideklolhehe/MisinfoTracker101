@@ -11,6 +11,7 @@ from services.complexity_analyzer import ComplexityAnalyzer
 from services.complexity_scheduler import ComplexityScheduler
 from services.export_service import ComplexityReportExporter
 from services.complexity_alerts import ComplexityAlertService
+from services.complexity_predictor import ComplexityPredictor
 from utils.app_context import ensure_app_context
 
 # Initialize services
@@ -754,6 +755,177 @@ def get_counter_recommendations(narrative_id):
     except Exception as e:
         logger.error(f"Error in counter recommendations API endpoint: {e}")
         return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/api/predict/<int:narrative_id>', methods=['GET'])
+@login_required
+def predict_narrative_complexity(narrative_id):
+    """
+    API endpoint to predict future complexity for a narrative.
+    
+    Args:
+        narrative_id: ID of the narrative to predict
+        
+    Returns:
+        JSON with prediction results
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get prediction days from request
+        days_ahead = request.args.get('days', 7, type=int)
+        
+        # Validate parameters
+        if not isinstance(days_ahead, int) or days_ahead < 1 or days_ahead > 30:
+            return jsonify({"error": "Invalid 'days' parameter. Must be an integer between 1 and 30"}), 400
+        
+        # Make prediction
+        prediction = ComplexityPredictor.predict_narrative_evolution(narrative_id, days_ahead)
+        
+        if "error" in prediction:
+            return jsonify({"error": prediction["error"]}), 400
+            
+        return jsonify(prediction)
+        
+    except Exception as e:
+        logger.error(f"Error in complexity prediction API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/api/similar-trajectories/<int:narrative_id>', methods=['GET'])
+@login_required
+def get_similar_trajectories(narrative_id):
+    """
+    API endpoint to find narratives with similar complexity trajectories.
+    
+    Args:
+        narrative_id: ID of the narrative to compare with others
+        
+    Returns:
+        JSON with similar narratives
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get similar narratives
+        similar = ComplexityPredictor.get_similar_trajectories(narrative_id)
+        
+        if "error" in similar:
+            return jsonify({"error": similar["error"]}), 400
+            
+        return jsonify(similar)
+        
+    except Exception as e:
+        logger.error(f"Error in similar trajectories API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/api/trending', methods=['GET'])
+@login_required
+def get_trending_narratives():
+    """
+    API endpoint to get narratives with strong upward complexity trends.
+    
+    Returns:
+        JSON with trending narratives
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get parameters from request
+        days = request.args.get('days', 30, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        
+        # Validate parameters
+        if not isinstance(days, int) or days < 1 or days > 90:
+            return jsonify({"error": "Invalid 'days' parameter. Must be an integer between 1 and 90"}), 400
+            
+        if not isinstance(limit, int) or limit < 1 or limit > 50:
+            return jsonify({"error": "Invalid 'limit' parameter. Must be an integer between 1 and 50"}), 400
+        
+        # Get trending narratives
+        trending = ComplexityPredictor.get_trending_narratives(days, limit)
+        
+        if "error" in trending:
+            return jsonify({"error": trending["error"]}), 400
+            
+        return jsonify(trending)
+        
+    except Exception as e:
+        logger.error(f"Error in trending narratives API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/predict/<int:narrative_id>', methods=['GET'])
+@login_required
+def view_narrative_prediction(narrative_id):
+    """
+    View complexity prediction for a specific narrative.
+    
+    Args:
+        narrative_id: ID of the narrative to predict
+        
+    Returns:
+        HTML page with complexity prediction
+    """
+    try:
+        # Get narrative
+        narrative = DetectedNarrative.query.get(narrative_id)
+        if not narrative:
+            return render_template('error.html', message=f"Narrative with ID {narrative_id} not found"), 404
+        
+        # Get days from request
+        days_ahead = request.args.get('days', 7, type=int)
+        
+        # Make prediction
+        prediction = ComplexityPredictor.predict_narrative_evolution(narrative_id, days_ahead)
+        
+        # Check if prediction failed
+        if "error" in prediction:
+            return render_template('error.html', message=prediction["error"]), 400
+        
+        # Get similar narratives
+        similar = ComplexityPredictor.get_similar_trajectories(narrative_id)
+        
+        return render_template(
+            'complexity/predict.html',
+            narrative=narrative,
+            prediction=prediction,
+            similar_narratives=similar.get('similar_narratives', []) if "error" not in similar else []
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in view prediction endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
+
+@complexity_bp.route('/complexity/trending', methods=['GET'])
+@login_required
+def view_trending_narratives():
+    """
+    View narratives with strong upward complexity trends.
+    
+    Returns:
+        HTML page with trending narratives
+    """
+    try:
+        # Get parameters from request
+        days = request.args.get('days', 30, type=int)
+        
+        # Get trending narratives
+        trending = ComplexityPredictor.get_trending_narratives(days, 20)
+        
+        return render_template(
+            'complexity/trending.html',
+            trending_narratives=trending.get('trending_narratives', []) if "error" not in trending else [],
+            days=days,
+            timestamp=trending.get('timestamp') if "error" not in trending else None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in trending narratives endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
 
 # Register blueprint
 app.register_blueprint(complexity_bp)
