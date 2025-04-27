@@ -80,6 +80,7 @@ with app.app_context():
     from routes.agents import agents_bp
     from routes.dev_auth import dev_auth_bp  # Development-only
     from routes.evidence import evidence_bp
+    from routes.complexity import complexity_bp
     
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -90,6 +91,7 @@ with app.app_context():
     app.register_blueprint(api_credentials_bp, url_prefix='/api-credentials')
     app.register_blueprint(rss_feeds_bp, url_prefix='/rss-feeds')
     app.register_blueprint(evidence_bp, url_prefix='/evidence')
+    app.register_blueprint(complexity_bp)  # No URL prefix needed since routes include '/complexity'
     app.register_blueprint(agents_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(home_bp)
