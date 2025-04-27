@@ -527,14 +527,233 @@ def complexity_trends():
                     'emotional_score': complexity_data.get('emotional_manipulation', {}).get('score'),
                 })
         
+        # Get active alerts
+        alerts = ComplexityAlertService.get_all_active_alerts()
+        
         return render_template(
             'complexity/trends.html',
-            narratives=narratives_with_complexity
+            narratives=narratives_with_complexity,
+            alerts=alerts
         )
         
     except Exception as e:
         logger.error(f"Error in complexity trends endpoint: {e}")
         return render_template('error.html', message=str(e)), 500
+
+@complexity_bp.route('/complexity/api/alerts', methods=['GET'])
+@login_required
+def get_complexity_alerts():
+    """
+    API endpoint to get active complexity alerts.
+    
+    Returns:
+        JSON with alerts data
+    """
+    try:
+        # Get time period from request (default to last 7 days for change alerts)
+        days = request.args.get('days', 7, type=int)
+        
+        # Get alert type filter (optional)
+        alert_type = request.args.get('type', None)
+        
+        if alert_type == 'high_complexity':
+            alerts = ComplexityAlertService.check_high_complexity_alerts(days=1)
+        elif alert_type == 'rapid_change':
+            alerts = ComplexityAlertService.check_rapid_change_alerts(days=days)
+        elif alert_type == 'coordinated':
+            alerts = ComplexityAlertService.check_coordinated_narratives()
+        else:
+            # Get all alerts
+            alerts = ComplexityAlertService.get_all_active_alerts()
+        
+        return jsonify(alerts)
+        
+    except Exception as e:
+        logger.error(f"Error in complexity alerts API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@complexity_bp.route('/complexity/alerts', methods=['GET'])
+@login_required
+def complexity_alerts():
+    """
+    Display alerts for narrative complexity.
+    
+    Returns:
+        HTML page with complexity alerts
+    """
+    try:
+        # Get all active alerts
+        alerts = ComplexityAlertService.get_all_active_alerts()
+        
+        # Get narratives for context
+        narrative_ids = set()
+        
+        # Collect all narrative IDs from different alert types
+        for alert_type, alert_list in alerts.items():
+            if alert_type != 'total_count':
+                for alert in alert_list:
+                    if 'narrative_id' in alert:
+                        narrative_ids.add(alert['narrative_id'])
+                    elif 'narrative_ids' in alert:
+                        narrative_ids.update(alert['narrative_ids'])
+        
+        # Get narrative details
+        narratives = {}
+        for narrative_id in narrative_ids:
+            narrative = DetectedNarrative.query.get(narrative_id)
+            if narrative:
+                narratives[narrative_id] = {
+                    'id': narrative.id,
+                    'title': narrative.title,
+                    'status': narrative.status,
+                    'last_updated': narrative.last_updated
+                }
+        
+        return render_template(
+            'complexity/alerts.html',
+            alerts=alerts,
+            narratives=narratives
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in complexity alerts endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
+
+@complexity_bp.route('/complexity/clusters', methods=['GET'])
+@login_required
+def narrative_clusters():
+    """
+    Display clusters of narratives with similar complexity patterns.
+    
+    Returns:
+        HTML page with narrative clusters
+    """
+    try:
+        # Get narratives with complexity analysis
+        narratives_with_complexity = []
+        
+        narratives = DetectedNarrative.query.filter(
+            DetectedNarrative.status == 'active'
+        ).all()
+        
+        for narrative in narratives:
+            if not narrative.meta_data:
+                continue
+                
+            try:
+                metadata = json.loads(narrative.meta_data)
+                complexity_data = metadata.get('complexity_analysis', {})
+                
+                if not complexity_data or 'overall_complexity_score' not in complexity_data:
+                    continue
+                
+                # Extract complexity profile
+                narratives_with_complexity.append({
+                    'id': narrative.id,
+                    'title': narrative.title,
+                    'status': narrative.status,
+                    'last_updated': narrative.last_updated,
+                    'overall_score': complexity_data.get('overall_complexity_score', 0),
+                    'linguistic_score': complexity_data.get('linguistic_complexity', {}).get('score', 0),
+                    'logical_score': complexity_data.get('logical_structure', {}).get('score', 0),
+                    'rhetorical_score': complexity_data.get('rhetorical_techniques', {}).get('score', 0),
+                    'emotional_score': complexity_data.get('emotional_manipulation', {}).get('score', 0),
+                })
+                
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+        
+        # Get narrative clusters
+        clusters = ComplexityAlertService._cluster_similar_narratives(narratives_with_complexity)
+        
+        return render_template(
+            'complexity/clusters.html',
+            clusters=clusters,
+            narratives_count=len(narratives_with_complexity)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in narrative clusters endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
+
+@complexity_bp.route('/complexity/api/counter-integration/<int:narrative_id>', methods=['GET'])
+@login_required
+def get_counter_recommendations(narrative_id):
+    """
+    API endpoint to get counter-narrative recommendations based on complexity analysis.
+    
+    Args:
+        narrative_id: ID of the narrative to get recommendations for
+        
+    Returns:
+        JSON with counter-narrative recommendations
+    """
+    try:
+        # Check if the user has appropriate role
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Unauthorized: Insufficient privileges"}), 403
+        
+        # Get narrative data
+        narrative = DetectedNarrative.query.get(narrative_id)
+        if not narrative:
+            return jsonify({"error": f"Narrative with ID {narrative_id} not found"}), 404
+        
+        # Extract complexity data from narrative metadata
+        complexity_data = {}
+        if narrative.meta_data:
+            try:
+                metadata = json.loads(narrative.meta_data)
+                complexity_data = metadata.get('complexity_analysis', {})
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(f"Could not parse metadata for narrative {narrative_id}")
+        
+        # Check if we have complexity data
+        if not complexity_data or 'overall_complexity_score' not in complexity_data:
+            return jsonify({"error": f"No complexity data available for narrative {narrative_id}"}), 404
+        
+        # Generate counter-narrative recommendations based on complexity profile
+        # This would normally call a method in a counter-narrative service
+        # For now, we'll return a placeholder response
+        recommendations = {
+            'narrative_id': narrative_id,
+            'complexity_profile': {
+                'overall': complexity_data.get('overall_complexity_score'),
+                'linguistic': complexity_data.get('linguistic_complexity', {}).get('score'),
+                'logical': complexity_data.get('logical_structure', {}).get('score'),
+                'rhetorical': complexity_data.get('rhetorical_techniques', {}).get('score'),
+                'emotional': complexity_data.get('emotional_manipulation', {}).get('score')
+            },
+            'recommendations': []
+        }
+        
+        # Add recommendations based on high dimension scores
+        dimensions = [
+            ('linguistic_complexity', 'Linguistic Complexity', 'Simplify language and explain complex terms.'),
+            ('logical_structure', 'Logical Structure', 'Focus on clear, linear reasoning and address logical fallacies directly.'),
+            ('rhetorical_techniques', 'Rhetorical Techniques', 'Avoid matching rhetorical flourish; instead use evidence-based, direct counters.'),
+            ('emotional_manipulation', 'Emotional Manipulation', 'Acknowledge emotions but redirect to factual analysis and reasoned discussion.')
+        ]
+        
+        for dim_key, dim_name, strategy in dimensions:
+            dim_score = complexity_data.get(dim_key, {}).get('score', 0)
+            if dim_score >= 7.0:
+                recommendations['recommendations'].append({
+                    'dimension': dim_key,
+                    'dimension_name': dim_name,
+                    'score': dim_score,
+                    'priority': 'high' if dim_score >= 8.0 else 'medium',
+                    'strategy': strategy,
+                    'techniques': [
+                        f"Counter high {dim_name.lower()} with clear, accessible narratives",
+                        f"Focus on addressing the specific {dim_name.lower()} techniques identified"
+                    ]
+                })
+        
+        return jsonify(recommendations)
+        
+    except Exception as e:
+        logger.error(f"Error in counter recommendations API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # Register blueprint
 app.register_blueprint(complexity_bp)
