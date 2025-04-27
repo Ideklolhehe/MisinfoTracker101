@@ -457,6 +457,14 @@ def initialize_app():
 
 # All blueprints are registered in app.py now
 
+# Apply development authentication fix
+try:
+    from fix_auth import patch_replit_auth
+    if patch_replit_auth():
+        logger.warning("Applied development auth patch - NOT FOR PRODUCTION")
+except Exception as e:
+    logger.error(f"Failed to apply development auth patch: {e}")
+
 # Initialize the app when imported
 with app.app_context():
     initialize_app()

@@ -39,6 +39,7 @@ dependencies = [
     "python-jwt>=4.1.0",
     "pillow>=11.2.1",
     "cryptography>=44.0.2",
+    "htmltools==0.6.0",
 ]
 
 [tool.uv.sources]
