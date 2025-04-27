@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Agent Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">CIVILIAN Multi-Agent System Dashboard</h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-dark">
+                    <h5 class="card-title mb-0">System Status</h5>
+                </div>
+                <div class="card-body">
+                    <div id="system-status-loading" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div id="system-status" class="d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5>Status:</h5>
+                            <span id="status-badge" class="badge"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Active Agents:</span>
+                            <span id="agent-count">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Total Cycles:</span>
+                            <span id="total-cycles">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Total Errors:</span>
+                            <span id="total-errors">-</span>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button id="start-agents-btn" class="btn btn-success">Start Agents</button>
+                            <button id="stop-agents-btn" class="btn btn-danger">Stop Agents</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-dark">
+                    <h5 class="card-title mb-0">Agent Performance</h5>
+                </div>
+                <div class="card-body">
+                    <div id="agent-stats-loading" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div id="agent-stats" class="d-none">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Agent</th>
+                                    <th>Cycles</th>
+                                    <th>Errors</th>
+                                    <th>Last Cycle</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agent-stats-body">
+                                <!-- Will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Agent Logs</h5>
+                    <button id="refresh-logs-btn" class="btn btn-sm btn-secondary">Refresh</button>
+                </div>
+                <div class="card-body">
+                    <div id="agent-logs-loading" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div id="agent-logs" class="d-none">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Component</th>
+                                        <th>Type</th>
+                                        <th>Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="agent-logs-body">
+                                    <!-- Will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Format timestamp
+    function formatTimestamp(isoTimestamp) {
+        const date = new Date(isoTimestamp);
+        return date.toLocaleString();
+    }
+    
+    // Format duration
+    function formatDuration(seconds) {
+        if (!seconds) return '-';
+        
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        
+        if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${remainingSeconds}s`;
+        } else {
+            return `${remainingSeconds}s`;
+        }
+    }
+    
+    // Fetch system status
+    function fetchSystemStatus() {
+        $('#system-status-loading').removeClass('d-none');
+        $('#system-status').addClass('d-none');
+        $('#agent-stats-loading').removeClass('d-none');
+        $('#agent-stats').addClass('d-none');
+        
+        $.ajax({
+            url: '/agents/stats',
+            method: 'GET',
+            success: function(data) {
+                if (data.success) {
+                    updateSystemStatus(data.system_status);
+                } else {
+                    console.error('Error fetching agent stats:', data.error);
+                    showErrorAlert('Error fetching agent stats: ' + data.error);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error fetching agent stats:', error);
+                showErrorAlert('Error fetching agent stats: ' + error);
+            },
+            complete: function() {
+                $('#system-status-loading').addClass('d-none');
+                $('#system-status').removeClass('d-none');
+                $('#agent-stats-loading').addClass('d-none');
+                $('#agent-stats').removeClass('d-none');
+            }
+        });
+    }
+    
+    // Update system status display
+    function updateSystemStatus(status) {
+        // Update status badge
+        const statusBadge = $('#status-badge');
+        if (status.status === 'running') {
+            statusBadge.text('Running').removeClass('bg-danger').addClass('bg-success');
+            $('#start-agents-btn').prop('disabled', true);
+            $('#stop-agents-btn').prop('disabled', false);
+        } else {
+            statusBadge.text('Stopped').removeClass('bg-success').addClass('bg-danger');
+            $('#start-agents-btn').prop('disabled', false);
+            $('#stop-agents-btn').prop('disabled', true);
+        }
+        
+        // Update summary metrics
+        $('#agent-count').text(status.agent_count);
+        $('#total-cycles').text(status.total_cycles);
+        $('#total-errors').text(status.total_errors);
+        
+        // Update agent stats table
+        const tbody = $('#agent-stats-body');
+        tbody.empty();
+        
+        // Add rows for each agent
+        if (status.agent_details) {
+            Object.entries(status.agent_details).forEach(function([agentType, agentStats]) {
+                const lastCycleDuration = agentStats.last_cycle_duration ? 
+                    `${agentStats.last_cycle_duration.toFixed(2)}s` : '-';
+                
+                const row = $('<tr>');
+                row.append($('<td>').text(agentType));
+                row.append($('<td>').text(agentStats.cycle_count || 0));
+                row.append($('<td>').text(agentStats.error_count || 0));
+                row.append($('<td>').text(lastCycleDuration));
+                tbody.append(row);
+            });
+        }
+    }
+    
+    // Fetch agent logs
+    function fetchAgentLogs() {
+        $('#agent-logs-loading').removeClass('d-none');
+        $('#agent-logs').addClass('d-none');
+        
+        $.ajax({
+            url: '/agents/logs',
+            method: 'GET',
+            success: function(data) {
+                if (data.success) {
+                    updateAgentLogs(data.logs);
+                } else {
+                    console.error('Error fetching agent logs:', data.error);
+                    showErrorAlert('Error fetching agent logs: ' + data.error);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error fetching agent logs:', error);
+                showErrorAlert('Error fetching agent logs: ' + error);
+            },
+            complete: function() {
+                $('#agent-logs-loading').addClass('d-none');
+                $('#agent-logs').removeClass('d-none');
+            }
+        });
+    }
+    
+    // Update agent logs display
+    function updateAgentLogs(logs) {
+        const tbody = $('#agent-logs-body');
+        tbody.empty();
+        
+        logs.forEach(function(log) {
+            const row = $('<tr>');
+            
+            // Set row color based on log type
+            if (log.log_type === 'error') {
+                row.addClass('table-danger');
+            } else if (log.log_type === 'warning') {
+                row.addClass('table-warning');
+            }
+            
+            row.append($('<td>').text(formatTimestamp(log.timestamp)));
+            row.append($('<td>').text(log.component));
+            row.append($('<td>').text(log.log_type));
+            row.append($('<td>').text(log.message));
+            
+            tbody.append(row);
+        });
+        
+        if (logs.length === 0) {
+            const emptyRow = $('<tr>');
+            emptyRow.append($('<td colspan="4" class="text-center">').text('No logs available'));
+            tbody.append(emptyRow);
+        }
+    }
+    
+    // Start agents
+    function startAgents() {
+        $('#start-agents-btn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Starting...');
+        
+        $.ajax({
+            url: '/agents/start',
+            method: 'POST',
+            success: function(data) {
+                if (data.success) {
+                    showSuccessAlert('Agents started successfully');
+                    fetchSystemStatus();
+                } else {
+                    console.error('Error starting agents:', data.error);
+                    showErrorAlert('Error starting agents: ' + data.error);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error starting agents:', error);
+                showErrorAlert('Error starting agents: ' + error);
+            },
+            complete: function() {
+                $('#start-agents-btn').prop('disabled', false).text('Start Agents');
+            }
+        });
+    }
+    
+    // Stop agents
+    function stopAgents() {
+        $('#stop-agents-btn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Stopping...');
+        
+        $.ajax({
+            url: '/agents/stop',
+            method: 'POST',
+            success: function(data) {
+                if (data.success) {
+                    showSuccessAlert('Agents stopped successfully');
+                    fetchSystemStatus();
+                } else {
+                    console.error('Error stopping agents:', data.error);
+                    showErrorAlert('Error stopping agents: ' + data.error);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error stopping agents:', error);
+                showErrorAlert('Error stopping agents: ' + error);
+            },
+            complete: function() {
+                $('#stop-agents-btn').prop('disabled', false).text('Stop Agents');
+            }
+        });
+    }
+    
+    // Show success alert
+    function showSuccessAlert(message) {
+        const alertHtml = `
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        $('.container').prepend(alertHtml);
+    }
+    
+    // Show error alert
+    function showErrorAlert(message) {
+        const alertHtml = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        $('.container').prepend(alertHtml);
+    }
+    
+    // Initialize the dashboard
+    $(document).ready(function() {
+        // Fetch initial data
+        fetchSystemStatus();
+        fetchAgentLogs();
+        
+        // Set up refresh interval (every 10 seconds)
+        setInterval(fetchSystemStatus, 10000);
+        
+        // Set up button event handlers
+        $('#start-agents-btn').click(startAgents);
+        $('#stop-agents-btn').click(stopAgents);
+        $('#refresh-logs-btn').click(fetchAgentLogs);
+    });
+</script>
+{% endblock %}
