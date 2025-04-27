@@ -936,20 +936,13 @@ def features():
         HTML page with feature details
     """
     try:
-        # Debug messages
-        current_app.logger.info("Attempting to render the features page")
-        
-        # Use a simplified template to debug the issue
-        return render_template('complexity/features_simple.html')
-        
+        return render_template('complexity/features.html')
     except Exception as e:
         # Detailed error logging
         import traceback
         error_traceback = traceback.format_exc()
         current_app.logger.error(f"Error in features page endpoint: {e}")
         current_app.logger.error(f"Traceback: {error_traceback}")
-        
-        # Return simple error
-        return render_template('error.html', message=str(e)), 500
+        return render_template('error.html', message=f"Error loading features page: {str(e)}"), 500
 
 # Blueprint is registered in app.py
