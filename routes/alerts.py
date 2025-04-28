@@ -4,7 +4,7 @@ Routes for misinformation alert system.
 
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, render_template, abort, redirect, url_for, flash
 from flask_login import login_required, current_user
 
