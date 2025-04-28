@@ -248,12 +248,18 @@
                 <p class="mb-0"><small>{{ narrative.description|truncate(200) }}</small></p>
             </div>
             <div class="col-md-3 text-end">
-                {% if current_user.role in ['admin', 'analyst', 'researcher'] %}
-                <button id="analyze-btn" class="btn btn-primary analyze-btn" data-narrative-id="{{ narrative.id }}">
-                    <i class="bi bi-gear-fill me-1"></i>
-                    {% if has_complexity_data %}Re-analyze{% else %}Analyze{% endif %}
-                </button>
-                {% endif %}
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="/prediction/what-if/{{ narrative.id }}" class="btn btn-success">
+                        <i class="bi bi-diagram-3 me-1"></i>
+                        What-If Analysis
+                    </a>
+                    {% if current_user.role in ['admin', 'analyst', 'researcher'] %}
+                    <button id="analyze-btn" class="btn btn-primary analyze-btn" data-narrative-id="{{ narrative.id }}">
+                        <i class="bi bi-gear-fill me-1"></i>
+                        {% if has_complexity_data %}Re-analyze{% else %}Analyze{% endif %}
+                    </button>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
