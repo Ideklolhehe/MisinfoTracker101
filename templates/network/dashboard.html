@@ -90,9 +90,11 @@
                         <label for="topN" class="form-label">Top central narratives:</label>
                         <input type="number" class="form-control" id="topN" name="top_n" min="1" max="20" value="{{ top_n|default(5) }}">
                     </div>
-                    <div class="col-md-3 mb-2">
+                    <div class="col-md-6 mb-2">
                         <button type="submit" class="btn btn-primary">Apply Filters</button>
                         <a href="/network/campaigns" class="btn btn-outline-secondary ms-2">View Campaigns</a>
+                        <a href="/network/communities" class="btn btn-outline-info ms-2">Louvain Communities</a>
+                        <a href="/network/streaming/denstream" class="btn btn-outline-success ms-2">DenStream Clusters</a>
                     </div>
                 </form>
             </div>
