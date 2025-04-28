@@ -194,6 +194,21 @@ class AnalyzerAgent:
                     "density": nx.density(graph),
                     "key_nodes": [{"id": n, "centrality": c} for n, c in key_nodes]
                 }
+                
+            # Process with DenStream for streaming clustering
+            try:
+                from utils.stream_processor import process_narrative_with_denstream
+                stream_result = process_narrative_with_denstream(narrative_id)
+                if stream_result.get("status") == "success":
+                    # Add streaming cluster info to metadata
+                    metadata["streaming_cluster"] = {
+                        "cluster_id": stream_result.get("cluster_id"),
+                        "is_noise": stream_result.get("is_noise", False),
+                        "processed_at": datetime.utcnow().isoformat()
+                    }
+                    logger.info(f"Narrative {narrative_id} processed with DenStream: cluster={stream_result.get('cluster_id')}")
+            except Exception as e:
+                logger.warning(f"Failed to process narrative with DenStream: {e}")
             
             # Now update the narrative in a single transaction
             try:
