@@ -363,3 +363,61 @@ def api_denstream_clusters():
     except Exception as e:
         logger.error(f"Error in DenStream API endpoint: {e}")
         return jsonify({"error": str(e)}), 500
+        
+@network_bp.route('/network/streaming/clustream', methods=['GET'])
+@login_required
+def clustream_clusters():
+    """
+    View temporal clusters from CluStream streaming algorithm.
+    
+    Returns:
+        HTML page showing CluStream clustering results for temporal analysis
+    """
+    try:
+        # Check if user has access
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            abort(403, "Insufficient privileges to access temporal cluster analysis tools")
+        
+        # Initialize network analyzer
+        analyzer = NarrativeNetworkAnalyzer()
+        
+        # Get CluStream clusters
+        clusters = analyzer.get_clustream_clusters()
+        
+        return render_template(
+            'network/clustream.html',
+            clusters=clusters.get('clusters', []),
+            noise_points=clusters.get('noise_points', []),
+            total_processed=clusters.get('total_processed', 0),
+            generated_at=clusters.get('generated_at', '')
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in CluStream clusters endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
+        
+@network_bp.route('/network/api/streaming/clustream', methods=['GET'])
+@login_required
+def api_clustream_clusters():
+    """
+    API endpoint to get temporal clusters from CluStream streaming algorithm.
+    
+    Returns:
+        JSON with CluStream clustering results
+    """
+    try:
+        # Check if user has access
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Insufficient privileges"}), 403
+        
+        # Initialize network analyzer
+        analyzer = NarrativeNetworkAnalyzer()
+        
+        # Get CluStream clusters
+        clusters = analyzer.get_clustream_clusters()
+        
+        return jsonify(clusters)
+        
+    except Exception as e:
+        logger.error(f"Error in CluStream API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500

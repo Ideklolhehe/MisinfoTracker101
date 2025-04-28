@@ -457,7 +457,9 @@ class NarrativeNetworkAnalyzer:
                 embedding_dict = {i: float(val) for i, val in enumerate(embedding)}
                 
                 # Learn from this example with timestamp
-                self.clustream.learn_one(embedding_dict, time=timestamp.timestamp())
+                # Note: River's API changed and CluStream doesn't accept 'time' parameter directly
+                # We'll store the timestamp separately
+                self.clustream.learn_one(embedding_dict)
                 
                 # Get current clustering
                 cluster_id = self.clustream.predict_one(embedding_dict)
