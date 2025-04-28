@@ -87,6 +87,7 @@ with app.app_context():
     from routes.alerts import alerts_bp
     from routes.clusters import clusters_bp
     from routes.prediction import prediction_bp
+    from routes.network import network_bp
     
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -108,6 +109,7 @@ with app.app_context():
     app.register_blueprint(alerts_bp)  # Routes include '/alerts'
     app.register_blueprint(clusters_bp)  # Routes include '/clusters'
     app.register_blueprint(prediction_bp)  # Routes include '/prediction'
+    app.register_blueprint(network_bp)  # Routes include '/network'
     
     # Initialize external API clients
     from services.api_credential_manager import APICredentialManager
