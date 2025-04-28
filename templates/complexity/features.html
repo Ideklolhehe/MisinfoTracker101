@@ -30,6 +30,27 @@
         color: #333333;
     }
     
+    .feature-bullet-list {
+        list-style-type: none;
+        padding-left: 0;
+        margin-bottom: 0;
+    }
+    
+    .feature-bullet-list li {
+        position: relative;
+        padding-left: 1.5rem;
+        margin-bottom: 0.5rem;
+        color: #555;
+    }
+    
+    .feature-bullet-list li::before {
+        content: "•";
+        position: absolute;
+        left: 0.5rem;
+        color: var(--primary-blue);
+        font-weight: bold;
+    }
+    
     .features-header {
         background: linear-gradient(135deg, var(--light-blue) 0%, var(--light-purple) 100%);
         padding: 3rem 2rem;
@@ -249,219 +270,147 @@
         <p class="lead mb-0">Advanced tools for detecting, analyzing, and countering sophisticated misinformation</p>
     </div>
     
-    <div class="stats-container">
-        <div class="stat-card">
-            <div class="stat-value">6</div>
-            <div class="stat-label">Major Features</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">24+</div>
-            <div class="stat-label">Powerful Tools</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">10x</div>
-            <div class="stat-label">Analysis Speed</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">AI</div>
-            <div class="stat-label">Powered Insights</div>
-        </div>
-    </div>
+    <div class="row mt-5">
+        <div class="col-md-12">
+            <div class="card shadow-sm bg-white">
+                <div class="card-body p-4">
+                    <h2 class="mb-4 text-center">Core Features</h2>
 
-    <div class="feature-container">
-        <!-- Time-Series Analysis -->
-        <div class="row align-items-center feature-card">
-            <div class="col-lg-7 order-lg-2">
-                <div class="badge-new">NEW</div>
-                <div class="feature-icon">
-                    <i class="bi bi-graph-up-arrow"></i>
-                </div>
-                <h2 class="feature-title">Time-Series Analysis</h2>
-                <div class="tag-container">
-                    <span class="feature-tag">Trend Tracking</span>
-                    <span class="feature-tag">Pattern Detection</span>
-                    <span class="feature-tag">Visual Analytics</span>
-                </div>
-                <p class="feature-description">Track how narrative complexity evolves over time to identify patterns in misinformation campaigns and detect coordinated information operations.</p>
-                <ul class="feature-list">
-                    <li>Interactive time-series visualizations of complexity metrics</li>
-                    <li>Customizable time ranges from days to months</li>
-                    <li>Dimension-specific trend analysis</li>
-                    <li>AI-generated insights about evolving patterns</li>
-                </ul>
-                <div class="feature-action">
-                    <a href="{{ url_for('complexity.complexity_trends') }}" class="btn btn-primary feature-btn">
-                        <i class="bi bi-graph-up-arrow me-2"></i>View Trends
-                    </a>
-                </div>
-            </div>
-            <div class="col-lg-5 order-lg-1">
-                <img src="https://placehold.co/600x400?text=Trends+Visualization" alt="Time-Series Analysis" class="feature-image">
-            </div>
-        </div>
-        
-        <!-- Export Functionality -->
-        <div class="row align-items-center feature-card">
-            <div class="col-lg-7">
-                <div class="badge-new">NEW</div>
-                <div class="feature-icon">
-                    <i class="bi bi-file-earmark-arrow-down"></i>
-                </div>
-                <h2 class="feature-title">Export Functionality</h2>
-                <div class="tag-container">
-                    <span class="feature-tag">PDF Reports</span>
-                    <span class="feature-tag">CSV Data</span>
-                    <span class="feature-tag">Comparative Reports</span>
-                </div>
-                <p class="feature-description">Generate comprehensive reports and data exports to share findings with team members and include in broader analysis documents.</p>
-                <ul class="feature-list">
-                    <li>Detailed PDF reports with visualizations and insights</li>
-                    <li>Structured CSV data for external analysis</li>
-                    <li>Side-by-side comparative reports for multiple narratives</li>
-                    <li>Time-series data exports for trend analysis</li>
-                </ul>
-                <div class="feature-action">
-                    <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-primary feature-btn">
-                        <i class="bi bi-file-earmark-arrow-down me-2"></i>Export Reports
-                    </a>
-                </div>
-            </div>
-            <div class="col-lg-5">
-                <img src="https://placehold.co/600x400?text=Export+Functionality" alt="Export Functionality" class="feature-image">
-            </div>
-        </div>
-        
-        <!-- Alerting System -->
-        <div class="row align-items-center feature-card">
-            <div class="col-lg-7 order-lg-2">
-                <div class="badge-new">NEW</div>
-                <div class="feature-icon">
-                    <i class="bi bi-bell"></i>
-                </div>
-                <h2 class="feature-title">Alerting System</h2>
-                <div class="tag-container">
-                    <span class="feature-tag">Threshold Alerts</span>
-                    <span class="feature-tag">Rapid Change Detection</span>
-                    <span class="feature-tag">Early Warning</span>
-                </div>
-                <p class="feature-description">Receive automated alerts when narratives exceed complexity thresholds or show unusual patterns, enabling faster response to emerging threats.</p>
-                <ul class="feature-list">
-                    <li>Configurable thresholds for complexity dimensions</li>
-                    <li>Alerts for rapidly increasing complexity</li>
-                    <li>Detection of unusual pattern shifts</li>
-                    <li>Prioritized critical alerts dashboard</li>
-                </ul>
-                <div class="feature-action">
-                    <a href="{{ url_for('complexity.complexity_alerts') }}" class="btn btn-primary feature-btn">
-                        <i class="bi bi-bell me-2"></i>View Alerts
-                    </a>
-                </div>
-            </div>
-            <div class="col-lg-5 order-lg-1">
-                <img src="https://placehold.co/600x400?text=Alerting+System" alt="Alerting System" class="feature-image">
-            </div>
-        </div>
-        
-        <!-- Narrative Clustering -->
-        <div class="row align-items-center feature-card">
-            <div class="col-lg-7">
-                <div class="badge-new">NEW</div>
-                <div class="feature-icon">
-                    <i class="bi bi-diagram-3"></i>
-                </div>
-                <h2 class="feature-title">Narrative Clustering</h2>
-                <div class="tag-container">
-                    <span class="feature-tag">Pattern Matching</span>
-                    <span class="feature-tag">Coordinated Campaigns</span>
-                    <span class="feature-tag">Similarity Analysis</span>
-                </div>
-                <p class="feature-description">Group narratives with similar complexity patterns to identify coordinated campaigns and common misinformation techniques.</p>
-                <ul class="feature-list">
-                    <li>Automatic clustering of similar narratives</li>
-                    <li>Visual representation of narrative relationships</li>
-                    <li>Detection of coordinated campaign patterns</li>
-                    <li>Dimension-level similarity analysis</li>
-                </ul>
-                <div class="feature-action">
-                    <a href="{{ url_for('complexity.narrative_clusters') }}" class="btn btn-primary feature-btn">
-                        <i class="bi bi-diagram-3 me-2"></i>View Clusters
-                    </a>
-                </div>
-            </div>
-            <div class="col-lg-5">
-                <img src="https://placehold.co/600x400?text=Narrative+Clustering" alt="Narrative Clustering" class="feature-image">
-            </div>
-        </div>
-        
-        <!-- Predictive Modeling -->
-        <div class="row align-items-center feature-card">
-            <div class="col-lg-7 order-lg-2">
-                <div class="badge-new">NEW</div>
-                <div class="feature-icon">
-                    <i class="bi bi-lightbulb"></i>
-                </div>
-                <h2 class="feature-title">Predictive Modeling</h2>
-                <div class="tag-container">
-                    <span class="feature-tag">ML-Based Forecasting</span>
-                    <span class="feature-tag">Trend Prediction</span>
-                    <span class="feature-tag">Future Projections</span>
-                </div>
-                <p class="feature-description">Forecast how narrative complexity might evolve using machine learning models, giving analysts a powerful tool for anticipating misinformation campaigns.</p>
-                <ul class="feature-list">
-                    <li>AI-powered complexity trajectory forecasting</li>
-                    <li>Projected timeline to critical thresholds</li>
-                    <li>Confidence intervals for predictions</li>
-                    <li>Key factor identification for complexity drivers</li>
-                </ul>
-                <div class="feature-action">
-                    <a href="{{ url_for('complexity.view_narrative_prediction', narrative_id=1) }}" class="btn btn-primary feature-btn">
-                        <i class="bi bi-lightbulb me-2"></i>View Predictions
-                    </a>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Time-Series Analysis</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Interactive time-series visualizations of complexity metrics</li>
+                                <li>Customizable time ranges from days to months</li>
+                                <li>Dimension-specific trend analysis</li>
+                                <li>AI-generated insights about evolving patterns</li>
+                                <li>Visual comparison of multiple narrative evolution</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_trends') }}" class="btn btn-sm btn-primary mt-2">
+                                View Trends
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Export Functionality</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Detailed PDF reports with visualizations and insights</li>
+                                <li>Structured CSV data for external analysis</li>
+                                <li>Side-by-side comparative reports for multiple narratives</li>
+                                <li>Time-series data exports for trend analysis</li>
+                                <li>Standardized report formats for consistency</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-sm btn-primary mt-2">
+                                Export Reports
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Alerting System</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Configurable thresholds for complexity dimensions</li>
+                                <li>Alerts for rapidly increasing complexity</li>
+                                <li>Detection of unusual pattern shifts</li>
+                                <li>Prioritized critical alerts dashboard</li>
+                                <li>Multi-channel notifications (email, SMS, in-app)</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_alerts') }}" class="btn btn-sm btn-primary mt-2">
+                                View Alerts
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Narrative Clustering</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Automatic clustering of similar narratives</li>
+                                <li>Visual representation of narrative relationships</li>
+                                <li>Detection of coordinated campaign patterns</li>
+                                <li>Dimension-level similarity analysis</li>
+                                <li>Temporal mapping of narrative spread across clusters</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.narrative_clusters') }}" class="btn btn-sm btn-primary mt-2">
+                                View Clusters
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Predictive Modeling</h3>
+                            <ul class="feature-bullet-list">
+                                <li>AI-powered complexity trajectory forecasting</li>
+                                <li>Projected timeline to critical thresholds</li>
+                                <li>Confidence intervals for predictions</li>
+                                <li>Key factor identification for complexity drivers</li>
+                                <li>What-if scenario modeling for intervention planning</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.view_narrative_prediction', narrative_id=1) }}" class="btn btn-sm btn-primary mt-2">
+                                View Predictions
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Counter-Narrative Integration</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Dimension-specific counter-strategy recommendations</li>
+                                <li>Prioritized countering based on complexity profiles</li>
+                                <li>AI-generated counter-narrative approaches</li>
+                                <li>Effectiveness tracking for counter-measures</li>
+                                <li>Source targeting optimization for intervention</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-sm btn-primary mt-2">
+                                View Counter Approaches
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Dashboard Visualizations</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Customizable dashboard layouts</li>
+                                <li>Real-time complexity metrics</li>
+                                <li>Interactive dimension breakdown charts</li>
+                                <li>Geographic spread visualization</li>
+                                <li>Temporal heatmaps for intensity tracking</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-sm btn-primary mt-2">
+                                View Dashboard
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Comparative Analysis</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Side-by-side dimension comparison charts</li>
+                                <li>Relative growth rate analysis between narratives</li>
+                                <li>Correlation identification and quantification</li>
+                                <li>Shared theme detection across narratives</li>
+                                <li>Coordinated source analysis for linked narratives</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.compare') }}" class="btn btn-sm btn-primary mt-2">
+                                Compare Narratives
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="col-lg-5 order-lg-1">
-                <img src="https://placehold.co/600x400?text=Predictive+Modeling" alt="Predictive Modeling" class="feature-image">
+            
+            <div class="text-center mt-5 mb-5">
+                <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-lg btn-primary">
+                    <i class="bi bi-arrow-right-circle me-2"></i>Get Started Now
+                </a>
             </div>
         </div>
-        
-        <!-- Counter-Narrative Integration -->
-        <div class="row align-items-center feature-card">
-            <div class="col-lg-7">
-                <div class="badge-new">NEW</div>
-                <div class="feature-icon">
-                    <i class="bi bi-shield"></i>
-                </div>
-                <h2 class="feature-title">Counter-Narrative Integration</h2>
-                <div class="tag-container">
-                    <span class="feature-tag">Strategy Recommendations</span>
-                    <span class="feature-tag">Targeted Responses</span>
-                    <span class="feature-tag">AI-Driven Tactics</span>
-                </div>
-                <p class="feature-description">Connect complexity analysis with counter-narrative generation to create more effective responses based on specific manipulation techniques.</p>
-                <ul class="feature-list">
-                    <li>Dimension-specific counter-strategy recommendations</li>
-                    <li>Prioritized countering based on complexity profiles</li>
-                    <li>AI-generated counter-narrative approaches</li>
-                    <li>Effectiveness tracking for counter-measures</li>
-                </ul>
-                <div class="feature-action">
-                    <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-primary feature-btn">
-                        <i class="bi bi-shield me-2"></i>Counter Recommendations
-                    </a>
-                </div>
-            </div>
-            <div class="col-lg-5">
-                <img src="https://placehold.co/600x400?text=Counter-Narrative+Integration" alt="Counter-Narrative Integration" class="feature-image">
-            </div>
-        </div>
-    </div>
-    
-    <div class="cta-container">
-        <h2 class="cta-title">Experience the Power of Advanced Complexity Analysis</h2>
-        <p class="cta-description">Start using these powerful tools to detect, analyze, and counter sophisticated misinformation campaigns.</p>
-        <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn cta-btn">
-            <i class="bi bi-bar-chart-line me-2"></i>Go to Dashboard
-        </a>
     </div>
 </div>
 {% endblock %}
