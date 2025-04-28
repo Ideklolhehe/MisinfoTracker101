@@ -6,6 +6,7 @@ Connects the analyzer agents with streaming clustering algorithms.
 import logging
 import numpy as np
 from typing import Dict, Any, Optional
+from datetime import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from app import db
@@ -97,4 +98,44 @@ def process_narrative_with_denstream(narrative_id: int) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Error processing narrative with DenStream: {e}")
+        return {"narrative_id": narrative_id, "status": "error", "message": str(e)}
+
+def process_narrative_with_clustream(narrative_id: int, timestamp: Optional[datetime] = None) -> Dict[str, Any]:
+    """
+    Process a narrative with the CluStream algorithm for temporal clustering.
+    
+    Args:
+        narrative_id: ID of the narrative to process
+        timestamp: Optional timestamp for the narrative (if None, current time is used)
+        
+    Returns:
+        Dictionary containing the processing results
+    """
+    try:
+        # Get narrative embedding
+        embedding = get_narrative_embedding(narrative_id)
+        if embedding is None:
+            return {"narrative_id": narrative_id, "status": "error", "message": "Failed to create embedding"}
+        
+        # Use provided timestamp or narrative's first_detected timestamp or current time
+        if timestamp is None:
+            narrative = DetectedNarrative.query.get(narrative_id)
+            if narrative and narrative.first_detected:
+                timestamp = narrative.first_detected
+            else:
+                timestamp = datetime.utcnow()
+        
+        # Process with CluStream
+        cluster_id = network_analyzer.process_narrative_with_clustream(narrative_id, embedding, timestamp)
+        
+        return {
+            "narrative_id": narrative_id,
+            "status": "success",
+            "cluster_id": cluster_id,
+            "is_noise": cluster_id == -1,
+            "timestamp": timestamp.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing narrative with CluStream: {e}")
         return {"narrative_id": narrative_id, "status": "error", "message": str(e)}

@@ -45,8 +45,18 @@ class NarrativeNetworkAnalyzer:
             n_samples_init=20      # initial buffer size
         )
         
+        # Initialize CluStream for temporal analysis
+        self.clustream = cluster.CluStream(
+            n_macro_clusters=5,    # Number of macro clusters
+            time_window=1000,      # Time window
+            n_micro_clusters=50,   # Number of micro clusters
+            max_micro_clusters=100, # Maximum micro clusters
+            seed=42                # Random seed for reproducibility
+        )
+        
         # Narrative cluster mapping
         self.cluster_assignments = {}
+        self.clustream_assignments = {}
         self.cluster_centers = {}
         
         # Streaming data
@@ -425,6 +435,46 @@ class NarrativeNetworkAnalyzer:
             logger.error(f"Error processing narrative with DenStream: {e}")
             return -1
     
+    def process_narrative_with_clustream(self, narrative_id: int, embedding: np.ndarray, timestamp: Optional[datetime] = None) -> int:
+        """
+        Process a narrative with CluStream for temporal clustering.
+        
+        Args:
+            narrative_id: ID of the narrative
+            embedding: Vector embedding of the narrative content
+            timestamp: Optional timestamp for the narrative (if None, current time is used)
+            
+        Returns:
+            Assigned cluster ID
+        """
+        try:
+            with data_lock:
+                # Use current time if timestamp not provided
+                if timestamp is None:
+                    timestamp = datetime.utcnow()
+                
+                # Convert embedding to dict format for River
+                embedding_dict = {i: float(val) for i, val in enumerate(embedding)}
+                
+                # Learn from this example with timestamp
+                self.clustream.learn_one(embedding_dict, time=timestamp.timestamp())
+                
+                # Get current clustering
+                cluster_id = self.clustream.predict_one(embedding_dict)
+                
+                # Store assignment
+                self.clustream_assignments[narrative_id] = {
+                    'cluster_id': cluster_id, 
+                    'timestamp': timestamp.isoformat()
+                }
+                
+                logger.info(f"Narrative {narrative_id} assigned to temporal cluster {cluster_id}")
+                return cluster_id
+                
+        except Exception as e:
+            logger.error(f"Error processing narrative with CluStream: {e}")
+            return -1
+    
     def get_denstream_clusters(self) -> Dict[str, Any]:
         """
         Get the current DenStream clustering results.
@@ -485,6 +535,91 @@ class NarrativeNetworkAnalyzer:
             logger.error(f"Error getting DenStream clusters: {e}")
             return {'clusters': [], 'noise_points': [], 'total_processed': 0}
 
+    def get_clustream_clusters(self) -> Dict[str, Any]:
+        """
+        Get the current CluStream clustering results with temporal information.
+        
+        Returns:
+            Dictionary with temporal cluster information
+        """
+        try:
+            with data_lock:
+                # Group narratives by cluster
+                clusters = defaultdict(list)
+                for narrative_id, data in self.clustream_assignments.items():
+                    cluster_id = data['cluster_id']
+                    clusters[cluster_id].append((narrative_id, data['timestamp']))
+                
+                # Format clusters with time information
+                formatted_clusters = []
+                for cluster_id, narrative_data in clusters.items():
+                    # Skip noise cluster (-1)
+                    if cluster_id == -1:
+                        continue
+                    
+                    # Get narratives with timestamps
+                    narratives = []
+                    timestamps = []
+                    for nid, timestamp in narrative_data:
+                        narrative = DetectedNarrative.query.get(nid)
+                        if narrative:
+                            narratives.append({
+                                'id': narrative.id,
+                                'title': narrative.title,
+                                'confidence': float(narrative.confidence_score or 0),
+                                'status': narrative.status,
+                                'timestamp': timestamp
+                            })
+                            timestamps.append(datetime.fromisoformat(timestamp))
+                    
+                    # Sort narratives by timestamp
+                    narratives.sort(key=lambda x: x['timestamp'])
+                    
+                    # Calculate temporal statistics
+                    if timestamps:
+                        earliest = min(timestamps)
+                        latest = max(timestamps)
+                        duration = (latest - earliest).total_seconds()
+                        
+                        formatted_clusters.append({
+                            'id': cluster_id,
+                            'size': len(narratives),
+                            'narratives': narratives,
+                            'earliest': earliest.isoformat(),
+                            'latest': latest.isoformat(),
+                            'duration_seconds': duration,
+                            'duration_hours': duration / 3600,
+                            'duration_days': duration / 86400
+                        })
+                
+                # Get noise points
+                noise_points = []
+                if -1 in clusters:
+                    for nid, timestamp in clusters[-1]:
+                        narrative = DetectedNarrative.query.get(nid)
+                        if narrative:
+                            noise_points.append({
+                                'id': narrative.id,
+                                'title': narrative.title,
+                                'timestamp': timestamp
+                            })
+                
+                return {
+                    'clusters': formatted_clusters,
+                    'noise_points': noise_points,
+                    'total_processed': len(self.clustream_assignments),
+                    'generated_at': datetime.utcnow().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting CluStream clusters: {e}")
+            return {
+                'clusters': [], 
+                'noise_points': [], 
+                'total_processed': 0,
+                'generated_at': datetime.utcnow().isoformat()
+            }
+            
     def export_network_json(self) -> Dict[str, Any]:
         """
         Export the narrative network as a JSON object for visualization.
