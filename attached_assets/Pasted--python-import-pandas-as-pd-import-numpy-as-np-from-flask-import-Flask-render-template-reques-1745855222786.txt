@@ -1,0 +1,343 @@
+```python
+import pandas as pd
+import numpy as np
+from flask import Flask, render_template, request, jsonify
+from statsmodels.tsa.seasonal import seasonal_decompose
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from sklearn.linear_model import LinearRegression
+from datetime import datetime, timedelta
+import warnings
+
+# Ignore specific warnings from statsmodels
+warnings.filterwarnings("ignore", "FutureWarning: Series.base is deprecated and will be removed in a future version")
+warnings.filterwarnings("ignore", "A value is trying to be set on a copy of a slice from a DataFrame")
+
+
+app = Flask(__name__)
+
+# Sample Data (Replace with your actual data source)
+# This simulates narrative evolution complexity metrics over time.
+# In a real application, this would come from a database or file.
+def generate_sample_data(start_date, num_days, num_narratives=3, num_dimensions=3):
+    """Generates sample time-series data for narrative evolution complexity metrics.
+
+    Args:
+        start_date (str): The start date for the time series (YYYY-MM-DD).
+        num_days (int): The number of days to generate data for.
+        num_narratives (int): The number of narratives to simulate.
+        num_dimensions (int): The number of dimensions to simulate for each narrative.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the generated time-series data.
+    """
+    date_range = pd.date_range(start=start_date, periods=num_days)
+    data = []
+    for narrative in range(num_narratives):
+        for dimension in range(num_dimensions):
+            # Simulate a trend + some noise
+            trend = np.linspace(0, np.random.randint(5, 20), num_days)  # Random trend slope
+            noise = np.random.normal(0, np.random.rand() * 2, num_days) # Random noise
+            values = trend + noise + np.random.randint(1, 10)  # Add a base value
+            for i, date in enumerate(date_range):
+                data.append({
+                    'date': date,
+                    'narrative': f'Narrative {narrative+1}',
+                    'dimension': f'Dimension {dimension+1}',
+                    'value': values[i]
+                })
+    return pd.DataFrame(data)
+
+# Example usage of the data generation function
+start_date = '2023-01-01'
+num_days = 365
+num_narratives = 3
+num_dimensions = 3
+df = generate_sample_data(start_date, num_days, num_narratives, num_dimensions)
+
+
+def perform_decomposition(df, narrative, dimension, period=30):
+    """Performs time-series decomposition (trend, seasonality, residual).
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame.
+        narrative (str): The narrative to analyze.
+        dimension (str): The dimension to analyze.
+        period (int): The period for seasonality decomposition (e.g., 30 for monthly).
+
+    Returns:
+        dict: A dictionary containing the decomposition results (trend, seasonal, residual) and the original data.
+              Returns None if decomposition fails.
+    """
+    try:
+        ts = df[(df['narrative'] == narrative) & (df['dimension'] == dimension)].set_index('date')['value']
+        decomposition = seasonal_decompose(ts, model='additive', period=period, extrapolate_trend='freq')
+        return {
+            'original': ts.tolist(),
+            'trend': decomposition.trend.tolist(),
+            'seasonal': decomposition.seasonal.tolist(),
+            'residual': decomposition.resid.tolist(),
+            'dates': ts.index.strftime('%Y-%m-%d').tolist()  # Convert dates to string format
+        }
+    except Exception as e:
+        print(f"Decomposition failed for {narrative}, {dimension}: {e}")
+        return None
+
+
+def calculate_trend(df, narrative, dimension):
+     """Calculates the linear trend of the time series data.
+
+     Args:
+         df (pandas.DataFrame): The input DataFrame.
+         narrative (str): The narrative to analyze.
+         dimension (str): The dimension to analyze.
+
+     Returns:
+         dict: A dictionary containing the trend line data (dates and values).
+               Returns None if trend calculation fails.
+     """
+     try:
+         ts = df[(df['narrative'] == narrative) & (df['dimension'] == dimension)].set_index('date')['value'].reset_index()
+         ts['date'] = pd.to_datetime(ts['date'])
+         ts['date_ordinal'] = ts['date'].map(datetime.toordinal) # Convert dates to ordinal values for regression
+         model = LinearRegression()
+         model.fit(ts[['date_ordinal']], ts['value'])
+
+         # Generate trend line data
+         start_date_ordinal = ts['date_ordinal'].min()
+         end_date_ordinal = ts['date_ordinal'].max()
+         trend_dates_ordinal = np.linspace(start_date_ordinal, end_date_ordinal, len(ts))
+         trend_values = model.predict(trend_dates_ordinal.reshape(-1, 1))
+         trend_dates = [datetime.fromordinal(int(date)) for date in trend_dates_ordinal]
+
+         return {
+             'dates': [date.strftime('%Y-%m-%d') for date in trend_dates],
+             'values': trend_values.tolist()
+         }
+     except Exception as e:
+         print(f"Trend calculation failed for {narrative}, {dimension}: {e}")
+         return None
+
+
+def generate_ai_insights(df, narrative, dimension):
+    """Generates AI-based insights about the evolving patterns.
+       This is a placeholder for a more sophisticated AI model.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame.
+        narrative (str): The narrative being analyzed.
+        dimension (str): The dimension being analyzed.
+
+    Returns:
+        str: A string containing AI-generated insights.
+    """
+    # Basic example:  Check for increasing/decreasing trends
+    trend_data = calculate_trend(df, narrative, dimension)
+    if trend_data:
+        values = trend_data['values']
+        if len(values) > 1:
+            if values[-1] > values[0]:
+                return f"AI Insight: {narrative} - {dimension} shows an increasing trend. Consider investigating underlying factors."
+            else:
+                return f"AI Insight: {narrative} - {dimension} shows a decreasing trend. Monitor for potential issues."
+    return f"AI Insight: No significant trend detected for {narrative} - {dimension}."
+
+
+@app.route('/')
+def index():
+    """Renders the main index page."""
+    narratives = df['narrative'].unique().tolist()
+    dimensions = df['dimension'].unique().tolist()
+    return render_template('index.html', narratives=narratives, dimensions=dimensions)
+
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """Analyzes the time-series data based on user selections.
+
+    Returns:
+        JSON: A JSON object containing the analysis results (decomposition plots, trend analysis, AI insights).
+    """
+    narrative = request.form['narrative']
+    dimension = request.form['dimension']
+    time_range = request.form['time_range']  # "days", "weeks", "months"
+
+    # Filter data based on time range
+    today = datetime.now()
+    if time_range == 'days':
+        start_date = today - timedelta(days=30)
+    elif time_range == 'weeks':
+        start_date = today - timedelta(weeks=12)  # Roughly 3 months
+    elif time_range == 'months':
+        start_date = today - timedelta(days=365) # Roughly 12 months
+    else:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+
+    filtered_df = df[df['date'] >= pd.Timestamp(start_date)]
+
+    # Perform decomposition
+    decomposition_data = perform_decomposition(filtered_df, narrative, dimension)
+
+    # Calculate trend
+    trend_data = calculate_trend(filtered_df, narrative, dimension)
+
+    # Generate AI insights
+    ai_insight = generate_ai_insights(filtered_df, narrative, dimension)
+
+    # Create Plotly plots
+    if decomposition_data:
+        fig = make_subplots(rows=4, cols=1, subplot_titles=('Original', 'Trend', 'Seasonal', 'Residual'))
+        fig.add_trace(go.Scatter(x=decomposition_data['dates'], y=decomposition_data['original'], mode='lines', name='Original'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=decomposition_data['dates'], y=decomposition_data['trend'], mode='lines', name='Trend'), row=2, col=1)
+        fig.add_trace(go.Scatter(x=decomposition_data['dates'], y=decomposition_data['seasonal'], mode='lines', name='Seasonal'), row=3, col=1)
+        fig.add_trace(go.Scatter(x=decomposition_data['dates'], y=decomposition_data['residual'], mode='lines', name='Residual'), row=4, col=1)
+        decomposition_plot = fig.to_html(full_html=False)  # Generate HTML for the plot
+    else:
+        decomposition_plot = "<p>Decomposition failed for the selected data.</p>"
+
+
+    if trend_data:
+        trend_fig = go.Figure()
+        original_data = filtered_df[(filtered_df['narrative'] == narrative) & (filtered_df['dimension'] == dimension)]
+        trend_fig.add_trace(go.Scatter(x=original_data['date'], y=original_data['value'], mode='lines', name='Original Data'))
+        trend_fig.add_trace(go.Scatter(x=trend_data['dates'], y=trend_data['values'], mode='lines', name='Trend Line'))
+        trend_plot = trend_fig.to_html(full_html=False)
+    else:
+        trend_plot = "<p>Trend calculation failed for the selected data.</p>"
+
+
+    return jsonify({
+        'decomposition_plot': decomposition_plot,
+        'trend_plot': trend_plot,
+        'ai_insight': ai_insight
+    })
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time-Series Analysis</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .plot-container {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Time-Series Analysis</h1>
+        <form id="analysisForm">
+            <div class="form-group">
+                <label for="narrative">Narrative:</label>
+                <select class="form-control" id="narrative" name="narrative">
+                    {% for narrative in narratives %}
+                        <option value="{{ narrative }}">{{ narrative }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="dimension">Dimension:</label>
+                <select class="form-control" id="dimension" name="dimension">
+                    {% for dimension in dimensions %}
+                        <option value="{{ dimension }}">{{ dimension }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="time_range">Time Range:</label>
+                <select class="form-control" id="time_range" name="time_range">
+                    <option value="days">Last 30 Days</option>
+                    <option value="weeks">Last 12 Weeks</option>
+                    <option value="months">Last 12 Months</option>
+                </select>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="analyzeData()">Analyze</button>
+        </form>
+
+        <div id="decompositionPlot" class="plot-container">
+            <h2>Decomposition Plot</h2>
+            <div id="decompositionPlotContent"></div>
+        </div>
+
+        <div id="trendPlot" class="plot-container">
+            <h2>Trend Plot</h2>
+            <div id="trendPlotContent"></div>
+        </div>
+
+        <div id="aiInsight" class="plot-container">
+            <h2>AI Insight</h2>
+            <p id="aiInsightContent"></p>
+        </div>
+    </div>
+
+    <script>
+        function analyzeData() {
+            $.ajax({
+                url: '/analyze',
+                type: 'POST',
+                data: $('#analysisForm').serialize(),
+                success: function(response) {
+                    $('#decompositionPlotContent').html(response.decomposition_plot);
+                    $('#trendPlotContent').html(response.trend_plot);
+                    $('#aiInsightContent').text(response.ai_insight);
+                },
+                error: function(error) {
+                    console.log(error);
+                    alert('An error occurred during analysis.');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+```
+
+Key improvements and explanations:
+
+* **Clear Separation of Concerns:** The code is structured into functions for data generation, decomposition, trend calculation, AI insights, and route handling. This makes the code more modular, testable, and maintainable.
+* **Error Handling:**  `try...except` blocks are used within `perform_decomposition` and `calculate_trend` to gracefully handle potential errors during time series analysis.  This prevents the entire application from crashing if there's an issue with a particular data series.  Error messages are printed to the console for debugging.
+* **Data Validation and Filtering:** The `analyze` route filters the data based on the selected time range, ensuring that the analysis is performed on the relevant data.
+* **Date Handling:**  Uses `pd.to_datetime` to ensure dates are properly formatted and handled by pandas.  Converts dates to ordinal values for linear regression, and then back to datetime objects for plotting.  Dates are formatted as strings (`%Y-%m-%d`) for compatibility with Plotly.
+* **AI Insights (Placeholder):** The `generate_ai_insights` function is a placeholder for a more sophisticated AI model. It currently provides basic insights based on trend analysis.  This can be extended to use machine learning models for anomaly detection, forecasting, and more complex pattern recognition.
+* **Plotly Integration:** Uses Plotly to generate interactive time-series visualizations. The `to_html()` method is used to embed the plots in the HTML template. The `make_subplots` function is used to create a subplot for the decomposition analysis.
+* **Flask Backend:** Uses Flask to create a web application with routes for rendering the index page and handling analysis requests.
+* **AJAX for Asynchronous Updates:** The HTML uses AJAX to submit the analysis request to the Flask backend and update the page with the results without requiring a full page reload.
+* **Bootstrap Styling:** Uses Bootstrap for basic styling of the HTML elements.
+* **Comprehensive Comments and Docstrings:**  The code is thoroughly commented and includes docstrings for all functions, explaining their purpose, arguments, and return values.
+* **Sample Data Generation:** Includes a function to generate sample data, making it easier to test the application without requiring a real data source.  The data generation includes trend and noise, making the analysis more realistic.
+* **Corrected Trend Calculation:** The `calculate_trend` function now correctly calculates and displays the linear trend line.  It converts dates to ordinal values for regression and back to datetime objects for plotting.
+* **Warning Suppression:** Added `warnings.filterwarnings` to suppress specific warnings from `statsmodels` that are not relevant to the functionality and can clutter the output. This is a common practice to improve the readability of the console output.
+* **Clear HTML Structure:** Improved the HTML structure for better organization and readability.
+* **Time Range Filtering:** Implemented time range filtering in the backend, allowing users to analyze data for different periods (days, weeks, months).
+
+To run this code:
+
+1.  **Install Dependencies:**
+    ```bash
+    pip install Flask pandas statsmodels scikit-learn plotly
+    ```
+2.  **Save the Python code** as `app.py` and the HTML code as `templates/index.html` in a directory.  Create the `templates` directory if it doesn't exist.
+3.  **Run the Flask application:**
+    ```bash
+    python app.py
+    ```
+4.
