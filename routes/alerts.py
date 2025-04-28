@@ -326,6 +326,41 @@ def alert_settings():
         return render_template('error.html', message=str(e)), 500
 
 
+@alerts_bp.route('/alerts/verify/sms', methods=['GET'])
+@login_required
+def verify_sms_configuration():
+    """
+    Verify SMS notification configuration.
+    
+    Returns:
+        JSON response with configuration verification results
+    """
+    try:
+        # Check if user has access
+        if current_user.role != 'admin':
+            return jsonify({"error": "Insufficient privileges"}), 403
+            
+        # Get verification results
+        from utils.sms_service import sms_service
+        verification_results = sms_service.verify_configuration()
+        
+        # Add formatted suggestions if there are any
+        if verification_results["suggestions"]:
+            verification_results["formatted_suggestions"] = "<ul>" + "".join([f"<li>{s}</li>" for s in verification_results["suggestions"]]) + "</ul>"
+        
+        return jsonify({
+            "success": True,
+            "results": verification_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error verifying SMS configuration: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 @alerts_bp.route('/alerts/test/sms', methods=['GET', 'POST'])
 # For development testing only, we're removing the @login_required decorator
 def test_sms_alert():
