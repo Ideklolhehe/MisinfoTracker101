@@ -71,18 +71,19 @@
         content: "•";
         position: absolute;
         left: 0.5rem;
-        color: var(--primary-blue);
+        color: var(--primary-medium);
         font-weight: bold;
     }
     
     .features-header {
-        background: linear-gradient(135deg, var(--light-blue) 0%, var(--light-purple) 100%);
+        background: linear-gradient(135deg, var(--primary-medium) 0%, var(--accent-color) 100%);
         padding: 3rem 2rem;
         border-radius: 0.5rem;
         margin-bottom: 3rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-        border: 1px solid #e8e8e8;
+        box-shadow: 0 10px 20px rgba(101, 67, 33, 0.1);
+        border: 1px solid var(--neutral-border);
         text-align: center;
+        color: white;
     }
     
     .section-divider {
@@ -293,55 +294,147 @@
         <h1 class="display-4 mb-3">Narrative Complexity Analyzer</h1>
         <p class="lead mb-0">Advanced tools for detecting, analyzing, and countering sophisticated misinformation</p>
     </div>
+    
+    <div class="row mt-5">
+        <div class="col-md-12">
+            <div class="card shadow-sm bg-white">
+                <div class="card-body p-4">
+                    <h2 class="mb-4 text-center">Core Features</h2>
 
-    <div class="card">
-        <div class="card-header">
-            <h1>Narrative Complexity Analyzer Features</h1>
-        </div>
-        <div class="card-body">
-            <h3>Key Features</h3>
-            <ul>
-                <li>Interactive time-series visualizations of complexity metrics</li>
-                <li>Customizable time ranges from days to months</li>
-                <li>Dimension-specific trend analysis</li>
-                <li>AI-generated insights about evolving patterns</li>
-                <li>Visual comparison of multiple narrative evolutions</li>
-                <li>Detailed PDF reports with visualizations and insights</li>
-                <li>Structured CSV data for external analysis</li>
-                <li>Side-by-side comparative reports for multiple narratives</li>
-                <li>Time-series data exports for trend analysis</li>
-                <li>Standardized report formats for consistency</li>
-                <li>Configurable thresholds for complexity dimensions</li>
-                <li>Alerts for rapidly increasing complexity</li>
-                <li>Detection of unusual pattern shifts</li>
-                <li>Prioritized critical alerts dashboard</li>
-                <li>Multi-channel notifications (email, SMS, in-app)</li>
-                <li>Automatic clustering of similar narratives</li>
-                <li>Visual representation of narrative relationships</li>
-                <li>Detection of coordinated campaign patterns</li>
-                <li>Dimension-level similarity analysis</li>
-                <li>Temporal mapping of narrative spread across clusters</li>
-                <li>AI-powered complexity trajectory forecasting</li>
-                <li>Projected timeline to critical thresholds</li>
-                <li>Confidence intervals for predictions</li>
-                <li>Key factor identification for complexity drivers</li>
-                <li>What-if scenario modeling for intervention planning</li>
-                <li>Dimension-specific counter-strategy recommendations</li>
-                <li>Prioritized countering based on complexity profiles</li>
-                <li>AI-generated counter-narrative approaches</li>
-                <li>Effectiveness tracking for counter-measures</li>
-                <li>Source targeting optimization for intervention</li>
-                <li>Customizable dashboard layouts</li>
-                <li>Real-time complexity metrics</li>
-                <li>Interactive dimension breakdown charts</li>
-                <li>Geographic spread visualization</li>
-                <li>Temporal heatmaps for intensity tracking</li>
-                <li>Side-by-side dimension comparison charts</li>
-                <li>Relative growth rate analysis between narratives</li>
-                <li>Correlation identification and quantification</li>
-                <li>Shared theme detection across narratives</li>
-                <li>Coordinated source analysis for linked narratives</li>
-            </ul>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3" style="color: var(--primary-dark);">Time-Series Analysis</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Interactive time-series visualizations of complexity metrics</li>
+                                <li>Customizable time ranges from days to months</li>
+                                <li>Dimension-specific trend analysis</li>
+                                <li>AI-generated insights about evolving patterns</li>
+                                <li>Visual comparison of multiple narrative evolution</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_trends') }}" class="btn btn-sm btn-primary mt-2">
+                                View Trends
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Export Functionality</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Detailed PDF reports with visualizations and insights</li>
+                                <li>Structured CSV data for external analysis</li>
+                                <li>Side-by-side comparative reports for multiple narratives</li>
+                                <li>Time-series data exports for trend analysis</li>
+                                <li>Standardized report formats for consistency</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-sm btn-primary mt-2">
+                                Export Reports
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Alerting System</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Configurable thresholds for complexity dimensions</li>
+                                <li>Alerts for rapidly increasing complexity</li>
+                                <li>Detection of unusual pattern shifts</li>
+                                <li>Prioritized critical alerts dashboard</li>
+                                <li>Multi-channel notifications (email, SMS, in-app)</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_alerts') }}" class="btn btn-sm btn-primary mt-2">
+                                View Alerts
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Narrative Clustering</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Automatic clustering of similar narratives</li>
+                                <li>Visual representation of narrative relationships</li>
+                                <li>Detection of coordinated campaign patterns</li>
+                                <li>Dimension-level similarity analysis</li>
+                                <li>Temporal mapping of narrative spread across clusters</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.narrative_clusters') }}" class="btn btn-sm btn-primary mt-2">
+                                View Clusters
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Predictive Modeling</h3>
+                            <ul class="feature-bullet-list">
+                                <li>AI-powered complexity trajectory forecasting</li>
+                                <li>Projected timeline to critical thresholds</li>
+                                <li>Confidence intervals for predictions</li>
+                                <li>Key factor identification for complexity drivers</li>
+                                <li>What-if scenario modeling for intervention planning</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.view_narrative_prediction', narrative_id=1) }}" class="btn btn-sm btn-primary mt-2">
+                                View Predictions
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Counter-Narrative Integration</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Dimension-specific counter-strategy recommendations</li>
+                                <li>Prioritized countering based on complexity profiles</li>
+                                <li>AI-generated counter-narrative approaches</li>
+                                <li>Effectiveness tracking for counter-measures</li>
+                                <li>Source targeting optimization for intervention</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-sm btn-primary mt-2">
+                                View Counter Approaches
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Dashboard Visualizations</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Customizable dashboard layouts</li>
+                                <li>Real-time complexity metrics</li>
+                                <li>Interactive dimension breakdown charts</li>
+                                <li>Geographic spread visualization</li>
+                                <li>Temporal heatmaps for intensity tracking</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-sm btn-primary mt-2">
+                                View Dashboard
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h3 class="mb-3">Comparative Analysis</h3>
+                            <ul class="feature-bullet-list">
+                                <li>Side-by-side dimension comparison charts</li>
+                                <li>Relative growth rate analysis between narratives</li>
+                                <li>Correlation identification and quantification</li>
+                                <li>Shared theme detection across narratives</li>
+                                <li>Coordinated source analysis for linked narratives</li>
+                            </ul>
+                            <a href="{{ url_for('complexity.compare') }}" class="btn btn-sm btn-primary mt-2">
+                                Compare Narratives
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-5 mb-5">
+                <a href="{{ url_for('complexity.complexity_dashboard') }}" class="btn btn-lg btn-primary">
+                    <i class="bi bi-arrow-right-circle me-2"></i>Get Started Now
+                </a>
+            </div>
         </div>
     </div>
 </div>
