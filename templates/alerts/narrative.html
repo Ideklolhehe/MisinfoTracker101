@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}Narrative Alerts - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="row">
+    <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{{ url_for('alerts.alerts_dashboard') }}">Alert Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Narrative Alerts</li>
+        </ol>
+      </nav>
+      
+      <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Narrative Details</h5>
+            <a href="{{ url_for('alerts.evaluate_narrative_alert', narrative_id=narrative.id) }}" class="btn btn-sm btn-info">
+              Evaluate Now
+            </a>
+          </div>
+        </div>
+        <div class="card-body">
+          <h4>{{ narrative.title }}</h4>
+          <div class="mb-3">
+            <span class="badge {% if narrative.propagation_score > 0.7 %}bg-danger{% elif narrative.propagation_score > 0.5 %}bg-warning text-dark{% elif narrative.propagation_score > 0.3 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+              Propagation: {{ "%.2f"|format(narrative.propagation_score) }}
+            </span>
+            <span class="badge {% if narrative.threat_level >= 4 %}bg-danger{% elif narrative.threat_level >= 3 %}bg-warning text-dark{% elif narrative.threat_level >= 2 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+              Threat Level: {{ narrative.threat_level }}
+            </span>
+            <span class="badge bg-secondary">
+              Source: {{ narrative.source_name }}
+            </span>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-8">
+              <div class="card">
+                <div class="card-header bg-light">
+                  <h6 class="card-title mb-0">Content</h6>
+                </div>
+                <div class="card-body">
+                  <p>{{ narrative.content }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header bg-light">
+                  <h6 class="card-title mb-0">Details</h6>
+                </div>
+                <div class="card-body">
+                  <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between">
+                      <span>Detected on:</span>
+                      <span>{{ narrative.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                      <span>URL:</span>
+                      <span><a href="{{ narrative.url }}" target="_blank">Link</a></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                      <span>Status:</span>
+                      <span class="badge {% if narrative.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                        {{ "Active" if narrative.is_active else "Inactive" }}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Alerts Section -->
+      <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+          <h5 class="card-title mb-0">Alerts for This Narrative</h5>
+        </div>
+        <div class="card-body">
+          {% if alerts %}
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Priority</th>
+                    <th>Message</th>
+                    <th>Channels</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for alert in alerts %}
+                  <tr class="{% if alert.priority == 'critical' %}table-danger{% elif alert.priority == 'high' %}table-warning{% elif alert.priority == 'medium' %}table-info{% endif %}">
+                    <td>{{ loop.index }}</td>
+                    <td><span class="badge {% if alert.priority == 'critical' %}bg-danger{% elif alert.priority == 'high' %}bg-warning text-dark{% elif alert.priority == 'medium' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ alert.priority|upper }}</span></td>
+                    <td>{{ alert.message }}</td>
+                    <td>
+                      {% for channel in alert.channels %}
+                        <span class="badge bg-secondary">{{ channel }}</span>
+                      {% endfor %}
+                    </td>
+                    <td>{{ alert.timestamp }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="text-center">No alerts have been triggered for this narrative yet.</p>
+          {% endif %}
+        </div>
+      </div>
+      
+      <!-- Alert Logs Section -->
+      <div class="card">
+        <div class="card-header bg-dark text-white">
+          <h5 class="card-title mb-0">Alert System Logs</h5>
+        </div>
+        <div class="card-body">
+          {% if alert_logs %}
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Message</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for log in alert_logs %}
+                  <tr>
+                    <td>{{ log.timestamp }}</td>
+                    <td>{{ log.message }}</td>
+                    <td>
+                      {% if log.details %}
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#log-{{ log.id }}" aria-expanded="false">
+                          Show Details
+                        </button>
+                        <div class="collapse mt-2" id="log-{{ log.id }}">
+                          <div class="card card-body">
+                            <pre class="mb-0"><code>{{ log.details|tojson(indent=2) }}</code></pre>
+                          </div>
+                        </div>
+                      {% else %}
+                        <span class="text-muted">No details available</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="text-center">No alert logs found for this narrative.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

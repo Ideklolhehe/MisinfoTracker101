@@ -10,7 +10,7 @@ from flask_login import login_required, current_user
 
 from app import db
 from models import DetectedNarrative, SystemLog
-from services.alert_system import AlertSystem, AlertPriority, MisinformationEvent, Alert
+from services.alert_system import AlertSystem, AlertPriority, MisinformationEvent, Alert, AlertChannel
 from utils.app_context import ensure_app_context
 from utils.sms_service import sms_service
 
@@ -246,6 +246,9 @@ def alert_settings():
         if current_user.role != 'admin':
             abort(403, "Only administrators can access alert settings")
         
+        # Import the SMS service to check its status
+        from utils.sms_service import sms_service
+        
         if request.method == 'POST':
             # Update threshold settings
             new_thresholds = {}
@@ -265,13 +268,15 @@ def alert_settings():
                 return render_template(
                     'alerts/settings.html',
                     thresholds=alert_system.thresholds,
+                    twilio_enabled=sms_service.is_configured,
                     success_message="Alert thresholds updated successfully"
                 )
         
         # Show current settings
         return render_template(
             'alerts/settings.html',
-            thresholds=alert_system.thresholds
+            thresholds=alert_system.thresholds,
+            twilio_enabled=sms_service.is_configured
         )
         
     except Exception as e:

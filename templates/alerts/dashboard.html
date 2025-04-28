@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+
+{% block title %}Alert Dashboard - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h1 class="mb-4">Misinformation Alert Dashboard</h1>
+
+  <!-- Display flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Alert System Status</h5>
+          <div>
+            <a href="{{ url_for('alerts.test_sms_alert') }}" class="btn btn-sm btn-info">Test SMS Alert</a>
+            <a href="{{ url_for('alerts.alert_settings') }}" class="btn btn-sm btn-light">Settings</a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3">
+              <div class="card {% if alert_counts.critical > 0 %}border-danger{% else %}border-success{% endif %} mb-3">
+                <div class="card-header text-white {% if alert_counts.critical > 0 %}bg-danger{% else %}bg-success{% endif %}">Critical Alerts</div>
+                <div class="card-body">
+                  <h5 class="card-title">{{ alert_counts.critical }}</h5>
+                  <p class="card-text">Require immediate attention</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card {% if alert_counts.high > 0 %}border-warning{% else %}border-success{% endif %} mb-3">
+                <div class="card-header text-white {% if alert_counts.high > 0 %}bg-warning{% else %}bg-success{% endif %}">High Priority</div>
+                <div class="card-body">
+                  <h5 class="card-title">{{ alert_counts.high }}</h5>
+                  <p class="card-text">Significant concerns</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card border-info mb-3">
+                <div class="card-header text-white bg-info">Medium Priority</div>
+                <div class="card-body">
+                  <h5 class="card-title">{{ alert_counts.medium }}</h5>
+                  <p class="card-text">Moderate concerns</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card border-secondary mb-3">
+                <div class="card-header text-white bg-secondary">Low Priority</div>
+                <div class="card-body">
+                  <h5 class="card-title">{{ alert_counts.low }}</h5>
+                  <p class="card-text">Minor concerns</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Critical Alerts Section -->
+  {% if critical_alerts %}
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+          <h5 class="card-title mb-0">Critical Alerts</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Narrative</th>
+                  <th>Message</th>
+                  <th>Time</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for alert in critical_alerts %}
+                <tr>
+                  <td>{{ alert.event_id }}</td>
+                  <td>
+                    {% if narratives and alert.event_id|int in narratives %}
+                      <a href="{{ url_for('civilian.view_narrative', narrative_id=alert.event_id) }}">
+                        {{ narratives[alert.event_id|int].title }}
+                      </a>
+                    {% else %}
+                      Unknown
+                    {% endif %}
+                  </td>
+                  <td>{{ alert.message }}</td>
+                  <td>{{ alert.timestamp }}</td>
+                  <td>
+                    <a href="{{ url_for('alerts.view_narrative_alerts', narrative_id=alert.event_id) }}" class="btn btn-sm btn-info">Details</a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Recent Alerts Section -->
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header bg-dark text-white">
+          <h5 class="card-title mb-0">Recent Alerts</h5>
+        </div>
+        <div class="card-body">
+          {% if recent_alerts %}
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Narrative</th>
+                  <th>Priority</th>
+                  <th>Message</th>
+                  <th>Time</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for alert in recent_alerts %}
+                <tr class="{% if alert.priority == 'critical' %}table-danger{% elif alert.priority == 'high' %}table-warning{% elif alert.priority == 'medium' %}table-info{% endif %}">
+                  <td>{{ alert.event_id }}</td>
+                  <td>
+                    {% if narratives and alert.event_id|int in narratives %}
+                      <a href="{{ url_for('civilian.view_narrative', narrative_id=alert.event_id) }}">
+                        {{ narratives[alert.event_id|int].title }}
+                      </a>
+                    {% else %}
+                      Unknown
+                    {% endif %}
+                  </td>
+                  <td><span class="badge {% if alert.priority == 'critical' %}bg-danger{% elif alert.priority == 'high' %}bg-warning text-dark{% elif alert.priority == 'medium' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ alert.priority|upper }}</span></td>
+                  <td>{{ alert.message }}</td>
+                  <td>{{ alert.timestamp }}</td>
+                  <td>
+                    <a href="{{ url_for('alerts.view_narrative_alerts', narrative_id=alert.event_id) }}" class="btn btn-sm btn-info">Details</a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-center">No recent alerts found.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

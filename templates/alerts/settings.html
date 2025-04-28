@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}Alert Settings - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="row">
+    <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{{ url_for('alerts.alerts_dashboard') }}">Alert Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Alert Settings</li>
+        </ol>
+      </nav>
+      
+      <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+          <h5 class="card-title mb-0">Alert Threshold Settings</h5>
+        </div>
+        <div class="card-body">
+          {% if success_message %}
+            <div class="alert alert-success" role="alert">
+              {{ success_message }}
+            </div>
+          {% endif %}
+          
+          <form method="POST">
+            <div class="row">
+              {% for key, value in thresholds.items() %}
+                <div class="col-md-6 mb-3">
+                  <label for="{{ key }}" class="form-label">{{ key|replace('_', ' ')|title }}</label>
+                  <div class="input-group">
+                    <input type="range" class="form-range" id="{{ key }}_range" 
+                           min="0" max="1" step="0.05" value="{{ value }}"
+                           onchange="document.getElementById('{{ key }}').value = this.value">
+                    <input type="number" class="form-control" id="{{ key }}" name="{{ key }}"
+                           min="0" max="1" step="0.05" value="{{ value }}"
+                           onchange="document.getElementById('{{ key }}_range').value = this.value"
+                           style="max-width: 100px; margin-left: 10px;">
+                  </div>
+                  <small class="text-muted">Threshold for triggering alerts based on {{ key|replace('_', ' ') }}.</small>
+                </div>
+              {% endfor %}
+            </div>
+            
+            <div class="mt-4">
+              <button type="submit" class="btn btn-primary">Save Settings</button>
+              <a href="{{ url_for('alerts.alerts_dashboard') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header bg-dark text-white">
+          <h5 class="card-title mb-0">Notification Configuration</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card border-info mb-3">
+                <div class="card-header text-white bg-info">
+                  <h5 class="card-title mb-0">Email Notifications</h5>
+                </div>
+                <div class="card-body">
+                  <p class="text-muted">Email notifications for critical and high priority alerts.</p>
+                  <div class="mb-3">
+                    <label for="email_recipient" class="form-label">Email Recipient</label>
+                    <input type="email" class="form-control" id="email_recipient" value="admin@example.com" disabled>
+                    <small class="text-muted">Configure in environment variables.</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="card border-success mb-3">
+                <div class="card-header text-white bg-success">
+                  <h5 class="card-title mb-0">SMS Notifications</h5>
+                </div>
+                <div class="card-body">
+                  <p class="text-muted">SMS alerts for critical misinformation threats.</p>
+                  <p>
+                    Status: 
+                    <span class="badge {% if twilio_enabled %}bg-success{% else %}bg-danger{% endif %}">
+                      {% if twilio_enabled %}Enabled{% else %}Disabled{% endif %}
+                    </span>
+                  </p>
+                  
+                  {% if twilio_enabled %}
+                    <p class="mb-2">Twilio phone number: <code id="phone">*********</code></p>
+                    <p class="mb-2">Recipient phone number: <code id="recipient">*********</code></p>
+                    <a href="{{ url_for('alerts.test_sms_alert') }}" class="btn btn-outline-success">Send Test SMS</a>
+                  {% else %}
+                    <div class="alert alert-warning">
+                      Twilio credentials not configured. Set the following environment variables:
+                      <ul>
+                        <li>TWILIO_ACCOUNT_SID</li>
+                        <li>TWILIO_AUTH_TOKEN</li>
+                        <li>TWILIO_PHONE_NUMBER</li>
+                        <li>RECIPIENT_PHONE_NUMBER</li>
+                      </ul>
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
