@@ -4,13 +4,15 @@ Routes for misinformation alert system.
 
 import logging
 import json
-from flask import Blueprint, request, jsonify, render_template, abort
+from datetime import datetime
+from flask import Blueprint, request, jsonify, render_template, abort, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from app import db
 from models import DetectedNarrative, SystemLog
-from services.alert_system import AlertSystem, AlertPriority, MisinformationEvent
+from services.alert_system import AlertSystem, AlertPriority, MisinformationEvent, Alert
 from utils.app_context import ensure_app_context
+from utils.sms_service import sms_service
 
 logger = logging.getLogger(__name__)
 
