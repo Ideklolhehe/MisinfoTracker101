@@ -249,6 +249,38 @@ def alert_settings():
         # Import the SMS service to check its status
         from utils.sms_service import sms_service
         
+        # Get Twilio configuration status
+        twilio_enabled = sms_service.is_configured
+        twilio_phone = sms_service.twilio_phone
+        recipient_phone = sms_service.recipient_phone
+        
+        # Mask phone numbers for display
+        twilio_phone_masked = "XXXX" + twilio_phone[-4:] if twilio_phone and len(twilio_phone) >= 4 else "Not configured"
+        recipient_phone_masked = "XXXX" + recipient_phone[-4:] if recipient_phone and len(recipient_phone) >= 4 else "Not configured"
+        
+        # Check if this is likely a trial account (based on common Twilio trial number prefixes)
+        twilio_trial = False
+        if twilio_phone and (twilio_phone.startswith('+1620') or 
+                             twilio_phone.startswith('+1415') or 
+                             twilio_phone.startswith('+1843')):
+            twilio_trial = True
+            
+        # Check if we have any recent test results in the system logs
+        last_test_result = None
+        try:
+            recent_log = SystemLog.query.filter_by(
+                log_type="notification",
+                component="alert_system"
+            ).order_by(SystemLog.timestamp.desc()).first()
+            
+            if recent_log and recent_log.timestamp > datetime.now() - timedelta(minutes=5):
+                last_test_result = {
+                    "success": "successfully" in recent_log.message.lower(),
+                    "message": recent_log.message
+                }
+        except Exception as log_error:
+            logger.warning(f"Could not retrieve SMS test logs: {log_error}")
+        
         if request.method == 'POST':
             # Update threshold settings
             new_thresholds = {}
@@ -268,7 +300,12 @@ def alert_settings():
                 return render_template(
                     'alerts/settings.html',
                     thresholds=alert_system.thresholds,
-                    twilio_enabled=sms_service.is_configured,
+                    twilio_enabled=twilio_enabled,
+                    twilio_phone_masked=twilio_phone_masked,
+                    recipient_phone_masked=recipient_phone_masked,
+                    twilio_trial=twilio_trial,
+                    twilio_verified=not twilio_trial,  # Assume non-trial accounts are verified
+                    last_test_result=last_test_result,
                     success_message="Alert thresholds updated successfully"
                 )
         
@@ -276,7 +313,12 @@ def alert_settings():
         return render_template(
             'alerts/settings.html',
             thresholds=alert_system.thresholds,
-            twilio_enabled=sms_service.is_configured
+            twilio_enabled=twilio_enabled,
+            twilio_phone_masked=twilio_phone_masked,
+            recipient_phone_masked=recipient_phone_masked,
+            twilio_trial=twilio_trial,
+            twilio_verified=not twilio_trial,  # Assume non-trial accounts are verified
+            last_test_result=last_test_result
         )
         
     except Exception as e:
@@ -321,7 +363,7 @@ def test_sms_alert():
         from utils.sms_service import sms_service
         
         test_message = f"CIVILIAN TEST ALERT: This is a test of the misinformation alert system. (Time: {datetime.now().strftime('%H:%M:%S')})"
-        success = sms_service.send_message(test_message)
+        success, details = sms_service.send_message(test_message)
         
         if success:
             # Log the successful test
@@ -344,21 +386,27 @@ def test_sms_alert():
             return jsonify({
                 "success": True,
                 "message": "SMS test alert sent successfully!",
-                "details": {
-                    "recipient": sms_service.recipient_phone,
-                    "from": sms_service.twilio_phone,
-                    "text": test_message
-                }
+                "details": details
             })
         else:
-            return jsonify({
+            # Add Twilio troubleshooting information
+            troubleshooting_info = {
+                "message": "Failed to send SMS test alert. Check configuration below."
+            }
+            
+            # Merge details with our response
+            response_data = {
                 "success": False,
-                "message": "Failed to send SMS test alert. Check configuration and logs.",
-                "details": {
-                    "is_configured": sms_service.is_configured,
-                    "twilio_available": sms_service.client is not None
+                "message": details.get("suggestion") if "suggestion" in details else "Failed to send SMS alert. Check configuration and logs.",
+                "details": details,
+                "troubleshooting": {
+                    "check_twilio_dashboard": "Verify in your Twilio dashboard that the phone numbers are properly configured.",
+                    "verify_trial_limitations": "If using a trial account, you may only be able to send to verified numbers.",
+                    "environment_variables": "Confirm TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, and RECIPIENT_PHONE_NUMBER are set correctly."
                 }
-            })
+            }
+            
+            return jsonify(response_data)
             
     except Exception as e:
         logger.error(f"Error in SMS test alert endpoint: {e}")
