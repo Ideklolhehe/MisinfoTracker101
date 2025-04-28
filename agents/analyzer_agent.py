@@ -177,6 +177,28 @@ class AnalyzerAgent:
                 "analyzed_at": datetime.utcnow().isoformat()
             }
             
+            # Process with streaming clustering algorithms
+            from utils.stream_processor import process_narrative_with_denstream, process_narrative_with_clustream
+            
+            # Use DenStream for spatial clustering (based on content similarity)
+            denstream_result = process_narrative_with_denstream(narrative_id)
+            if denstream_result.get("status") == "success":
+                metadata["denstream"] = {
+                    "cluster_id": denstream_result.get("cluster_id"),
+                    "is_noise": denstream_result.get("is_noise", False)
+                }
+                logger.info(f"Narrative {narrative_id} processed with DenStream: cluster={denstream_result.get('cluster_id')}")
+            
+            # Use CluStream for temporal clustering (based on time and content)
+            clustream_result = process_narrative_with_clustream(narrative_id)
+            if clustream_result.get("status") == "success":
+                metadata["clustream"] = {
+                    "cluster_id": clustream_result.get("cluster_id"),
+                    "is_noise": clustream_result.get("is_noise", False),
+                    "timestamp": clustream_result.get("timestamp")
+                }
+                logger.info(f"Narrative {narrative_id} processed with CluStream: cluster={clustream_result.get('cluster_id')}")
+            
             # Build a graph representation for this narrative outside any transaction
             graph = self._build_narrative_graph(narrative_id)
             if graph:
@@ -194,21 +216,6 @@ class AnalyzerAgent:
                     "density": nx.density(graph),
                     "key_nodes": [{"id": n, "centrality": c} for n, c in key_nodes]
                 }
-                
-            # Process with DenStream for streaming clustering
-            try:
-                from utils.stream_processor import process_narrative_with_denstream
-                stream_result = process_narrative_with_denstream(narrative_id)
-                if stream_result.get("status") == "success":
-                    # Add streaming cluster info to metadata
-                    metadata["streaming_cluster"] = {
-                        "cluster_id": stream_result.get("cluster_id"),
-                        "is_noise": stream_result.get("is_noise", False),
-                        "processed_at": datetime.utcnow().isoformat()
-                    }
-                    logger.info(f"Narrative {narrative_id} processed with DenStream: cluster={stream_result.get('cluster_id')}")
-            except Exception as e:
-                logger.warning(f"Failed to process narrative with DenStream: {e}")
             
             # Now update the narrative in a single transaction
             try:
