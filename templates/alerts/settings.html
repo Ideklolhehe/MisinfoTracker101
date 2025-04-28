@@ -83,17 +83,46 @@
                   <p>
                     Status: 
                     <span class="badge {% if twilio_enabled %}bg-success{% else %}bg-danger{% endif %}">
-                      {% if twilio_enabled %}Enabled{% else %}Disabled{% endif %}
+                      {% if twilio_enabled %}Configured{% else %}Disabled{% endif %}
                     </span>
+                    {% if twilio_enabled and not twilio_verified %}
+                      <span class="badge bg-warning">Needs Verification</span>
+                    {% endif %}
                   </p>
                   
                   {% if twilio_enabled %}
-                    <p class="mb-2">Twilio phone number: <code id="phone">*********</code></p>
-                    <p class="mb-2">Recipient phone number: <code id="recipient">*********</code></p>
+                    <p class="mb-2">Twilio phone number: <code id="phone">{{ twilio_phone_masked }}</code></p>
+                    <p class="mb-2">Recipient phone number: <code id="recipient">{{ recipient_phone_masked }}</code></p>
+                    
+                    {% if twilio_trial %}
+                    <div class="alert alert-info mb-3">
+                      <h6 class="alert-heading"><i class="bi bi-info-circle-fill"></i> Twilio Trial Account Detected</h6>
+                      <p>Your Twilio account appears to be a trial account. Please note the following limitations:</p>
+                      <ul class="mb-1">
+                        <li>You can only send SMS messages to verified phone numbers</li>
+                        <li>You need to verify recipient numbers in your Twilio dashboard</li>
+                        <li>Error 21612 typically means the recipient number is not verified</li>
+                      </ul>
+                      <hr>
+                      <p class="mb-0"><a href="https://www.twilio.com/console/phone-numbers/verified" target="_blank" class="alert-link">Verify Phone Numbers in Twilio Dashboard</a></p>
+                    </div>
+                    {% endif %}
+                    
                     <a href="{{ url_for('alerts.test_sms_alert') }}" class="btn btn-outline-success">Send Test SMS</a>
+                    
+                    {% if last_test_result %}
+                    <div class="mt-3">
+                      <h6>Last Test Result:</h6>
+                      <div class="alert {% if last_test_result.success %}alert-success{% else %}alert-danger{% endif %}">
+                        {{ last_test_result.message }}
+                      </div>
+                    </div>
+                    {% endif %}
+                    
                   {% else %}
                     <div class="alert alert-warning">
-                      Twilio credentials not configured. Set the following environment variables:
+                      <h6 class="alert-heading"><i class="bi bi-exclamation-triangle-fill"></i> Twilio Not Configured</h6>
+                      <p>SMS alerts require Twilio credentials. Set the following environment variables:</p>
                       <ul>
                         <li>TWILIO_ACCOUNT_SID</li>
                         <li>TWILIO_AUTH_TOKEN</li>

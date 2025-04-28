@@ -59,12 +59,19 @@ class SmsService:
         Returns:
             Tuple with (success_bool, details_dict)
         """
+        # Create details dictionary with masked phone numbers for privacy
         details = {
             "configured": self.is_configured,
             "client_initialized": self.client is not None,
-            "twilio_phone": self.twilio_phone,
-            "recipient_phone": "XXXX" + (recipient or self.recipient_phone)[-4:] if (recipient or self.recipient_phone) else None
+            "twilio_phone": self.twilio_phone
         }
+        
+        # Safely add masked recipient phone if available
+        recipient_number = recipient or self.recipient_phone
+        if recipient_number and len(recipient_number) >= 4:
+            details["recipient_phone"] = "XXXX" + recipient_number[-4:]
+        else:
+            details["recipient_phone"] = "Unknown"
         
         # Check if service is configured
         if not self.is_configured or not self.client:
