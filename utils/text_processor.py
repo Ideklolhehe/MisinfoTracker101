@@ -31,13 +31,23 @@ class TextProcessor:
         for lang in languages:
             try:
                 if lang == 'en':
-                    self.nlp_models[lang] = spacy.load('en_core_web_sm')
+                    try:
+                        self.nlp_models[lang] = spacy.load('en_core_web_sm')
+                    except OSError:
+                        # Fallback to blank model if language model not available
+                        logger.warning(f"No spaCy model available for language {lang}, using blank model")
+                        self.nlp_models[lang] = spacy.blank("en")
                 elif lang == 'es':
-                    self.nlp_models[lang] = spacy.load('es_core_news_sm')
+                    try:
+                        self.nlp_models[lang] = spacy.load('es_core_news_sm')
+                    except OSError:
+                        # Fallback to blank model if language model not available
+                        logger.warning(f"No spaCy model available for language {lang}, using blank model")
+                        self.nlp_models[lang] = spacy.blank("es")
                 else:
                     logger.warning(f"Unsupported language: {lang}")
-            except OSError:
-                logger.error(f"Failed to load spaCy model for {lang}. Make sure to install it with: python -m spacy download {lang}_core_web_sm")
+            except Exception as e:
+                logger.warning(f"Failed to load spaCy model for {lang}: {str(e)}. Using NLTK fallbacks where possible.")
         
         # Initialize TF-IDF vectorizer
         self.tfidf = TfidfVectorizer(
