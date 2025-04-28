@@ -586,4 +586,3 @@ class AlertSystem:
             counts[alert.priority.value] += 1
         
         return counts
-"""

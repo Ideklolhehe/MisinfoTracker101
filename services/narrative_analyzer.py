@@ -467,4 +467,3 @@ class NarrativeAnalyzer:
             logger.error(f"Error creating belief network: {e}")
             db.session.rollback()
             return {"error": str(e)}
-"""
