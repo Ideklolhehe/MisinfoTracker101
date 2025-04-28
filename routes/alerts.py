@@ -277,3 +277,75 @@ def alert_settings():
     except Exception as e:
         logger.error(f"Error in alert settings endpoint: {e}")
         return render_template('error.html', message=str(e)), 500
+
+
+@alerts_bp.route('/alerts/test/sms', methods=['GET', 'POST'])
+@login_required
+def test_sms_alert():
+    """
+    Test SMS alert functionality.
+    
+    Returns:
+        Redirect to alerts dashboard with success/error message
+    """
+    try:
+        # Check if user has access
+        if current_user.role != 'admin':
+            abort(403, "Only administrators can test SMS alerts")
+        
+        # Create a test alert
+        test_event = MisinformationEvent(
+            event_id="test-123",
+            complexity_scores={
+                "overall_complexity": 0.95,
+                "linguistic_complexity": 0.9,
+                "logical_structure": 0.85,
+                "rhetorical_techniques": 0.8,
+                "emotional_manipulation": 0.9
+            },
+            pattern_shift_detected=True,
+            timestamp=datetime.now()
+        )
+        
+        # Create an alert with critical priority
+        test_alert = Alert(
+            event_id=test_event.event_id,
+            priority=AlertPriority.CRITICAL,
+            message="TEST ALERT: This is a test of the CIVILIAN SMS alert system. Please disregard.",
+            channels=[AlertChannel.SMS],
+            timestamp=datetime.now()
+        )
+        
+        # Send the alert directly through SMS service
+        from utils.sms_service import sms_service
+        
+        success = sms_service.send_message(
+            f"CIVILIAN TEST ALERT: This is a test of the misinformation alert system. (Time: {datetime.now().strftime('%H:%M:%S')})"
+        )
+        
+        if success:
+            flash("SMS test alert sent successfully!", "success")
+            
+            # Log the successful test
+            test_log = SystemLog(
+                log_type="notification",
+                component="alert_system",
+                message="SMS test alert sent successfully",
+                meta_data=json.dumps({
+                    "test": True,
+                    "channel": "sms",
+                    "user_id": current_user.id,
+                    "timestamp": datetime.now().isoformat()
+                })
+            )
+            db.session.add(test_log)
+            db.session.commit()
+        else:
+            flash("Failed to send SMS test alert. Check configuration and logs.", "danger")
+            
+        return redirect(url_for('alerts.alerts_dashboard'))
+        
+    except Exception as e:
+        logger.error(f"Error in SMS test alert endpoint: {e}")
+        flash(f"Error testing SMS alert: {str(e)}", "danger")
+        return redirect(url_for('alerts.alerts_dashboard'))
