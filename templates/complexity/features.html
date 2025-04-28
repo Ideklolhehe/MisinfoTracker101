@@ -34,6 +34,30 @@
         list-style-type: none;
         padding-left: 0;
         margin-bottom: 0;
+        font-size: 1.1rem;
+        line-height: 1.6;
+        color: #333;
+    }
+    
+    .feature-bullet-list li {
+        position: relative;
+        padding-left: 2rem;
+        margin-bottom: 0.75rem;
+        transition: background-color 0.3s;
+        border-radius: 5px;
+    }
+    
+    .feature-bullet-list li:hover {
+        background-color: #f0f0f5;
+    }
+    
+    .feature-bullet-list li::before {
+        content: "•";
+        position: absolute;
+        left: 0.5rem;
+        color: var(--primary-blue);
+        font-size: 1.5rem;
+        font-weight: bold;
     }
     
     .feature-bullet-list li {
