@@ -34,6 +34,30 @@
         list-style-type: none;
         padding-left: 0;
         margin-bottom: 0;
+        font-size: 1.1rem;
+        line-height: 1.6;
+        color: #333;
+    }
+    
+    .feature-bullet-list li {
+        position: relative;
+        padding-left: 2rem;
+        margin-bottom: 0.75rem;
+        transition: background-color 0.3s;
+        border-radius: 5px;
+    }
+    
+    .feature-bullet-list li:hover {
+        background-color: #f0f0f5;
+    }
+    
+    .feature-bullet-list li::before {
+        content: "•";
+        position: absolute;
+        left: 0.5rem;
+        color: var(--primary-blue);
+        font-size: 1.5rem;
+        font-weight: bold;
     }
     
     .feature-bullet-list li {
@@ -47,18 +71,19 @@
         content: "•";
         position: absolute;
         left: 0.5rem;
-        color: var(--primary-blue);
+        color: var(--primary-medium);
         font-weight: bold;
     }
     
     .features-header {
-        background: linear-gradient(135deg, var(--light-blue) 0%, var(--light-purple) 100%);
+        background: linear-gradient(135deg, var(--primary-medium) 0%, var(--accent-color) 100%);
         padding: 3rem 2rem;
         border-radius: 0.5rem;
         margin-bottom: 3rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-        border: 1px solid #e8e8e8;
+        box-shadow: 0 10px 20px rgba(101, 67, 33, 0.1);
+        border: 1px solid var(--neutral-border);
         text-align: center;
+        color: white;
     }
     
     .section-divider {
@@ -279,7 +304,7 @@
                     
                     <div class="row">
                         <div class="col-md-6">
-                            <h3 class="mb-3">Time-Series Analysis</h3>
+                            <h3 class="mb-3" style="color: var(--primary-dark);">Time-Series Analysis</h3>
                             <ul class="feature-bullet-list">
                                 <li>Interactive time-series visualizations of complexity metrics</li>
                                 <li>Customizable time ranges from days to months</li>

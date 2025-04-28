@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html {% block html_attribs %}lang="en" data-bs-theme="dark"{% endblock %}>
+<html {% block html_attribs %}lang="en" data-bs-theme="light"{% endblock %}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}CIVILIAN - Combating Information Manipulation{% endblock %}</title>
-    <!-- Bootstrap CSS (Replit dark theme) -->
-    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <!-- Bootstrap CSS (Light theme) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Custom CSS -->
@@ -14,11 +14,63 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            background-color: var(--neutral-background);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         .navbar-brand img {
             height: 30px;
             margin-right: 10px;
+        }
+        
+        /* Button styling */
+        .btn-primary {
+            background-color: var(--primary-medium);
+            border-color: var(--primary-medium);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+        
+        .btn-secondary {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #94623B;
+            border-color: #94623B;
+        }
+        
+        /* Card styling */
+        .card {
+            border-color: var(--neutral-border);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            background-color: white;
+        }
+        
+        .card-header {
+            background-color: var(--neutral-medium);
+            border-bottom: 1px solid var(--neutral-border);
+            padding: 1rem 1.25rem;
+        }
+        
+        /* Link styling */
+        a {
+            color: var(--primary-medium);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
         }
 
         main {
@@ -28,34 +80,60 @@
         .footer {
             margin-top: auto;
             padding: 1rem 0;
-            background-color: var(--bs-dark);
-            color: var(--bs-light);
+            background-color: var(--primary-dark);
+            color: var(--neutral-light);
         }
 
         /* Dashboard specific styles */
         .stat-card {
             border-radius: 10px;
             transition: transform 0.3s;
+            border: 1px solid var(--neutral-border);
+            background-color: var(--neutral-light);
         }
 
         .stat-card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(101, 67, 33, 0.1);
         }
 
-        /* Custom theme colors */
+        /* Sedona Warmth Color Palette */
         :root {
-            --civilian-primary: #3d5afe;
-            --civilian-secondary: #7986cb;
-            --civilian-accent: #00b0ff;
+            /* Primary colors */
+            --primary-dark: #673326;    /* Dark brown */
+            --primary-medium: #C87360;  /* Terracotta */
+            
+            /* Neutral colors */
+            --neutral-light: #DAC1AC;   /* Light beige */
+            --neutral-medium: #EFE6D9;  /* Cream */
+            --neutral-background: #F7F3ED;  /* Off-white */
+            --neutral-border: #EEDED0;  /* Light cream */
+            
+            /* Accent colors */
+            --accent-color: #B37F56;    /* Caramel */
+            --text-color: #402F2A;      /* Dark brown text */
+            
+            /* Bootstrap overrides */
+            --bs-primary: var(--primary-medium);
+            --bs-secondary: var(--accent-color);
+            --bs-success: #8A7A5F;      /* Olive brown */
+            --bs-info: #9FB7C2;         /* Dusty blue */
+            --bs-warning: #D9A05B;      /* Golden */
+            --bs-danger: #A35449;       /* Rust */
+            
+            /* For CIVILIAN */
+            --civilian-primary: var(--primary-medium);
+            --civilian-secondary: var(--accent-color);
+            --civilian-accent: var(--primary-dark);
         }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg" style="background-color: var(--primary-dark); color: var(--neutral-light);">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="/">
+            <a class="navbar-brand d-flex align-items-center text-light" href="/">
                 <i class="bi bi-shield-check fs-3 me-2"></i>
                 <span>CIVILIAN</span>
             </a>
@@ -65,28 +143,28 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/"><i class="bi bi-house-door me-1"></i> Home</a>
+                        <a class="nav-link text-light" href="/"><i class="bi bi-house-door me-1"></i> Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('dashboard.index') }}"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
+                        <a class="nav-link text-light" href="{{ url_for('dashboard.index') }}"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('complexity.features') }}"><i class="bi bi-star me-1"></i> Features</a>
+                        <a class="nav-link text-light" href="{{ url_for('complexity.features') }}"><i class="bi bi-star me-1"></i> Features</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('verification.index') }}"><i class="bi bi-check-circle me-1"></i> Verify Content</a>
+                        <a class="nav-link text-light" href="{{ url_for('verification.index') }}"><i class="bi bi-check-circle me-1"></i> Verify Content</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('data_sources.index') }}"><i class="bi bi-database me-1"></i> Data Sources</a>
+                        <a class="nav-link text-light" href="{{ url_for('data_sources.index') }}"><i class="bi bi-database me-1"></i> Data Sources</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('evidence.index') }}"><i class="bi bi-shield-lock me-1"></i> Evidence</a>
+                        <a class="nav-link text-light" href="{{ url_for('evidence.index') }}"><i class="bi bi-shield-lock me-1"></i> Evidence</a>
                     </li>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-tools me-1"></i> Tools
                         </a>
-                        <ul class="dropdown-menu">
+                        <ul class="dropdown-menu" style="background-color: var(--neutral-medium);">
                             <li><a class="dropdown-item" href="#">Narrative Tracker</a></li>
                             <li><a class="dropdown-item" href="#">Belief Graph Visualizer</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('adversarial.index') }}">Adversarial Training</a></li>
@@ -101,10 +179,10 @@
                 <ul class="navbar-nav">
                     {% if current_user.is_authenticated %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-person-circle me-1"></i> {{ current_user.username }}
                             </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
+                            <ul class="dropdown-menu dropdown-menu-end" style="background-color: var(--neutral-medium);">
                                 <li><a class="dropdown-item" href="#">My Profile</a></li>
                                 <li><a class="dropdown-item" href="#">Settings</a></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -113,7 +191,7 @@
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('replit_auth.login') }}"><i class="bi bi-box-arrow-in-right me-1"></i> Log In</a>
+                            <a class="nav-link text-light" href="{{ url_for('replit_auth.login') }}"><i class="bi bi-box-arrow-in-right me-1"></i> Log In</a>
                         </li>
                     {% endif %}
                 </ul>
@@ -127,38 +205,38 @@
     </main>
 
     <!-- Footer -->
-    <footer class="footer mt-auto py-3 bg-dark">
+    <footer class="footer mt-auto py-3" style="background-color: var(--primary-dark); color: var(--neutral-light);">
         <div class="container">
             <div class="row">
                 <div class="col-md-6">
-                    <h5>CIVILIAN</h5>
-                    <p class="text-muted">A sovereign machine intelligence for detecting, tracing, and dismantling global misinformation networks.</p>
+                    <h5 class="text-light">CIVILIAN</h5>
+                    <p style="color: var(--neutral-light); opacity: 0.8;">A sovereign machine intelligence for detecting, tracing, and dismantling global misinformation networks.</p>
                 </div>
                 <div class="col-md-3">
-                    <h5>Quick Links</h5>
+                    <h5 class="text-light">Quick Links</h5>
                     <ul class="list-unstyled">
-                        <li><a href="{{ url_for('complexity.features') }}" class="link-light">Features</a></li>
-                        <li><a href="#" class="link-light">About</a></li>
-                        <li><a href="#" class="link-light">Documentation</a></li>
-                        <li><a href="{{ url_for('verification.index') }}" class="link-light">Verify Content</a></li>
+                        <li><a href="{{ url_for('complexity.features') }}" style="color: var(--neutral-light); text-decoration: none;">Features</a></li>
+                        <li><a href="#" style="color: var(--neutral-light); text-decoration: none;">About</a></li>
+                        <li><a href="#" style="color: var(--neutral-light); text-decoration: none;">Documentation</a></li>
+                        <li><a href="{{ url_for('verification.index') }}" style="color: var(--neutral-light); text-decoration: none;">Verify Content</a></li>
                     </ul>
                 </div>
                 <div class="col-md-3">
-                    <h5>Resources</h5>
+                    <h5 class="text-light">Resources</h5>
                     <ul class="list-unstyled">
-                        <li><a href="#" class="link-light">Research</a></li>
-                        <li><a href="#" class="link-light">Publications</a></li>
-                        <li><a href="#" class="link-light">Contact</a></li>
+                        <li><a href="#" style="color: var(--neutral-light); text-decoration: none;">Research</a></li>
+                        <li><a href="#" style="color: var(--neutral-light); text-decoration: none;">Publications</a></li>
+                        <li><a href="#" style="color: var(--neutral-light); text-decoration: none;">Contact</a></li>
                     </ul>
                 </div>
             </div>
-            <hr>
+            <hr style="border-color: var(--neutral-light); opacity: 0.2;">
             <div class="d-flex justify-content-between">
-                <p class="text-muted mb-0">&copy; 2025 CIVILIAN Project</p>
+                <p style="color: var(--neutral-light); opacity: 0.8;" class="mb-0">&copy; 2025 CIVILIAN Project</p>
                 <div>
-                    <a href="#" class="link-light me-3"><i class="bi bi-github"></i></a>
-                    <a href="#" class="link-light me-3"><i class="bi bi-twitter-x"></i></a>
-                    <a href="#" class="link-light"><i class="bi bi-envelope"></i></a>
+                    <a href="#" class="me-3" style="color: var(--neutral-light);"><i class="bi bi-github"></i></a>
+                    <a href="#" class="me-3" style="color: var(--neutral-light);"><i class="bi bi-twitter-x"></i></a>
+                    <a href="#" style="color: var(--neutral-light);"><i class="bi bi-envelope"></i></a>
                 </div>
             </div>
         </div>
