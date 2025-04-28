@@ -1,0 +1,183 @@
+import os
+import json
+import logging
+import uuid
+import time
+import threading
+from collections import defaultdict
+from typing import List, Dict, Callable
+
+from decouple import config
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import numpy as np
+import faiss
+from sklearn.cluster import DBSCAN, Birch, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+import networkx as nx
+import plotly.graph_objects as go
+from plotly.offline import plot
+
+# Load .env for local development fallback
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+# Configuration
+FLASK_PORT = config("FLASK_PORT", default=5000, cast=int)
+FLASK_DEBUG = config("FLASK_DEBUG", default=False, cast=bool)
+EMBEDDING_DIM = config("EMBEDDING_DIM", default=128, cast=int)
+DBSCAN_EPS = config("DBSCAN_EPS", default=0.5, cast=float)
+DBSCAN_MIN_SAMPLES = config("DBSCAN_MIN_SAMPLES", default=5, cast=int)
+BIRCH_THRESHOLD = config("BIRCH_THRESHOLD", default=0.5, cast=float)
+BIRCH_BRANCHING_FACTOR = config("BIRCH_BRANCHING_FACTOR", default=50, cast=int)
+AGG_N_CLUSTERS = config("AGG_N_CLUSTERS", default=3, cast=int)
+CORS_ORIGINS = config("CORS_ORIGINS", default="*", cast=lambda v: [o.strip() for o in v.split(",")])
+
+# Thread locks for concurrency safety
+data_lock = threading.Lock()
+
+# In-memory data store (replace with persistent storage)
+narratives: Dict[str, Dict] = {}
+embeddings_list: List[np.ndarray] = []
+current_clusters: Dict[str, int] = {}
+
+# Prometheus metrics
+ingest_counter = Counter('narratives_ingested_total', 'Total narratives ingested')
+cluster_counter = Counter('cluster_updates_total', 'Total clustering operations')
+silhouette_gauge = Gauge('clustering_silhouette_score', 'Latest silhouette score')
+
+# Flask app
+app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+
+# Utility functions
+def generate_narrative_id() -> str:
+    return f"narrative-{uuid.uuid4()}"
+
+
+def calculate_cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    a = a.flatten(); b = b.flatten()
+    norm_a, norm_b = np.linalg.norm(a), np.linalg.norm(b)
+    if norm_a==0 or norm_b==0:
+        return 0.0
+    return float(np.dot(a, b) / (norm_a * norm_b))
+
+# Clustering registry
+CLUSTERING_REGISTRY: Dict[str, Callable[[np.ndarray], np.ndarray]] = {}
+
+def register_clustering_algorithm(name: str):
+    def decorator(func):
+        CLUSTERING_REGISTRY[name] = func
+        return func
+    return decorator
+
+@register_clustering_algorithm("DBSCAN")
+def dbscan_clustering(X: np.ndarray) -> np.ndarray:
+    return DBSCAN(eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES).fit_predict(X)
+
+@register_clustering_algorithm("BIRCH")
+def birch_clustering(X: np.ndarray) -> np.ndarray:
+    return Birch(threshold=BIRCH_THRESHOLD, branching_factor=BIRCH_BRANCHING_FACTOR).fit_predict(X)
+
+@register_clustering_algorithm("Agglomerative")
+def agg_clustering(X: np.ndarray) -> np.ndarray:
+    return AgglomerativeClustering(n_clusters=AGG_N_CLUSTERS).fit_predict(X)
+
+# Placeholder for incremental clustering
+@register_clustering_algorithm("Incremental")
+def incremental_clustering(X: np.ndarray) -> np.ndarray:
+    # Example: use DBSCAN on minibatch for demonstration
+    return DBSCAN(eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES).fit_predict(X)
+
+# Clustering function
+def perform_clustering(embeddings: np.ndarray, algorithm: str) -> np.ndarray:
+    func = CLUSTERING_REGISTRY.get(algorithm)
+    if not func:
+        raise ValueError(f"Unknown algorithm: {algorithm}")
+    return func(embeddings)
+
+# FAISS-based graph construction for scalability
+def build_narrative_graph(ids: List[str], embs: List[np.ndarray]):
+    d = embs[0].shape[0]
+    index = faiss.IndexFlatIP(d)
+    faiss.normalize_L2(np.vstack(embs))
+    index.add(np.vstack(embs))
+    D, I = index.search(np.vstack(embs), 10)
+    G = nx.Graph()
+    for idx, nid in enumerate(ids):
+        G.add_node(nid)
+        for j, sim in zip(I[idx][1:], D[idx][1:]):
+            if sim > 0.8:
+                G.add_edge(nid, ids[j], weight=float(sim))
+    return G
+
+# Visualization
+ def visualize_graph(G: nx.Graph) -> str:
+    pos = nx.spring_layout(G, seed=42)
+    edge_x, edge_y = [], []
+    for u, v in G.edges():
+        x0, y0 = pos[u]; x1, y1 = pos[v]
+        edge_x += [x0, x1, None]; edge_y += [y0, y1, None]
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1))
+    node_x = [pos[n][0] for n in G.nodes()]
+    node_y = [pos[n][1] for n in G.nodes()]
+    node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=list(G.nodes()), marker=dict(size=10))
+    fig = go.Figure(data=[edge_trace, node_trace])
+    return plot(fig, output_type='div')
+
+# API endpoints
+@app.route('/api/narratives', methods=['POST'])
+def add_narrative():
+    data = request.get_json(force=True)
+    emb = data.get('embedding'); text = data.get('text')
+    if not emb or not text or len(emb)!=EMBEDDING_DIM:
+        return jsonify(error='Invalid payload'), 400
+    nid = generate_narrative_id()
+    with data_lock:
+        narratives[nid] = {'embedding': emb, 'text': text}
+        embeddings_list.append(np.array(emb, dtype='float32'))
+    ingest_counter.inc()
+    return jsonify(narrative_id=nid), 201
+
+@app.route('/api/clusters', methods=['POST'])
+def update_clusters():
+    data = request.get_json(force=True)
+    alg = data.get('algorithm');
+    if alg not in CLUSTERING_REGISTRY:
+        return jsonify(error='Algorithm not supported'), 400
+    with data_lock:
+        X = np.vstack(embeddings_list)
+        labels = perform_clustering(X, alg)
+        for lid, nid in zip(labels, narratives.keys()):
+            current_clusters[nid] = int(lid)
+    cluster_counter.inc()
+    if len(set(labels))>1:
+        score = silhouette_score(X, labels)
+        silhouette_gauge.set(score)
+    return jsonify(status='updated'), 200
+
+@app.route('/api/clusters', methods=['GET'])
+def get_clusters():
+    return jsonify(current_clusters), 200
+
+@app.route('/api/graph', methods=['GET'])
+def get_graph():
+    with data_lock:
+        ids = list(narratives.keys())
+        embs = [narratives[i]['embedding'] for i in ids]
+    G = build_narrative_graph(ids, embs)
+    div = visualize_graph(G)
+    return jsonify(graph_html=div), 200
+
+@app.route('/metrics')
+def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+if __name__ == '__main__':
+    logger.info('Starting Enhanced Narrative Analyzer')
+    app.run(port=FLASK_PORT, debug=FLASK_DEBUG)  # For production, use Gunicorn wsgi: app

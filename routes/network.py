@@ -236,3 +236,130 @@ def api_coordinated_campaigns():
     except Exception as e:
         logger.error(f"Error in campaigns API endpoint: {e}")
         return jsonify({"error": str(e)}), 500
+
+@network_bp.route('/network/communities', methods=['GET'])
+@login_required
+def louvain_communities():
+    """
+    View communities detected with Louvain algorithm.
+    
+    Returns:
+        HTML page showing Louvain communities
+    """
+    try:
+        # Check if user has access
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            abort(403, "Insufficient privileges to access community analysis tools")
+        
+        # Initialize network analyzer
+        analyzer = NarrativeNetworkAnalyzer()
+        
+        # Build the network
+        include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+        analyzer.build_narrative_network(include_archived=include_archived)
+        
+        # Identify communities
+        communities = analyzer.identify_communities_with_louvain()
+        
+        # Export network for visualization
+        network_data = analyzer.export_network_json()
+        
+        return render_template(
+            'network/communities.html',
+            communities=communities,
+            network_data=json.dumps(network_data),
+            include_archived=include_archived
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in Louvain communities endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
+
+@network_bp.route('/network/api/communities', methods=['GET'])
+@login_required
+def api_louvain_communities():
+    """
+    API endpoint to get communities detected with Louvain algorithm.
+    
+    Returns:
+        JSON with community data
+    """
+    try:
+        # Check if user has access
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Insufficient privileges"}), 403
+        
+        # Initialize network analyzer
+        analyzer = NarrativeNetworkAnalyzer()
+        
+        # Build the network
+        include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+        analyzer.build_narrative_network(include_archived=include_archived)
+        
+        # Identify communities
+        communities = analyzer.identify_communities_with_louvain()
+        
+        return jsonify({
+            "communities": communities,
+            "community_count": len(communities),
+            "generated_at": communities[0]["narratives"][0]["first_detected"] if communities and communities[0]["narratives"] else None
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in communities API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@network_bp.route('/network/streaming/denstream', methods=['GET'])
+@login_required
+def denstream_clusters():
+    """
+    View clusters from DenStream streaming algorithm.
+    
+    Returns:
+        HTML page showing DenStream clustering results
+    """
+    try:
+        # Check if user has access
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            abort(403, "Insufficient privileges to access streaming cluster analysis tools")
+        
+        # Initialize network analyzer
+        analyzer = NarrativeNetworkAnalyzer()
+        
+        # Get DenStream clusters
+        clusters = analyzer.get_denstream_clusters()
+        
+        return render_template(
+            'network/denstream.html',
+            clusters=clusters
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in DenStream clusters endpoint: {e}")
+        return render_template('error.html', message=str(e)), 500
+
+@network_bp.route('/network/api/streaming/denstream', methods=['GET'])
+@login_required
+def api_denstream_clusters():
+    """
+    API endpoint to get clusters from DenStream streaming algorithm.
+    
+    Returns:
+        JSON with DenStream clustering results
+    """
+    try:
+        # Check if user has access
+        if current_user.role not in ['admin', 'analyst', 'researcher']:
+            return jsonify({"error": "Insufficient privileges"}), 403
+        
+        # Initialize network analyzer
+        analyzer = NarrativeNetworkAnalyzer()
+        
+        # Get DenStream clusters
+        clusters = analyzer.get_denstream_clusters()
+        
+        return jsonify(clusters)
+        
+    except Exception as e:
+        logger.error(f"Error in DenStream API endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
