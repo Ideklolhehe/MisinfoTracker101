@@ -3,11 +3,12 @@
  * Dashboard and application styles
  */
 
-:root {
-    --civilian-primary: #4caf50; /* Light Green */
-    --civilian-secondary: #ff9800; /* Orange */
-    --civilian-accent: #f44336; /* Red */
-}
+--primary-color-dark: #555540;
+    --primary-color-light: #8C7568;
+    --neutral-light: #F2F2F0;
+    --accent-color: #4E321A;
+    --text-color: #403B35;
+    --background-color-light: #FEF7EF;
 
 /* Core layout styles */
 html, body {
