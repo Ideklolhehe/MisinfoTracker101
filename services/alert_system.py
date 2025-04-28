@@ -380,10 +380,19 @@ class AlertSystem:
                 logger.warning("SMS alert requested but Twilio is not configured")
                 return
             
-            # Note: Actual SMS sending implementation would depend on your SMS service
-            # This is a placeholder that logs the action
+            # Import here to avoid circular imports
+            from utils.sms_service import sms_service
             
-            logger.info(f"SMS alert would be sent: {alert.message}")
+            # Prepare a more concise message for SMS
+            message = f"CIVILIAN ALERT [{alert.priority.value.upper()}]: {alert.message}"
+            
+            # Send the SMS
+            success = sms_service.send_message(message)
+            
+            if success:
+                logger.info(f"SMS alert sent successfully: {alert.message}")
+            else:
+                logger.warning(f"Failed to send SMS alert: {alert.message}")
             
             # Record the notification attempt
             self._log_notification_attempt("sms", alert)
