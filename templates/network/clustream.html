@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}DenStream Streaming Clusters - CIVILIAN{% endblock %}
+{% block title %}CluStream Temporal Clusters - CIVILIAN{% endblock %}
 
 {% block styles %}
 <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
@@ -50,6 +50,30 @@
   .timeline-marker:hover {
     transform: scale(1.5);
   }
+  .time-axis {
+    margin-top: 10px;
+    height: 40px;
+    position: relative;
+  }
+  .time-tick {
+    position: absolute;
+    border-left: 1px solid var(--bs-gray-500);
+    height: 10px;
+    font-size: 0.7rem;
+    color: var(--bs-gray-500);
+  }
+  .time-label {
+    position: absolute;
+    top: 12px;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    color: var(--bs-gray-500);
+  }
+  .temporal-highlight {
+    background: linear-gradient(90deg, rgba(var(--bs-primary-rgb), 0.1) 0%, rgba(var(--bs-primary-rgb), 0.2) 100%);
+    border-left: 2px solid var(--bs-primary);
+    padding-left: 10px;
+  }
 </style>
 {% endblock %}
 
@@ -57,9 +81,9 @@
 <div class="container-fluid">
   <div class="row mb-4">
     <div class="col">
-      <h1>DenStream Streaming Clusters</h1>
+      <h1>CluStream Temporal Clusters</h1>
       <p class="lead">
-        Real-time clustering of narrative streams using DenStream algorithm.
+        Temporal clustering of narrative streams using CluStream algorithm with time-sensitive analysis.
       </p>
       <div class="d-flex justify-content-between">
         <div>
@@ -69,19 +93,22 @@
           <span class="badge bg-success me-2">
             <i class="bi bi-diagram-3-fill"></i> {{ clusters.clusters|length }} Active Clusters
           </span>
-          <span class="badge bg-secondary">
+          <span class="badge bg-secondary me-2">
             <i class="bi bi-question-circle-fill"></i> {{ clusters.noise_points|length }} Noise Points
+          </span>
+          <span class="badge bg-info">
+            <i class="bi bi-clock"></i> Updated: {{ generated_at }}
           </span>
         </div>
         <div>
           <a href="{{ url_for('network.network_dashboard') }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-diagram-3"></i> Network Dashboard
           </a>
+          <a href="{{ url_for('network.denstream_clusters') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-lightning"></i> DenStream Clusters
+          </a>
           <a href="{{ url_for('network.louvain_communities') }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-pie-chart"></i> Louvain Communities
-          </a>
-          <a href="{{ url_for('network.coordinated_campaigns') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-diagram-2"></i> Coordinated Campaigns
           </a>
         </div>
       </div>
@@ -92,13 +119,13 @@
     <div class="col-lg-8">
       <div class="card">
         <div class="card-header">
-          <h5 class="card-title mb-0">Streaming Cluster Visualization</h5>
+          <h5 class="card-title mb-0">Temporal Cluster Visualization</h5>
         </div>
         <div class="card-body">
           <div class="streaming-visualization" id="stream-container"></div>
           <div class="text-center mt-2">
             <small class="text-muted">
-              Points are colored by cluster. Noise points are shown in gray. Hover over points for narrative details.
+              Points are colored by temporal cluster. Larger points represent more recent narratives. Hover over points for narrative details and timestamps.
             </small>
           </div>
         </div>
@@ -107,7 +134,7 @@
     <div class="col-lg-4">
       <div class="card">
         <div class="card-header">
-          <h5 class="card-title mb-0">DenStream Overview</h5>
+          <h5 class="card-title mb-0">CluStream Temporal Overview</h5>
         </div>
         <div class="card-body">
           <div class="row">
@@ -160,28 +187,32 @@
           <div class="alert alert-info">
             <i class="bi bi-info-circle-fill me-2"></i>
             <small>
-              DenStream is a density-based clustering algorithm for evolving data streams. It continuously processes narratives and identifies clusters in real-time, adapting to new patterns as they emerge.
+              CluStream is a temporal clustering algorithm for evolving data streams that tracks both spatial and temporal patterns. It maintains micro-clusters that capture the temporal evolution of narrative clusters over time, enabling the analysis of how misinformation patterns change and evolve.
             </small>
           </div>
           <hr>
-          <h6>Streaming Parameters</h6>
+          <div class="time-axis" id="time-axis">
+            <!-- Time axis will be populated by JavaScript -->
+          </div>
+          <hr>
+          <h6>Temporal Parameters</h6>
           <table class="table table-sm">
             <tbody>
               <tr>
-                <td><strong>Decay Factor (λ)</strong></td>
-                <td>0.01</td>
+                <td><strong>Macro Clusters</strong></td>
+                <td>5</td>
               </tr>
               <tr>
-                <td><strong>Potential Threshold (β)</strong></td>
-                <td>0.5</td>
+                <td><strong>Time Window</strong></td>
+                <td>Adaptive</td>
               </tr>
               <tr>
-                <td><strong>Minimum Weight (μ)</strong></td>
-                <td>2.5</td>
+                <td><strong>Window Range</strong></td>
+                <td>Last 7 days</td>
               </tr>
               <tr>
-                <td><strong>Radius Multiplier (ε)</strong></td>
-                <td>0.5</td>
+                <td><strong>Last Updated</strong></td>
+                <td>{{ generated_at }}</td>
               </tr>
             </tbody>
           </table>
@@ -192,7 +223,7 @@
 
   <div class="row">
     <div class="col">
-      <h4 class="mb-3">Active Stream Clusters</h4>
+      <h4 class="mb-3">Active Temporal Clusters</h4>
       
       {% if clusters.clusters %}
         <div class="row">
@@ -244,7 +275,7 @@
               <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                   <div class="modal-header">
-                    <h5 class="modal-title" id="clusterModalLabel{{ cluster.id }}">Cluster #{{ cluster.id }} - All Narratives</h5>
+                    <h5 class="modal-title" id="clusterModalLabel{{ cluster.id }}">Temporal Cluster #{{ cluster.id }} - All Narratives</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                   </div>
                   <div class="modal-body">
@@ -290,7 +321,7 @@
       {% else %}
         <div class="alert alert-warning">
           <i class="bi bi-exclamation-triangle-fill me-2"></i>
-          No active stream clusters detected. The system requires more narrative data for DenStream to form clusters.
+          No active temporal clusters detected. The system requires more narrative data for CluStream to form temporal clusters.
         </div>
       {% endif %}
     </div>
