@@ -2,7 +2,7 @@ modules = ["python-3.11", "postgresql-16", "gcloud", "typescript-language-server
 
 [nix]
 channel = "stable-24_05"
-packages = ["cargo", "freetype", "glibcLocales", "grpc", "kubo", "lcms2", "libiconv", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "openssl", "pkg-config", "postgresql", "rustc", "tcl", "tk", "zlib"]
+packages = ["arrow-cpp", "cargo", "freetype", "glibcLocales", "grpc", "kubo", "lcms2", "libiconv", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "libyaml", "openjpeg", "openssl", "pkg-config", "postgresql", "rustc", "tcl", "tk", "zlib"]
 
 [deployment]
 deploymentTarget = "autoscale"
