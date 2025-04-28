@@ -275,4 +275,3 @@ def alert_settings():
     except Exception as e:
         logger.error(f"Error in alert settings endpoint: {e}")
         return render_template('error.html', message=str(e)), 500
-"""

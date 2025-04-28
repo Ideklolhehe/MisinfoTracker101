@@ -82,6 +82,12 @@ with app.app_context():
     from routes.evidence import evidence_bp
     from routes.complexity import complexity_bp
     
+    # Import advanced analysis blueprints
+    from routes.time_series import time_series_bp
+    from routes.alerts import alerts_bp
+    from routes.clusters import clusters_bp
+    from routes.prediction import prediction_bp
+    
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(api_bp, url_prefix='/api')
@@ -96,6 +102,12 @@ with app.app_context():
     app.register_blueprint(profile_bp)
     app.register_blueprint(home_bp)
     app.register_blueprint(dev_auth_bp)  # Development-only
+    
+    # Register advanced analysis blueprints
+    app.register_blueprint(time_series_bp)  # Routes include '/time_series'
+    app.register_blueprint(alerts_bp)  # Routes include '/alerts'
+    app.register_blueprint(clusters_bp)  # Routes include '/clusters'
+    app.register_blueprint(prediction_bp)  # Routes include '/prediction'
     
     # Initialize external API clients
     from services.api_credential_manager import APICredentialManager

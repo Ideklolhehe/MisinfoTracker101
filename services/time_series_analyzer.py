@@ -414,4 +414,3 @@ class TimeSeriesAnalyzer:
             'acceleration': acceleration,
             'recent_change_rate': recent_change_rate
         }
-"""

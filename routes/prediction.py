@@ -330,4 +330,3 @@ def prediction_dashboard():
     except Exception as e:
         logger.error(f"Error in prediction dashboard endpoint: {e}")
         return render_template('error.html', message=str(e)), 500
-"""

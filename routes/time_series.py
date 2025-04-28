@@ -274,4 +274,3 @@ def api_get_time_series_insights(narrative_id):
     except Exception as e:
         logger.error(f"Error in time-series insights API endpoint: {e}")
         return jsonify({"error": str(e)}), 500
-"""

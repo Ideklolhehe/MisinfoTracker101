@@ -367,4 +367,3 @@ def view_coordinated_campaigns():
     except Exception as e:
         logger.error(f"Error in coordinated campaigns endpoint: {e}")
         return render_template('error.html', message=str(e)), 500
-"""
