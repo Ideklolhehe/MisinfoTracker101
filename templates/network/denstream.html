@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+
+{% block title %}DenStream Streaming Clusters - CIVILIAN{% endblock %}
+
+{% block styles %}
+<link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+<style>
+  .cluster-card {
+    margin-bottom: 1.5rem;
+    transition: transform 0.2s;
+  }
+  .cluster-card:hover {
+    transform: translateY(-5px);
+  }
+  .streaming-visualization {
+    border: 1px solid var(--bs-secondary-border-subtle);
+    border-radius: 0.5rem;
+    background-color: var(--bs-body-bg);
+    height: 500px;
+  }
+  .stream-point {
+    fill-opacity: 0.6;
+    stroke-width: 1.5;
+  }
+  .stream-point.active {
+    fill-opacity: 0.9;
+    stroke-width: 2;
+  }
+  .noise-point {
+    fill: var(--bs-gray-500);
+    fill-opacity: 0.4;
+    stroke: var(--bs-gray-800);
+  }
+  .timeline {
+    height: 3px;
+    background-color: var(--bs-gray-600);
+    margin: 1.5rem 0;
+    position: relative;
+  }
+  .timeline-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--bs-primary);
+    position: absolute;
+    top: -4.5px;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .timeline-marker:hover {
+    transform: scale(1.5);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row mb-4">
+    <div class="col">
+      <h1>DenStream Streaming Clusters</h1>
+      <p class="lead">
+        Real-time clustering of narrative streams using DenStream algorithm.
+      </p>
+      <div class="d-flex justify-content-between">
+        <div>
+          <span class="badge bg-primary me-2">
+            <i class="bi bi-lightning-fill"></i> {{ clusters.total_processed }} Narratives Processed
+          </span>
+          <span class="badge bg-success me-2">
+            <i class="bi bi-diagram-3-fill"></i> {{ clusters.clusters|length }} Active Clusters
+          </span>
+          <span class="badge bg-secondary">
+            <i class="bi bi-question-circle-fill"></i> {{ clusters.noise_points|length }} Noise Points
+          </span>
+        </div>
+        <div>
+          <a href="{{ url_for('network.network_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-diagram-3"></i> Network Dashboard
+          </a>
+          <a href="{{ url_for('network.louvain_communities') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-pie-chart"></i> Louvain Communities
+          </a>
+          <a href="{{ url_for('network.coordinated_campaigns') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-diagram-2"></i> Coordinated Campaigns
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Streaming Cluster Visualization</h5>
+        </div>
+        <div class="card-body">
+          <div class="streaming-visualization" id="stream-container"></div>
+          <div class="text-center mt-2">
+            <small class="text-muted">
+              Points are colored by cluster. Noise points are shown in gray. Hover over points for narrative details.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">DenStream Overview</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-6 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Active Clusters</h6>
+                  <h3 class="mt-2">{{ clusters.clusters|length }}</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Noise Points</h6>
+                  <h3 class="mt-2">{{ clusters.noise_points|length }}</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Total Processed</h6>
+                  <h3 class="mt-2">{{ clusters.total_processed }}</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Largest Cluster</h6>
+                  <h3 class="mt-2">
+                    {% if clusters.clusters %}
+                      {% set largest_cluster = 0 %}
+                      {% for cluster in clusters.clusters %}
+                        {% if cluster.size > largest_cluster %}
+                          {% set largest_cluster = cluster.size %}
+                        {% endif %}
+                      {% endfor %}
+                      {{ largest_cluster }}
+                    {% else %}
+                      0
+                    {% endif %}
+                  </h3>
+                </div>
+              </div>
+            </div>
+          </div>
+          <hr>
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <small>
+              DenStream is a density-based clustering algorithm for evolving data streams. It continuously processes narratives and identifies clusters in real-time, adapting to new patterns as they emerge.
+            </small>
+          </div>
+          <hr>
+          <h6>Streaming Parameters</h6>
+          <table class="table table-sm">
+            <tbody>
+              <tr>
+                <td><strong>Decay Factor (λ)</strong></td>
+                <td>0.01</td>
+              </tr>
+              <tr>
+                <td><strong>Potential Threshold (β)</strong></td>
+                <td>0.5</td>
+              </tr>
+              <tr>
+                <td><strong>Minimum Weight (μ)</strong></td>
+                <td>2.5</td>
+              </tr>
+              <tr>
+                <td><strong>Radius Multiplier (ε)</strong></td>
+                <td>0.5</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h4 class="mb-3">Active Stream Clusters</h4>
+      
+      {% if clusters.clusters %}
+        <div class="row">
+          {% for cluster in clusters.clusters %}
+            <div class="col-md-6 col-xl-4">
+              <div class="card cluster-card" id="cluster-{{ cluster.id }}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0">Cluster #{{ cluster.id }}</h5>
+                  <span class="badge bg-primary">{{ cluster.size }} narratives</span>
+                </div>
+                <div class="card-body">
+                  <h6>Narratives in this cluster:</h6>
+                  <ul class="list-group list-group-flush">
+                    {% for narrative in cluster.narratives[:5] %}
+                      <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                          <div>
+                            <a href="{{ url_for('network.narrative_network', narrative_id=narrative.id) }}">
+                              {{ narrative.title|truncate(60) }}
+                            </a>
+                            <span class="badge {% if narrative.status == 'active' %}bg-danger{% elif narrative.status == 'monitoring' %}bg-warning{% else %}bg-secondary{% endif %} ms-2">
+                              {{ narrative.status }}
+                            </span>
+                          </div>
+                          <span class="badge bg-info rounded-pill">{{ "%.2f"|format(narrative.confidence) }}</span>
+                        </div>
+                      </li>
+                    {% endfor %}
+                    
+                    {% if cluster.narratives|length > 5 %}
+                      <li class="list-group-item text-center">
+                        <button class="btn btn-sm btn-link" type="button" data-bs-toggle="modal" data-bs-target="#clusterModal{{ cluster.id }}">
+                          View all {{ cluster.narratives|length }} narratives
+                        </button>
+                      </li>
+                    {% endif %}
+                  </ul>
+                </div>
+                <div class="card-footer bg-transparent">
+                  <button class="btn btn-sm btn-outline-primary cluster-focus-btn" data-cluster-id="{{ cluster.id }}">
+                    <i class="bi bi-zoom-in"></i> Focus on this cluster
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Modal for full narrative list -->
+            <div class="modal fade" id="clusterModal{{ cluster.id }}" tabindex="-1" aria-labelledby="clusterModalLabel{{ cluster.id }}" aria-hidden="true">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="clusterModalLabel{{ cluster.id }}">Cluster #{{ cluster.id }} - All Narratives</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="table-responsive">
+                      <table class="table table-striped table-hover">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Confidence</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for narrative in cluster.narratives %}
+                            <tr>
+                              <td>{{ narrative.id }}</td>
+                              <td>
+                                <a href="{{ url_for('network.narrative_network', narrative_id=narrative.id) }}">
+                                  {{ narrative.title }}
+                                </a>
+                              </td>
+                              <td>{{ "%.2f"|format(narrative.confidence) }}</td>
+                              <td>
+                                <span class="badge {% if narrative.status == 'active' %}bg-danger{% elif narrative.status == 'monitoring' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                  {{ narrative.status }}
+                                </span>
+                              </td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          No active stream clusters detected. The system requires more narrative data for DenStream to form clusters.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row mt-4">
+    <div class="col">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Noise Points</h5>
+        </div>
+        <div class="card-body">
+          {% if clusters.noise_points %}
+            <p>
+              The following {{ clusters.noise_points|length }} narratives are currently classified as noise points 
+              (not belonging to any cluster):
+            </p>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for point in clusters.noise_points %}
+                    <tr>
+                      <td>{{ point.id }}</td>
+                      <td>{{ point.title }}</td>
+                      <td>
+                        <a href="{{ url_for('network.narrative_network', narrative_id=point.id) }}" class="btn btn-sm btn-outline-secondary">
+                          <i class="bi bi-diagram-3"></i> View in Network
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle-fill me-2"></i>
+              No noise points found. All narratives have been assigned to clusters.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Data for visualization (mock 2D projection of clusters)
+    const clusterData = {
+      clusters: {{ clusters.clusters|tojson }},
+      noise_points: {{ clusters.noise_points|tojson }}
+    };
+    
+    // Create a color scale for clusters
+    const clusterColorScale = d3.scaleOrdinal(d3.schemeCategory10);
+    
+    // Setup SVG container
+    const width = document.getElementById('stream-container').clientWidth;
+    const height = document.getElementById('stream-container').clientHeight;
+    
+    const svg = d3.select("#stream-container")
+      .append("svg")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .call(d3.zoom().on("zoom", function(event) {
+        g.attr("transform", event.transform);
+      }));
+    
+    const g = svg.append("g");
+    
+    // Create tooltip
+    const tooltip = d3.select("#stream-container")
+      .append("div")
+      .attr("class", "tooltip")
+      .style("position", "absolute")
+      .style("visibility", "hidden")
+      .style("background-color", "var(--bs-dark)")
+      .style("color", "var(--bs-light)")
+      .style("padding", "8px")
+      .style("border-radius", "4px")
+      .style("font-size", "0.8rem")
+      .style("pointer-events", "none")
+      .style("z-index", "1000");
+    
+    // Generate 2D positions for data points using cluster IDs
+    // In a real implementation, you would use actual embeddings
+    function generatePointsData() {
+      const points = [];
+      
+      // Process cluster points
+      clusterData.clusters.forEach(cluster => {
+        const cluster_id = cluster.id;
+        const centerX = 100 + 200 * (cluster_id % 4); // Space clusters horizontally
+        const centerY = 100 + 200 * Math.floor(cluster_id / 4); // And vertically
+        
+        cluster.narratives.forEach(narrative => {
+          // Add some random variation around cluster center
+          const x = centerX + (Math.random() - 0.5) * 100;
+          const y = centerY + (Math.random() - 0.5) * 100;
+          
+          points.push({
+            id: narrative.id,
+            title: narrative.title,
+            status: narrative.status,
+            confidence: narrative.confidence,
+            x: x,
+            y: y,
+            cluster_id: cluster_id,
+            is_noise: false
+          });
+        });
+      });
+      
+      // Process noise points
+      clusterData.noise_points.forEach(point => {
+        // Randomly position noise points
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        
+        points.push({
+          id: point.id,
+          title: point.title,
+          x: x,
+          y: y,
+          cluster_id: -1,
+          is_noise: true
+        });
+      });
+      
+      return points;
+    }
+    
+    const points = generatePointsData();
+    
+    // Draw points
+    const circles = g.selectAll("circle")
+      .data(points)
+      .enter()
+      .append("circle")
+      .attr("cx", d => d.x)
+      .attr("cy", d => d.y)
+      .attr("r", 8)
+      .attr("class", d => d.is_noise ? "stream-point noise-point" : "stream-point")
+      .attr("fill", d => d.is_noise ? undefined : clusterColorScale(d.cluster_id))
+      .attr("stroke", d => d.is_noise ? undefined : d3.color(clusterColorScale(d.cluster_id)).darker())
+      .on("mouseover", function(event, d) {
+        // Show tooltip
+        tooltip.html(`
+          <strong>${d.title}</strong><br>
+          ID: ${d.id}<br>
+          ${d.is_noise ? 'Noise Point' : `Cluster: ${d.cluster_id}`}<br>
+          ${d.status ? `Status: ${d.status}<br>` : ''}
+          ${d.confidence ? `Confidence: ${d.confidence.toFixed(2)}` : ''}
+        `)
+        .style("visibility", "visible")
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY - 10) + "px");
+        
+        // Highlight point
+        d3.select(this)
+          .classed("active", true)
+          .attr("r", 12);
+      })
+      .on("mouseout", function() {
+        tooltip.style("visibility", "hidden");
+        d3.select(this)
+          .classed("active", false)
+          .attr("r", 8);
+      });
+    
+    // Add convex hulls for each cluster
+    const hull = d3.polygonHull;
+    const clusters = d3.group(points.filter(d => !d.is_noise), d => d.cluster_id);
+    
+    clusters.forEach((points, cluster_id) => {
+      if (points.length < 3) return; // Need at least 3 points for a hull
+      
+      const hullPoints = hull(points.map(d => [d.x, d.y]));
+      
+      if (!hullPoints) return;
+      
+      const hullLine = d3.line()
+        .x(d => d[0])
+        .y(d => d[1])
+        .curve(d3.curveCardinalClosed.tension(0.5));
+      
+      g.append("path")
+        .datum(hullPoints)
+        .attr("d", hullLine)
+        .attr("stroke", clusterColorScale(cluster_id))
+        .attr("stroke-width", 2)
+        .attr("fill", clusterColorScale(cluster_id))
+        .attr("fill-opacity", 0.1);
+    });
+    
+    // Add cluster labels
+    clusters.forEach((points, cluster_id) => {
+      // Find center of cluster
+      const x = d3.mean(points, d => d.x);
+      const y = d3.mean(points, d => d.y);
+      
+      g.append("text")
+        .attr("x", x)
+        .attr("y", y)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "14px")
+        .attr("font-weight", "bold")
+        .attr("fill", clusterColorScale(cluster_id))
+        .attr("stroke", "white")
+        .attr("stroke-width", 0.5)
+        .text(`Cluster ${cluster_id}`);
+    });
+    
+    // Add legend
+    const legend = svg.append("g")
+      .attr("class", "legend")
+      .attr("transform", "translate(20,20)");
+    
+    // Get unique clusters
+    const uniqueClusters = [...new Set(points.filter(p => !p.is_noise).map(p => p.cluster_id))].sort();
+    
+    // Add legend items
+    uniqueClusters.forEach((cluster_id, i) => {
+      const legendItem = legend.append("g")
+        .attr("transform", `translate(0,${i * 20})`);
+      
+      legendItem.append("rect")
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("fill", clusterColorScale(cluster_id));
+      
+      legendItem.append("text")
+        .attr("x", 20)
+        .attr("y", 10)
+        .attr("text-anchor", "start")
+        .style("font-size", "12px")
+        .text(`Cluster ${cluster_id}`);
+    });
+    
+    // Add noise points to legend
+    if (clusterData.noise_points.length > 0) {
+      const legendItem = legend.append("g")
+        .attr("transform", `translate(0,${uniqueClusters.length * 20})`);
+      
+      legendItem.append("rect")
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("class", "noise-point");
+      
+      legendItem.append("text")
+        .attr("x", 20)
+        .attr("y", 10)
+        .attr("text-anchor", "start")
+        .style("font-size", "12px")
+        .text("Noise Points");
+    }
+    
+    // Focus on a specific cluster
+    document.querySelectorAll('.cluster-focus-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const clusterId = parseInt(this.getAttribute('data-cluster-id'));
+        
+        // Highlight points in this cluster
+        circles.classed("active", d => d.cluster_id === clusterId)
+          .attr("r", d => d.cluster_id === clusterId ? 12 : 8);
+        
+        // Get the cluster center
+        const clusterPoints = points.filter(p => p.cluster_id === clusterId);
+        if (clusterPoints.length > 0) {
+          const centerX = d3.mean(clusterPoints, d => d.x);
+          const centerY = d3.mean(clusterPoints, d => d.y);
+          
+          // Calculate appropriate zoom level
+          const xExtent = d3.extent(clusterPoints, d => d.x);
+          const yExtent = d3.extent(clusterPoints, d => d.y);
+          const clusterWidth = xExtent[1] - xExtent[0] + 50;
+          const clusterHeight = yExtent[1] - yExtent[0] + 50;
+          
+          const scale = Math.min(
+            width / clusterWidth,
+            height / clusterHeight,
+            3 // Maximum zoom
+          );
+          
+          // Transform the view to focus on the cluster
+          const transform = d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(scale)
+            .translate(-centerX, -centerY);
+          
+          svg.transition()
+            .duration(750)
+            .call(d3.zoom().transform, transform);
+        }
+      });
+    });
+    
+    // Auto-fit visualization to screen
+    const bounds = g.node().getBBox();
+    const dx = bounds.width;
+    const dy = bounds.height;
+    const x = bounds.x + dx / 2;
+    const y = bounds.y + dy / 2;
+    
+    const scale = Math.min(0.8 * width / dx, 0.8 * height / dy);
+    const translate = [width / 2 - scale * x, height / 2 - scale * y];
+    
+    svg.call(
+      d3.zoom().transform,
+      d3.zoomIdentity
+        .translate(translate[0], translate[1])
+        .scale(scale)
+    );
+  });
+</script>
+{% endblock %}

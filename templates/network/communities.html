@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% block title %}Narrative Communities - CIVILIAN{% endblock %}
+
+{% block styles %}
+<link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+<style>
+  .community-card {
+    margin-bottom: 1.5rem;
+    transition: transform 0.2s;
+  }
+  .community-card:hover {
+    transform: translateY(-5px);
+  }
+  .network-visualization {
+    border: 1px solid var(--bs-secondary-border-subtle);
+    border-radius: 0.5rem;
+    background-color: var(--bs-body-bg);
+    height: 500px;
+  }
+  .community-tag {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.85rem;
+  }
+  .cohesion-meter {
+    height: 5px;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--bs-success), var(--bs-warning), var(--bs-danger));
+  }
+  .cohesion-marker {
+    position: relative;
+    width: 10px;
+    height: 10px;
+    background-color: var(--bs-light);
+    border-radius: 50%;
+    top: -2.5px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row mb-4">
+    <div class="col">
+      <h1>Narrative Communities Analysis</h1>
+      <p class="lead">
+        Detecting communities of related narratives using the Louvain algorithm.
+      </p>
+      <div class="d-flex justify-content-between">
+        <div>
+          <form class="d-inline-block" method="get">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="includeArchived" name="include_archived" value="true" {% if include_archived %}checked{% endif %} onchange="this.form.submit()">
+              <label class="form-check-label" for="includeArchived">Include archived narratives</label>
+            </div>
+          </form>
+        </div>
+        <div>
+          <a href="{{ url_for('network.network_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-diagram-3"></i> Network Dashboard
+          </a>
+          <a href="{{ url_for('network.coordinated_campaigns') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-diagram-2"></i> Coordinated Campaigns
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Network Visualization</h5>
+        </div>
+        <div class="card-body">
+          <div class="network-visualization" id="network-container"></div>
+          <div class="text-center mt-2">
+            <small class="text-muted">
+              Nodes are colored by community. Hover over nodes for narrative details.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Communities Overview</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-6 col-sm-3 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Communities</h6>
+                  <h3 class="mt-2">{{ communities|length }}</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-sm-3 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Total Narratives</h6>
+                  <h3 class="mt-2">
+                    {% set total_narratives = 0 %}
+                    {% for community in communities %}
+                      {% set total_narratives = total_narratives + community.size %}
+                    {% endfor %}
+                    {{ total_narratives }}
+                  </h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-sm-3 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Largest Community</h6>
+                  <h3 class="mt-2">
+                    {% if communities %}
+                      {{ communities[0].size }}
+                    {% else %}
+                      0
+                    {% endif %}
+                  </h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-sm-3 mb-3">
+              <div class="card bg-subtle h-100">
+                <div class="card-body text-center">
+                  <h6 class="card-subtitle text-muted">Avg. Cohesion</h6>
+                  <h3 class="mt-2">
+                    {% set total_cohesion = 0 %}
+                    {% for community in communities %}
+                      {% set total_cohesion = total_cohesion + community.cohesion %}
+                    {% endfor %}
+                    {% if communities %}
+                      {{ "%.2f"|format(total_cohesion / communities|length) }}
+                    {% else %}
+                      0
+                    {% endif %}
+                  </h3>
+                </div>
+              </div>
+            </div>
+          </div>
+          <hr>
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <small>
+              The Louvain algorithm detects communities by optimizing modularity, revealing natural clusters in the narrative network.
+              Higher cohesion indicates stronger internal connections within communities.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h4 class="mb-3">Detected Communities</h4>
+      
+      {% if communities %}
+        <div class="row">
+          {% for community in communities %}
+            <div class="col-md-6 col-lg-4">
+              <div class="card community-card" id="community-{{ community.id }}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0">Community #{{ community.id }}</h5>
+                  <span class="badge bg-primary">{{ community.size }} narratives</span>
+                </div>
+                <div class="card-body">
+                  <p class="mb-2">
+                    <strong>Cohesion Score:</strong> {{ "%.2f"|format(community.cohesion) }}
+                  </p>
+                  <div class="cohesion-meter">
+                    <div class="cohesion-marker" style="left: calc({{ community.cohesion * 100 }}% - 5px);"></div>
+                  </div>
+                  
+                  <h6>Top Narratives:</h6>
+                  <ul class="list-group list-group-flush">
+                    {% for narrative in community.narratives[:5] %}
+                      <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                          <div>
+                            <a href="{{ url_for('network.narrative_network', narrative_id=narrative.id) }}">
+                              {{ narrative.title|truncate(60) }}
+                            </a>
+                            <span class="badge {% if narrative.status == 'active' %}bg-danger{% elif narrative.status == 'monitoring' %}bg-warning{% else %}bg-secondary{% endif %} ms-2">
+                              {{ narrative.status }}
+                            </span>
+                          </div>
+                          <span class="badge bg-info rounded-pill">{{ "%.2f"|format(narrative.confidence) }}</span>
+                        </div>
+                      </li>
+                    {% endfor %}
+                    
+                    {% if community.narratives|length > 5 %}
+                      <li class="list-group-item text-center">
+                        <button class="btn btn-sm btn-link" type="button" data-bs-toggle="modal" data-bs-target="#communityModal{{ community.id }}">
+                          View all {{ community.narratives|length }} narratives
+                        </button>
+                      </li>
+                    {% endif %}
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Modal for full narrative list -->
+            <div class="modal fade" id="communityModal{{ community.id }}" tabindex="-1" aria-labelledby="communityModalLabel{{ community.id }}" aria-hidden="true">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="communityModalLabel{{ community.id }}">Community #{{ community.id }} - All Narratives</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="table-responsive">
+                      <table class="table table-striped table-hover">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Confidence</th>
+                            <th>Status</th>
+                            <th>First Detected</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for narrative in community.narratives %}
+                            <tr>
+                              <td>{{ narrative.id }}</td>
+                              <td>
+                                <a href="{{ url_for('network.narrative_network', narrative_id=narrative.id) }}">
+                                  {{ narrative.title }}
+                                </a>
+                              </td>
+                              <td>{{ "%.2f"|format(narrative.confidence) }}</td>
+                              <td>
+                                <span class="badge {% if narrative.status == 'active' %}bg-danger{% elif narrative.status == 'monitoring' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                  {{ narrative.status }}
+                                </span>
+                              </td>
+                              <td>{{ narrative.first_detected|truncate(16, True, '') }}</td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          No communities detected. This could be due to insufficient data or low connectivity between narratives.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Parse network data
+    const networkData = {{ network_data|safe }};
+    
+    // Create a color scale for communities
+    const communityColorScale = d3.scaleOrdinal(d3.schemeCategory10);
+    
+    // Setup force simulation
+    const simulation = d3.forceSimulation(networkData.nodes)
+      .force("link", d3.forceLink(networkData.edges)
+        .id(d => d.id)
+        .distance(100))
+      .force("charge", d3.forceManyBody().strength(-200))
+      .force("center", d3.forceCenter(
+        document.getElementById('network-container').clientWidth / 2,
+        document.getElementById('network-container').clientHeight / 2
+      ))
+      .force("collision", d3.forceCollide().radius(20));
+    
+    // Create SVG container
+    const svg = d3.select("#network-container")
+      .append("svg")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .call(d3.zoom().on("zoom", function(event) {
+        g.attr("transform", event.transform);
+      }));
+    
+    const g = svg.append("g");
+    
+    // Create tooltip
+    const tooltip = d3.select("#network-container")
+      .append("div")
+      .attr("class", "tooltip")
+      .style("position", "absolute")
+      .style("visibility", "hidden")
+      .style("background-color", "var(--bs-dark)")
+      .style("color", "var(--bs-light)")
+      .style("padding", "8px")
+      .style("border-radius", "4px")
+      .style("font-size", "0.8rem")
+      .style("pointer-events", "none")
+      .style("z-index", "1000");
+    
+    // Draw links
+    const link = g.append("g")
+      .selectAll("line")
+      .data(networkData.edges)
+      .enter().append("line")
+      .attr("stroke", "#999")
+      .attr("stroke-opacity", 0.6)
+      .attr("stroke-width", d => Math.sqrt(d.weight) * 2);
+    
+    // Draw nodes
+    const node = g.append("g")
+      .selectAll("circle")
+      .data(networkData.nodes)
+      .enter().append("circle")
+      .attr("r", 8)
+      .attr("fill", d => communityColorScale(d.community))
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 1.5)
+      .on("mouseover", function(event, d) {
+        tooltip.html(`
+          <strong>${d.title}</strong><br>
+          ID: ${d.id}<br>
+          Status: ${d.status}<br>
+          Community: ${d.community != -1 ? d.community : 'None'}<br>
+          Confidence: ${d.confidence.toFixed(2)}
+        `)
+        .style("visibility", "visible")
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY - 10) + "px");
+        
+        // Highlight connected nodes
+        link.style("stroke", l => 
+          l.source.id === d.id || l.target.id === d.id 
+            ? "var(--bs-warning)" 
+            : "#999");
+            
+        link.style("stroke-width", l => 
+          l.source.id === d.id || l.target.id === d.id 
+            ? Math.sqrt(l.weight) * 3 
+            : Math.sqrt(l.weight) * 1.5);
+            
+        d3.select(this)
+          .attr("stroke", "var(--bs-warning)")
+          .attr("stroke-width", 3)
+          .attr("r", 10);
+      })
+      .on("mouseout", function() {
+        tooltip.style("visibility", "hidden");
+        link.style("stroke", "#999")
+          .style("stroke-width", d => Math.sqrt(d.weight) * 1.5);
+        d3.select(this)
+          .attr("stroke", "#fff")
+          .attr("stroke-width", 1.5)
+          .attr("r", 8);
+      })
+      .call(d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended));
+    
+    // Add titles for accessibility
+    node.append("title")
+      .text(d => d.title);
+    
+    // Update positions on simulation tick
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+      
+      node
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+    });
+    
+    // Drag functions
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+    
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+    
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+    
+    // Add legend
+    const legend = svg.append("g")
+      .attr("class", "legend")
+      .attr("transform", "translate(20,20)");
+    
+    // Get unique communities
+    const communities = [...new Set(networkData.nodes.map(d => d.community))].filter(c => c !== -1).sort((a, b) => a - b);
+    
+    // Add legend items
+    communities.forEach((community, i) => {
+      const legendItem = legend.append("g")
+        .attr("transform", `translate(0,${i * 20})`);
+      
+      legendItem.append("rect")
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("fill", communityColorScale(community));
+      
+      legendItem.append("text")
+        .attr("x", 20)
+        .attr("y", 10)
+        .attr("text-anchor", "start")
+        .style("font-size", "12px")
+        .text(`Community ${community}`);
+    });
+  });
+</script>
+{% endblock %}
