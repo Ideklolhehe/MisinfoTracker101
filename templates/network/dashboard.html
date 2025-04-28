@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block title %}Narrative Network Analysis{% endblock %}
+
+{% block head %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/force-graph"></script>
+<style>
+    .network-container {
+        height: 600px;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    .controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+        background: rgba(33, 37, 41, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+        color: white;
+    }
+    .controls button {
+        margin: 5px 0;
+    }
+    .stat-card {
+        transition: all 0.3s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 600;
+    }
+    .central-narrative-card {
+        border-left: 5px solid var(--bs-primary);
+        transition: all 0.3s ease;
+    }
+    .central-narrative-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    }
+    .badge-centrality {
+        font-size: 0.7rem;
+        padding: 0.3em 0.6em;
+    }
+    .filter-controls {
+        padding: 1rem;
+        background-color: var(--bs-tertiary-bg);
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Narrative Network</li>
+                </ol>
+            </nav>
+            <h1 class="display-5">Narrative Network Analysis</h1>
+            <p class="lead">
+                Visualize relationships between misinformation narratives and identify potential coordinated campaigns.
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12 mb-4">
+            <div class="filter-controls">
+                <form method="GET" class="row align-items-center">
+                    <div class="col-md-3 mb-2">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="includeArchived" name="include_archived" value="true" {% if include_archived %}checked{% endif %}>
+                            <label class="form-check-label" for="includeArchived">Include archived narratives</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label for="topN" class="form-label">Top central narratives:</label>
+                        <input type="number" class="form-control" id="topN" name="top_n" min="1" max="20" value="{{ top_n|default(5) }}">
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <a href="/network/campaigns" class="btn btn-outline-secondary ms-2">View Campaigns</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Narrative Relationship Network</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="network-container" id="graph-container">
+                        <div class="controls">
+                            <button class="btn btn-sm btn-light" id="zoomIn"><i class="bi bi-zoom-in"></i></button>
+                            <button class="btn btn-sm btn-light" id="zoomOut"><i class="bi bi-zoom-out"></i></button>
+                            <button class="btn btn-sm btn-light" id="resetView"><i class="bi bi-arrows-fullscreen"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <span class="badge bg-primary me-2">Active</span>
+                            <span class="badge bg-secondary me-2">Archived</span>
+                            <span class="badge bg-success me-2">Debunked</span>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <small class="text-muted">Thicker lines indicate stronger relationships</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Network Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6 mb-4">
+                            <div class="stat-card p-3 rounded bg-light">
+                                <div class="text-muted">Narratives</div>
+                                <div class="stat-value">{{ statistics.node_count }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-4">
+                            <div class="stat-card p-3 rounded bg-light">
+                                <div class="text-muted">Relationships</div>
+                                <div class="stat-value">{{ statistics.edge_count }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-4">
+                            <div class="stat-card p-3 rounded bg-light">
+                                <div class="text-muted">Connections</div>
+                                <div class="stat-value">{{ (statistics.density * 100)|round(1) }}%</div>
+                                <small>Network density</small>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-4">
+                            <div class="stat-card p-3 rounded bg-light">
+                                <div class="text-muted">Clusters</div>
+                                <div class="stat-value">{{ statistics.component_count }}</div>
+                                <small>Narrative clusters</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-info mt-2">
+                        <h6 class="alert-heading">Network Insights</h6>
+                        <p class="mb-0">
+                            {% if statistics.density < 0.1 %}
+                            This is a sparse network with few interconnections between narratives.
+                            {% elif statistics.density < 0.3 %}
+                            This network shows moderate connectivity between different narratives.
+                            {% else %}
+                            This is a highly connected network, suggesting strong relationships between narratives.
+                            {% endif %}
+                            
+                            {% if statistics.component_count > 5 %}
+                            Several distinct narrative clusters are present.
+                            {% elif statistics.component_count > 1 %}
+                            A few separate narrative clusters exist in the network.
+                            {% else %}
+                            All narratives form a single connected component.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Most Central Narratives</h5>
+                </div>
+                <div class="card-body">
+                    <p>These narratives are the most central in the misinformation network, based on their connections.</p>
+                    
+                    <div class="row">
+                        {% for narrative in central_narratives %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card central-narrative-card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">
+                                        <a href="/narratives/view/{{ narrative.id }}">{{ narrative.title }}</a>
+                                    </h5>
+                                    <div class="mb-2">
+                                        <span class="badge bg-{{ narrative.status == 'active' and 'primary' or narrative.status == 'debunked' and 'success' or 'secondary' }} me-2">{{ narrative.status|capitalize }}</span>
+                                        <span class="badge bg-info">Confidence: {{ (narrative.confidence * 100)|round|int }}%</span>
+                                    </div>
+                                    <div class="mb-2">
+                                        <span class="badge bg-dark badge-centrality me-1" title="Degree Centrality">
+                                            Degree: {{ (narrative.centrality.degree * 100)|round|int }}%
+                                        </span>
+                                        <span class="badge bg-dark badge-centrality me-1" title="Betweenness Centrality">
+                                            Betweenness: {{ (narrative.centrality.betweenness * 100)|round|int }}%
+                                        </span>
+                                        <span class="badge bg-dark badge-centrality" title="Eigenvector Centrality">
+                                            Influence: {{ (narrative.centrality.eigenvector * 100)|round|int }}%
+                                        </span>
+                                    </div>
+                                    <div class="mt-3">
+                                        <a href="/network/narrative/{{ narrative.id }}" class="btn btn-sm btn-outline-primary">View Network</a>
+                                        <a href="/complexity/view/{{ narrative.id }}" class="btn btn-sm btn-outline-secondary">Complexity Analysis</a>
+                                        <a href="/prediction/what-if/{{ narrative.id }}" class="btn btn-sm btn-outline-success">What-If Analysis</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Parse the network data from the server
+    const networkData = {{ network_data|safe }};
+    
+    // Initialize the Force Graph
+    const graph = ForceGraph()
+        .graphData(networkData)
+        .backgroundColor('#212529')
+        .nodeId('id')
+        .nodeLabel(node => `${node.title} (ID: ${node.id})`)
+        .nodeColor(node => {
+            if (node.status === 'active') return '#0d6efd';  // Primary
+            if (node.status === 'debunked') return '#198754';  // Success
+            return '#6c757d';  // Secondary (archived)
+        })
+        .nodeRelSize(8)
+        .linkWidth(link => link.weight * 2)
+        .linkLabel(link => `${link.type} (${link.weight.toFixed(2)})`)
+        .linkDirectionalParticles(link => link.weight * 3)
+        .linkDirectionalParticleWidth(link => link.weight)
+        .linkColor(link => {
+            if (link.type === 'similar_content') return 'rgba(255, 255, 255, 0.5)';
+            if (link.type === 'supports') return 'rgba(25, 135, 84, 0.7)';
+            if (link.type === 'contradicts') return 'rgba(220, 53, 69, 0.7)';
+            return 'rgba(255, 193, 7, 0.7)';
+        })
+        .onNodeClick(node => {
+            window.open(`/narratives/view/${node.id}`, '_blank');
+        })
+        .cooldownTicks(100);
+    
+    // Add graph to container
+    const graphElem = document.getElementById('graph-container');
+    graph(graphElem);
+    
+    // Add zoom controls
+    document.getElementById('zoomIn').addEventListener('click', () => {
+        graph.zoom(graph.zoom() * 1.5);
+    });
+    
+    document.getElementById('zoomOut').addEventListener('click', () => {
+        graph.zoom(graph.zoom() / 1.5);
+    });
+    
+    document.getElementById('resetView').addEventListener('click', () => {
+        graph.zoomToFit(400);
+    });
+    
+    // Fit graph to view on load
+    setTimeout(() => {
+        graph.zoomToFit(400);
+    }, 500);
+</script>
+{% endblock %}
