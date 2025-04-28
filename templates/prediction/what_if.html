@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}What-If Scenario Analysis{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/prediction/dashboard">Predictions</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">What-If Analysis</li>
+                </ol>
+            </nav>
+            <h1 class="display-5">What-If Scenario Analysis</h1>
+            <p class="lead">
+                Model different intervention strategies and their potential impact on misinformation narratives.
+            </p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Narrative Information</h5>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ narrative.title }}</h5>
+                    <p class="card-text text-muted">
+                        <small>ID: {{ narrative.id }} | First detected: {{ narrative.first_detected.strftime('%Y-%m-%d') }}</small>
+                    </p>
+                    <div class="mb-3">
+                        <strong>Current Status:</strong> {{ narrative.status|capitalize }}
+                    </div>
+                    <div class="mb-3">
+                        <strong>Language:</strong> {{ narrative.language }}
+                    </div>
+                    <div class="mb-3">
+                        <strong>Current Confidence Score:</strong> {{ "%.2f"|format(narrative.confidence_score|float) }}
+                    </div>
+                    <div class="mb-3">
+                        <p>{{ narrative.description }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Run What-If Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.id) }}">
+                        <div class="mb-3">
+                            <label for="scenario" class="form-label">Intervention Scenario</label>
+                            <select class="form-select" id="scenario" name="scenario" required>
+                                <option value="counter_narrative" {% if scenario == 'counter_narrative' %}selected{% endif %}>Counter-narrative Campaign</option>
+                                <option value="debunking" {% if scenario == 'debunking' %}selected{% endif %}>Fact-checking & Debunking</option>
+                                <option value="visibility_reduction" {% if scenario == 'visibility_reduction' %}selected{% endif %}>Visibility Reduction</option>
+                            </select>
+                            <div class="form-text">Select the type of intervention to model.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="days_ahead" class="form-label">Days to Predict</label>
+                            <input type="number" class="form-control" id="days_ahead" name="days_ahead" 
+                                   value="{{ days_ahead }}" min="1" max="60" required>
+                            <div class="form-text">Number of days to forecast into the future (1-60).</div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">Run Analysis</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if analysis %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Scenario Analysis Results: {{ analysis.scenario }}</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-4"><em>{{ analysis.scenario_description }}</em></p>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <div id="chart" style="height: 400px;"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">Impact Assessment</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <strong>Absolute Reduction:</strong>
+                                        <span class="text-success">{{ "%.2f"|format(analysis.impact_metrics.absolute_reduction|float) }} points</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Relative Reduction:</strong>
+                                        <span class="text-success">{{ "%.1f"|format(analysis.impact_metrics.relative_reduction|float) }}%</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Analysis Date:</strong>
+                                        <span>{{ analysis.analysis_date[:10] }}</span>
+                                    </div>
+                                    
+                                    <hr>
+                                    
+                                    <div class="mb-3">
+                                        <h6>Interpretation</h6>
+                                        {% if analysis.impact_metrics.relative_reduction > 30 %}
+                                            <div class="alert alert-success">
+                                                <i class="bi bi-check-circle-fill"></i> This intervention is projected to be <strong>highly effective</strong> in reducing narrative complexity.
+                                            </div>
+                                        {% elif analysis.impact_metrics.relative_reduction > 10 %}
+                                            <div class="alert alert-info">
+                                                <i class="bi bi-info-circle-fill"></i> This intervention is projected to be <strong>moderately effective</strong> in reducing narrative complexity.
+                                            </div>
+                                        {% else %}
+                                            <div class="alert alert-warning">
+                                                <i class="bi bi-exclamation-triangle-fill"></i> This intervention is projected to have <strong>limited effectiveness</strong> in reducing narrative complexity.
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Recommended Actions</h6>
+                                </div>
+                                <div class="card-body">
+                                    {% if analysis.impact_metrics.relative_reduction > 30 %}
+                                        <ul>
+                                            <li>Prioritize implementation of this intervention strategy</li>
+                                            <li>Allocate sufficient resources for sustained implementation</li>
+                                            <li>Monitor effectiveness with regular progress tracking</li>
+                                            <li>Consider complementary strategies to maximize impact</li>
+                                        </ul>
+                                    {% elif analysis.impact_metrics.relative_reduction > 10 %}
+                                        <ul>
+                                            <li>Implement this intervention with targeted refinements</li>
+                                            <li>Consider combining with other strategies for greater impact</li>
+                                            <li>Evaluate cost-effectiveness before full deployment</li>
+                                            <li>Set up regular monitoring to assess real-world effectiveness</li>
+                                        </ul>
+                                    {% else %}
+                                        <ul>
+                                            <li>Consider alternative intervention strategies with higher projected effectiveness</li>
+                                            <li>If implemented, strengthen the approach with additional elements</li>
+                                            <li>Evaluate if narrative-specific factors are limiting effectiveness</li>
+                                            <li>Reassess approach after collecting more historical data</li>
+                                        </ul>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+{% if analysis %}
+<script>
+// Parse data from the analysis
+const dates = {{ analysis.dates|tojson }};
+const baselineData = {{ analysis.baseline_predictions|tojson }};
+const interventionData = {{ analysis.intervention_predictions|tojson }};
+const scenario = {{ analysis.scenario|tojson }};
+
+// Create traces for both prediction lines
+const baselineTrace = {
+    x: dates,
+    y: baselineData,
+    type: 'scatter',
+    mode: 'lines+markers',
+    name: 'Without Intervention',
+    line: {
+        color: '#dc3545',
+        width: 3
+    },
+    marker: {
+        size: 8
+    }
+};
+
+const interventionTrace = {
+    x: dates,
+    y: interventionData,
+    type: 'scatter',
+    mode: 'lines+markers',
+    name: scenario,
+    line: {
+        color: '#198754',
+        width: 3
+    },
+    marker: {
+        size: 8
+    }
+};
+
+// Layout configuration
+const layout = {
+    title: 'Complexity Trajectory Projection',
+    xaxis: {
+        title: 'Date'
+    },
+    yaxis: {
+        title: 'Complexity Score',
+        range: [0, 10]
+    },
+    margin: {
+        l: 50,
+        r: 50,
+        b: 80,
+        t: 80
+    },
+    legend: {
+        x: 0.01,
+        y: 0.99,
+        bgcolor: 'rgba(255, 255, 255, 0.7)',
+        bordercolor: 'rgba(0, 0, 0, 0.1)',
+        borderwidth: 1
+    },
+    shapes: [{
+        type: 'rect',
+        x0: dates[0],
+        y0: 0,
+        x1: dates[dates.length - 1],
+        y1: 3,
+        fillcolor: 'rgba(0, 255, 0, 0.1)',
+        line: {
+            width: 0
+        }
+    }, {
+        type: 'rect',
+        x0: dates[0],
+        y0: 3,
+        x1: dates[dates.length - 1],
+        y1: 7,
+        fillcolor: 'rgba(255, 255, 0, 0.1)',
+        line: {
+            width: 0
+        }
+    }, {
+        type: 'rect',
+        x0: dates[0],
+        y0: 7,
+        x1: dates[dates.length - 1],
+        y1: 10,
+        fillcolor: 'rgba(255, 0, 0, 0.1)',
+        line: {
+            width: 0
+        }
+    }]
+};
+
+// Combine traces and render the chart
+const data = [baselineTrace, interventionTrace];
+Plotly.newPlot('chart', data, layout, {responsive: true});
+</script>
+{% endif %}
+{% endblock %}
