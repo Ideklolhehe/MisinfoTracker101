@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}Multiple Narrative Predictions{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/prediction/dashboard">Predictions</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Multiple Predictions</li>
+                </ol>
+            </nav>
+            <h1 class="display-5">Multiple Narrative Predictions</h1>
+            <p class="lead">
+                Comparative complexity predictions across multiple narratives.
+            </p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Prediction Parameters</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('prediction.predict_multiple_narratives') }}" method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="days" class="form-label">Days to Predict</label>
+                            <input type="number" class="form-control" id="days" name="days" 
+                                   value="{{ days_ahead }}" min="1" max="60" required>
+                            <div class="form-text">Number of days to forecast into the future (1-60).</div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="limit" class="form-label">Number of Narratives</label>
+                            <input type="number" class="form-control" id="limit" name="limit" 
+                                   value="{{ limit }}" min="1" max="50" required>
+                            <div class="form-text">Maximum number of narratives to analyze (1-50).</div>
+                        </div>
+                        
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Update Predictions</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Complexity Projection Comparison</h5>
+                </div>
+                <div class="card-body">
+                    <div id="chart" style="height: 500px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Increasing Narratives</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Current</th>
+                                    <th>Projected</th>
+                                    <th>Change</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for narrative in predictions.predictions %}
+                                    {% if narrative.trend_direction in ['strong_increase', 'moderate_increase'] %}
+                                        <tr>
+                                            <td>{{ narrative.narrative_id }}</td>
+                                            <td>
+                                                <a href="{{ url_for('dashboard.view_narrative', narrative_id=narrative.narrative_id) }}">
+                                                    {{ narrative.title|truncate(40) }}
+                                                </a>
+                                            </td>
+                                            <td>{{ "%.2f"|format(narrative.current_complexity|float) }}</td>
+                                            <td>{{ "%.2f"|format(narrative.predictions[-1]|float) }}</td>
+                                            <td>
+                                                {% set change = narrative.predictions[-1]|float - narrative.current_complexity|float %}
+                                                <span class="text-danger">+{{ "%.2f"|format(change) }}</span>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group">
+                                                    <a href="{{ url_for('prediction.predict_narrative_complexity', narrative_id=narrative.narrative_id) }}" 
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-graph-up"></i>
+                                                    </a>
+                                                    <a href="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.narrative_id) }}" 
+                                                       class="btn btn-sm btn-outline-success">
+                                                        <i class="bi bi-diagram-3"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Decreasing Narratives</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Current</th>
+                                    <th>Projected</th>
+                                    <th>Change</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for narrative in predictions.predictions %}
+                                    {% if narrative.trend_direction in ['strong_decrease', 'moderate_decrease'] %}
+                                        <tr>
+                                            <td>{{ narrative.narrative_id }}</td>
+                                            <td>
+                                                <a href="{{ url_for('dashboard.view_narrative', narrative_id=narrative.narrative_id) }}">
+                                                    {{ narrative.title|truncate(40) }}
+                                                </a>
+                                            </td>
+                                            <td>{{ "%.2f"|format(narrative.current_complexity|float) }}</td>
+                                            <td>{{ "%.2f"|format(narrative.predictions[-1]|float) }}</td>
+                                            <td>
+                                                {% set change = narrative.predictions[-1]|float - narrative.current_complexity|float %}
+                                                <span class="text-success">{{ "%.2f"|format(change) }}</span>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group">
+                                                    <a href="{{ url_for('prediction.predict_narrative_complexity', narrative_id=narrative.narrative_id) }}" 
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-graph-up"></i>
+                                                    </a>
+                                                    <a href="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.narrative_id) }}" 
+                                                       class="btn btn-sm btn-outline-success">
+                                                        <i class="bi bi-diagram-3"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Stable Narratives</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Current</th>
+                                    <th>Projected</th>
+                                    <th>Change</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for narrative in predictions.predictions %}
+                                    {% if narrative.trend_direction == 'stable' %}
+                                        <tr>
+                                            <td>{{ narrative.narrative_id }}</td>
+                                            <td>
+                                                <a href="{{ url_for('dashboard.view_narrative', narrative_id=narrative.narrative_id) }}">
+                                                    {{ narrative.title|truncate(40) }}
+                                                </a>
+                                            </td>
+                                            <td>{{ "%.2f"|format(narrative.current_complexity|float) }}</td>
+                                            <td>{{ "%.2f"|format(narrative.predictions[-1]|float) }}</td>
+                                            <td>
+                                                {% set change = narrative.predictions[-1]|float - narrative.current_complexity|float %}
+                                                {% if change > 0 %}
+                                                    <span class="text-warning">+{{ "%.2f"|format(change) }}</span>
+                                                {% elif change < 0 %}
+                                                    <span class="text-info">{{ "%.2f"|format(change) }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">0.00</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group">
+                                                    <a href="{{ url_for('prediction.predict_narrative_complexity', narrative_id=narrative.narrative_id) }}" 
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-graph-up"></i>
+                                                    </a>
+                                                    <a href="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.narrative_id) }}" 
+                                                       class="btn btn-sm btn-outline-success">
+                                                        <i class="bi bi-diagram-3"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+// Process prediction data for charts
+const predictions = {{ predictions.predictions|tojson }};
+
+// Prepare data for multiple line plot
+let traces = [];
+let narrativeIds = {};
+
+// Sort predictions by current complexity (highest first)
+predictions.sort((a, b) => b.current_complexity - a.current_complexity);
+
+// Take top 10 for clarity in chart
+const topPredictions = predictions.slice(0, 10);
+
+// Create a trace for each narrative
+topPredictions.forEach((pred, index) => {
+    const shortTitle = pred.title.length > 25 ? 
+        pred.title.substring(0, 25) + '...' : pred.title;
+    
+    // Get different colors for different narratives
+    const colors = [
+        'rgb(31, 119, 180)', 'rgb(255, 127, 14)', 'rgb(44, 160, 44)', 
+        'rgb(214, 39, 40)', 'rgb(148, 103, 189)', 'rgb(140, 86, 75)', 
+        'rgb(227, 119, 194)', 'rgb(127, 127, 127)', 'rgb(188, 189, 34)', 
+        'rgb(23, 190, 207)'
+    ];
+    
+    // Store narrative ID for reference
+    narrativeIds[shortTitle] = pred.narrative_id;
+    
+    // Combine current complexity with predictions
+    let fullData = [pred.current_complexity].concat(pred.predictions);
+    
+    // Generate dates array starting from today
+    const now = new Date();
+    let dates = [];
+    for (let i = 0; i < fullData.length; i++) {
+        let date = new Date(now);
+        date.setDate(date.getDate() + i);
+        dates.push(date.toISOString().split('T')[0]);
+    }
+    
+    traces.push({
+        x: dates,
+        y: fullData,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: shortTitle,
+        line: {
+            color: colors[index % colors.length],
+            width: 2
+        },
+        marker: {
+            size: 6
+        }
+    });
+});
+
+// Layout configuration
+const layout = {
+    title: `${days_ahead}-Day Complexity Projections for Top Narratives`,
+    xaxis: {
+        title: 'Date'
+    },
+    yaxis: {
+        title: 'Complexity Score',
+        range: [0, 10]
+    },
+    margin: {
+        l: 50,
+        r: 50,
+        b: 80,
+        t: 50
+    },
+    legend: {
+        x: 0.01,
+        y: 0.99,
+        bgcolor: 'rgba(255, 255, 255, 0.7)',
+        bordercolor: 'rgba(0, 0, 0, 0.1)',
+        borderwidth: 1
+    },
+    shapes: [{
+        type: 'rect',
+        x0: traces[0].x[0],
+        y0: 0,
+        x1: traces[0].x[traces[0].x.length - 1],
+        y1: 3,
+        fillcolor: 'rgba(0, 255, 0, 0.1)',
+        line: {
+            width: 0
+        }
+    }, {
+        type: 'rect',
+        x0: traces[0].x[0],
+        y0: 3,
+        x1: traces[0].x[traces[0].x.length - 1],
+        y1: 7,
+        fillcolor: 'rgba(255, 255, 0, 0.1)',
+        line: {
+            width: 0
+        }
+    }, {
+        type: 'rect',
+        x0: traces[0].x[0],
+        y0: 7,
+        x1: traces[0].x[traces[0].x.length - 1],
+        y1: 10,
+        fillcolor: 'rgba(255, 0, 0, 0.1)',
+        line: {
+            width: 0
+        }
+    }]
+};
+
+// Add a vertical line at the current date
+layout.shapes.push({
+    type: 'line',
+    x0: traces[0].x[0],
+    y0: 0,
+    x1: traces[0].x[0],
+    y1: 10,
+    line: {
+        color: 'rgba(0, 0, 0, 0.5)',
+        width: 2,
+        dash: 'dash'
+    }
+});
+
+// Render the chart
+Plotly.newPlot('chart', traces, layout, {responsive: true});
+
+// Add click handler to redirect to narrative details
+document.getElementById('chart').on('plotly_click', function(data) {
+    const pointIndex = data.points[0].curveNumber;
+    const narrativeName = data.points[0].data.name;
+    
+    if (narrativeName in narrativeIds) {
+        const narrativeId = narrativeIds[narrativeName];
+        window.location.href = `/prediction/complexity/${narrativeId}`;
+    }
+});
+</script>
+{% endblock %}
