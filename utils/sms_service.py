@@ -48,7 +48,7 @@ class SmsService:
                 logger.error(f"Failed to initialize Twilio client: {e}")
                 self.is_configured = False
     
-    def send_message(self, message: str, recipient: Optional[str] = None) -> bool:
+    def send_message(self, message: str, recipient: Optional[str] = None) -> tuple[bool, dict]:
         """
         Send an SMS message via Twilio.
         
@@ -57,12 +57,20 @@ class SmsService:
             recipient: Optional override for the default recipient phone number
             
         Returns:
-            Boolean indicating success or failure
+            Tuple with (success_bool, details_dict)
         """
+        details = {
+            "configured": self.is_configured,
+            "client_initialized": self.client is not None,
+            "twilio_phone": self.twilio_phone,
+            "recipient_phone": "XXXX" + (recipient or self.recipient_phone)[-4:] if (recipient or self.recipient_phone) else None
+        }
+        
         # Check if service is configured
         if not self.is_configured or not self.client:
             logger.warning("SMS service not configured, cannot send message")
-            return False
+            details["error"] = "SMS service not configured"
+            return False, details
         
         # Use default recipient if none provided
         to_number = recipient or self.recipient_phone
@@ -75,11 +83,22 @@ class SmsService:
                 to=to_number
             )
             logger.info(f"SMS sent successfully. SID: {sms.sid}")
-            return True
+            details["sid"] = sms.sid
+            details["status"] = sms.status
+            return True, details
             
         except Exception as e:
-            logger.error(f"Failed to send SMS: {e}")
-            return False
+            error_message = str(e)
+            logger.error(f"Failed to send SMS: {error_message}")
+            details["error"] = error_message
+            # Check for common Twilio errors
+            if "21612" in error_message:
+                details["suggestion"] = "The 'To' or 'From' phone numbers are not properly configured. For trial accounts, verify numbers are confirmed in your Twilio dashboard."
+            elif "21608" in error_message:
+                details["suggestion"] = "The 'To' phone number is not a valid phone number format."
+            elif "20003" in error_message:
+                details["suggestion"] = "Authentication error. Check your Twilio Account SID and Auth Token."
+            return False, details
 
 
 # Singleton instance
