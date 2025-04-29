@@ -25,6 +25,7 @@ prediction_bp = Blueprint('prediction', __name__, url_prefix='/prediction')
 
 
 @prediction_bp.route('/')
+@prediction_bp.route('/dashboard')
 @login_required
 def dashboard():
     """Predictive modeling dashboard."""
@@ -43,6 +44,7 @@ def dashboard():
 
 
 @prediction_bp.route('/forecast/<int:narrative_id>')
+@prediction_bp.route('/predict_narrative_complexity/<int:narrative_id>')
 @login_required
 def forecast(narrative_id: int):
     """Display forecast for a narrative."""
@@ -226,6 +228,8 @@ def multiple_forecasts():
 
 
 @prediction_bp.route('/whatif/<int:narrative_id>', methods=['GET', 'POST'])
+@prediction_bp.route('/what-if/<int:narrative_id>', methods=['GET', 'POST'])
+@prediction_bp.route('/what_if_analysis/<int:narrative_id>', methods=['GET', 'POST'])
 @login_required
 def what_if(narrative_id: int):
     """What-if scenario modeling for a narrative."""
