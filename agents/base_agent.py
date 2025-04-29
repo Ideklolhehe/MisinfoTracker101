@@ -12,6 +12,7 @@ from datetime import datetime
 
 from app import db
 from models import SystemLog
+from utils.app_context import AppContextThread, with_app_context
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,8 @@ class BaseAgent:
             return
             
         self.is_running = True
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        # Use AppContextThread instead of standard Thread to maintain Flask context
+        self.thread = AppContextThread(target=self._run, daemon=True)
         self.thread.start()
         
         logger.info(f"{self.__class__.__name__} started")

@@ -1,4 +1,8 @@
 from app import app  # noqa: F401
+from utils.app_context import set_current_app
+
+# Set the global app instance for thread context
+set_current_app(app)
 import logging
 import os
 from utils.text_processor import TextProcessor
