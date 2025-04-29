@@ -38,14 +38,32 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.narratives' %}active{% endif %}" href="{{ url_for('dashboard.narratives') }}">
                             <i data-feather="activity"></i> Narratives
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'dashboard.counter_messaging' %}active{% endif %}" href="{{ url_for('dashboard.counter_messaging') }}">
-                            <i data-feather="shield"></i> Counter Messaging
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i data-feather="tool"></i> Tools
                         </a>
+                        <ul class="dropdown-menu" aria-labelledby="toolsDropdown">
+                            <li><a class="dropdown-item {% if request.endpoint == 'dashboard.source_reliability' %}active{% endif %}" href="{{ url_for('dashboard.source_reliability') }}">
+                                <i data-feather="bar-chart-2"></i> Source Reliability Analysis
+                            </a></li>
+                            <li><a class="dropdown-item {% if request.endpoint == 'dashboard.counter_messaging' %}active{% endif %}" href="{{ url_for('dashboard.counter_messaging') }}">
+                                <i data-feather="shield"></i> Counter Messaging
+                            </a></li>
+                            <li><a class="dropdown-item {% if request.endpoint == 'dashboard.report_misinfo' %}active{% endif %}" href="{{ url_for('dashboard.report_misinfo') }}">
+                                <i data-feather="alert-triangle"></i> Report Misinformation
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item {% if request.endpoint == 'prediction.dashboard' %}active{% endif %}" href="{{ url_for('prediction.dashboard') }}">
+                                <i data-feather="trending-up"></i> Predictive Modeling
+                            </a></li>
+                            <li><a class="dropdown-item {% if request.endpoint == 'complexity.dashboard' %}active{% endif %}" href="{{ url_for('complexity.dashboard') }}">
+                                <i data-feather="layers"></i> Complexity Analysis
+                            </a></li>
+                        </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'dashboard.settings' %}active{% endif %}" href="{{ url_for('dashboard.settings') }}">
@@ -76,17 +94,52 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+                            <a class="nav-link {% if request.endpoint == 'dashboard.narratives' %}active{% endif %}" href="{{ url_for('dashboard.narratives') }}">
                                 <i data-feather="activity"></i>
                                 Narratives
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'dashboard.counter_messaging' %}active{% endif %}" href="{{ url_for('dashboard.counter_messaging') }}">
-                                <i data-feather="shield"></i>
-                                Counter Messaging
-                            </a>
+                        
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>Tools</span>
+                                <span data-bs-toggle="collapse" href="#toolsCollapse" role="button" aria-expanded="true" aria-controls="toolsCollapse" style="cursor: pointer;">
+                                    <i data-feather="chevron-down"></i>
+                                </span>
+                            </h6>
                         </li>
+                        <div class="collapse show" id="toolsCollapse">
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'dashboard.source_reliability' %}active{% endif %}" href="{{ url_for('dashboard.source_reliability') }}">
+                                    <i data-feather="bar-chart-2"></i>
+                                    Source Reliability
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'dashboard.counter_messaging' %}active{% endif %}" href="{{ url_for('dashboard.counter_messaging') }}">
+                                    <i data-feather="shield"></i>
+                                    Counter Messaging
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'dashboard.report_misinfo' %}active{% endif %}" href="{{ url_for('dashboard.report_misinfo') }}">
+                                    <i data-feather="alert-triangle"></i>
+                                    Report Misinformation
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'prediction.dashboard' %}active{% endif %}" href="{{ url_for('prediction.dashboard') }}">
+                                    <i data-feather="trending-up"></i>
+                                    Predictive Modeling
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'complexity.dashboard' %}active{% endif %}" href="{{ url_for('complexity.dashboard') }}">
+                                    <i data-feather="layers"></i>
+                                    Complexity Analysis
+                                </a>
+                            </li>
+                        </div>
                         
                         <li class="nav-item mt-3">
                             <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
