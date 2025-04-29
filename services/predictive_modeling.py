@@ -70,6 +70,10 @@ class PredictiveModeling:
                 'random_state': 42
             }
         }
+        
+        # Import InformationSource model here to avoid circular imports
+        from models import InformationSource
+        self.InformationSource = InformationSource
     
     def get_narrative_time_series(self, narrative_id: int, days: int = 30) -> pd.DataFrame:
         """
@@ -1647,3 +1651,231 @@ class PredictiveModeling:
         except Exception as e:
             logger.exception(f"Error getting trending narratives: {str(e)}")
             return []
+            
+    def get_top_risk_sources(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get the top risk information sources based on reliability metrics.
+        
+        Args:
+            limit: Maximum number of sources to return
+            
+        Returns:
+            List of dictionaries containing source information
+        """
+        try:
+            # Query sources with lower reliability scores
+            sources = self.InformationSource.query.filter_by(
+                status='active'
+            ).order_by(
+                self.InformationSource.reliability_score.asc()
+            ).limit(limit).all()
+            
+            result = []
+            for source in sources:
+                # Get recent misinformation instances
+                recent_instances = db.session.query(
+                    func.count(NarrativeInstance.id).label('count')
+                ).filter(
+                    NarrativeInstance.source_id == source.id,
+                    NarrativeInstance.is_misinformation == True,
+                    NarrativeInstance.detected_at >= datetime.utcnow() - timedelta(days=30)
+                ).scalar()
+                
+                # Generate risk level based on reliability score
+                if source.reliability_score < 0.3:
+                    risk_level = "High"
+                elif source.reliability_score < 0.7:
+                    risk_level = "Medium"
+                else:
+                    risk_level = "Low"
+                
+                # Determine trend based on historical reliability (mock for now)
+                trend = "stable"  # Default if we can't determine
+                meta_data = {}
+                if hasattr(source, 'get_meta_data'):
+                    meta_data = source.get_meta_data() or {}
+                
+                if 'historical_reliability' in meta_data:
+                    history = meta_data['historical_reliability']
+                    if len(history) >= 2:
+                        current = history[-1]
+                        previous = history[-2]
+                        if current > previous * 1.05:
+                            trend = "up"
+                        elif current < previous * 0.95:
+                            trend = "down"
+                
+                result.append({
+                    'id': source.id,
+                    'name': source.name,
+                    'url': source.url,
+                    'source_type': source.source_type,
+                    'reliability_score': source.reliability_score,
+                    'recent_misinfo_count': recent_instances,
+                    'risk_trend': trend,
+                    'projected_risk': risk_level
+                })
+            
+            return result
+            
+        except Exception as e:
+            logger.exception(f"Error getting top risk sources: {str(e)}")
+            return []
+    
+    def predict_source_reliability(
+        self,
+        source_id: int,
+        days_history: int = 90,
+        days_horizon: int = 30,
+        force_refresh: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Predict future reliability of an information source.
+        
+        Args:
+            source_id: ID of the information source
+            days_history: Number of days of historical data to use
+            days_horizon: Number of days to forecast
+            force_refresh: Force refresh of prediction even if recent one exists
+            
+        Returns:
+            Dictionary with forecast results
+        """
+        try:
+            # Get the source
+            source = self.InformationSource.query.get(source_id)
+            if not source:
+                logger.error(f"Information source {source_id} not found")
+                return {
+                    "success": False,
+                    "error": f"Information source {source_id} not found"
+                }
+            
+            # Check if we have a recent forecast in cache and not forcing refresh
+            meta_data = {}
+            if hasattr(source, 'get_meta_data'):
+                meta_data = source.get_meta_data() or {}
+            
+            if not force_refresh and 'reliability_forecast' in meta_data:
+                forecast = meta_data['reliability_forecast']
+                generated_at = datetime.fromisoformat(forecast['generated_at']) if 'generated_at' in forecast else None
+                
+                # If forecast is less than 24 hours old, return cached version
+                if generated_at and (datetime.utcnow() - generated_at).total_seconds() < 86400:
+                    forecast['success'] = True
+                    forecast['from_cache'] = True
+                    return forecast
+            
+            # Get historical reliability data
+            if 'historical_reliability' not in meta_data or not meta_data['historical_reliability']:
+                # If no historical data, return error
+                logger.warning(f"Insufficient historical data for source {source_id}")
+                return {
+                    "success": False,
+                    "error": "Insufficient historical data for forecasting"
+                }
+            
+            # Extract historical data (assume format is list of [timestamp, score] pairs)
+            history = meta_data['historical_reliability']
+            
+            # Convert to pandas DataFrame
+            df = pd.DataFrame(history, columns=['timestamp', 'reliability'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.set_index('timestamp').sort_index()
+            
+            # Check if we have enough data
+            if len(df) < 5:  # Need at least 5 data points
+                logger.warning(f"Insufficient historical data points for source {source_id}")
+                return {
+                    "success": False,
+                    "error": "Insufficient historical data points (need at least 5)"
+                }
+            
+            # Forecast using ARIMA model
+            try:
+                # Create time series model
+                model = ARIMA(df['reliability'], order=(2, 1, 2))
+                model_fit = model.fit()
+                
+                # Forecast
+                forecast_values = model_fit.forecast(steps=days_horizon)
+                forecast_index = pd.date_range(
+                    start=df.index[-1] + pd.Timedelta(days=1), 
+                    periods=days_horizon
+                )
+                
+                # Create forecast DataFrame
+                forecast_df = pd.DataFrame({
+                    'date': forecast_index.strftime('%Y-%m-%d'),
+                    'reliability': forecast_values.tolist()
+                })
+                
+                # Ensure reliability values are between 0 and 1
+                forecast_df['reliability'] = forecast_df['reliability'].apply(
+                    lambda x: max(0, min(1, x))
+                )
+                
+                # Get confidence intervals
+                ci = model_fit.get_forecast(steps=days_horizon).conf_int()
+                lower_bound = ci.iloc[:, 0].apply(lambda x: max(0, min(1, x))).tolist()
+                upper_bound = ci.iloc[:, 1].apply(lambda x: max(0, min(1, x))).tolist()
+                
+                # Calculate trend
+                current_value = df['reliability'].iloc[-1]
+                future_value = forecast_df['reliability'].iloc[-1]
+                
+                if future_value > current_value * 1.1:
+                    trend = "improving"
+                elif future_value < current_value * 0.9:
+                    trend = "deteriorating"
+                else:
+                    trend = "stable"
+                
+                # Determine risk level
+                risk_level = "Low"
+                if future_value < 0.3:
+                    risk_level = "High"
+                elif future_value < 0.7:
+                    risk_level = "Medium"
+                
+                # Create result
+                result = {
+                    "success": True,
+                    "generated_at": datetime.utcnow().isoformat(),
+                    "source_id": source_id,
+                    "source_name": source.name,
+                    "current_reliability": float(current_value),
+                    "forecast": {
+                        "dates": forecast_df['date'].tolist(),
+                        "values": forecast_df['reliability'].tolist(),
+                        "lower_bound": lower_bound,
+                        "upper_bound": upper_bound
+                    },
+                    "trend": trend,
+                    "risk_level": risk_level,
+                    "days_history": days_history,
+                    "days_horizon": days_horizon,
+                    "model": "arima"
+                }
+                
+                # Cache the result in source metadata
+                meta_data['reliability_forecast'] = result
+                if hasattr(source, 'set_meta_data'):
+                    source.set_meta_data(meta_data)
+                    db.session.commit()
+                
+                return result
+                
+            except Exception as e:
+                logger.exception(f"Error forecasting reliability for source {source_id}: {str(e)}")
+                return {
+                    "success": False,
+                    "error": f"Error in forecasting: {str(e)}"
+                }
+            
+        except Exception as e:
+            logger.exception(f"Error in source reliability prediction: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Error in prediction: {str(e)}"
+            }
