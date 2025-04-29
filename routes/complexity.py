@@ -1,7 +1,7 @@
 import logging
 import json
 from typing import Dict, Any, List
-from flask import Blueprint, request, jsonify, render_template, send_file, Response, make_response, current_app
+from flask import Blueprint, request, jsonify, render_template, send_file, Response, make_response, current_app, flash, redirect, url_for
 from flask_login import login_required, current_user
 from io import BytesIO
 
@@ -494,10 +494,15 @@ def export_trends_to_csv():
 def complexity_trends():
     """
     Display time-series trends of narrative complexity.
+    Restricted to admin users only.
     
     Returns:
         HTML page with complexity trends visualization
     """
+    # Check if the user has admin role
+    if current_user.role != 'admin':
+        flash("You don't have permission to access this page.", "danger")
+        return redirect(url_for('dashboard.index'))
     try:
         # Get recently analyzed narratives for initial stats
         narratives_with_complexity = []

@@ -101,9 +101,9 @@ class ComplexityAnalyzer:
             cutoff_date = datetime.now() - timedelta(days=days)
             narratives = DetectedNarrative.query.filter(
                 DetectedNarrative.status == 'active',
-                DetectedNarrative.created_at >= cutoff_date
+                DetectedNarrative.first_detected >= cutoff_date
             ).order_by(
-                DetectedNarrative.created_at.desc()
+                DetectedNarrative.first_detected.desc()
             ).limit(limit).all()
             
             if not narratives:
