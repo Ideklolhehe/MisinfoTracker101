@@ -1,395 +1,427 @@
 """
-Routes for predictive modeling, forecasting, and what-if scenarios.
+Prediction routes for the CIVILIAN system.
+
+This module handles routes for predictive modeling, including narrative trajectory
+forecasting, key factor analysis, anomaly detection, and what-if scenario simulation.
 """
 
 import logging
-import json
-from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+from typing import Dict, Any, List
 
-from flask import Blueprint, render_template, request, jsonify, abort, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, url_for, flash, redirect
 from flask_login import login_required, current_user
 
+from app import db
+from models import DetectedNarrative, NarrativeInstance, CounterMessage
 from services.predictive_modeling import PredictiveModeling
 
-# Initialize service with thread safety
-predictive_modeling_service = PredictiveModeling()
-from models import DetectedNarrative
-from app import db
-from utils.metrics import time_operation
-
-# Configure module logger
+# Configure logging
 logger = logging.getLogger(__name__)
 
-# Create blueprint
+# Initialize blueprint
 prediction_bp = Blueprint('prediction', __name__, url_prefix='/prediction')
 
+# Initialize predictive modeling service
+predictive_modeling = PredictiveModeling()
 
 @prediction_bp.route('/')
-@prediction_bp.route('/dashboard')
 @login_required
 def dashboard():
-    """Predictive modeling dashboard."""
-    # Get top narratives to display
-    narratives = DetectedNarrative.query.filter(
-        DetectedNarrative.status != 'debunked'
-    ).order_by(
-        DetectedNarrative.last_updated.desc()
-    ).limit(10).all()
-    
-    return render_template(
-        'prediction/dashboard.html',
-        title='Predictive Modeling Dashboard',
-        narratives=narratives
-    )
-
+    """Display the prediction dashboard with available narratives."""
+    try:
+        # Get narratives with enough data for prediction
+        narratives = (DetectedNarrative.query
+                    .filter(DetectedNarrative.status == 'active')
+                    .order_by(DetectedNarrative.first_detected.desc())
+                    .limit(20)
+                    .all())
+        
+        return render_template(
+            'prediction/dashboard.html',
+            title='Predictive Dashboard',
+            narratives=narratives
+        )
+    except Exception as e:
+        logger.exception(f"Error displaying prediction dashboard: {str(e)}")
+        flash(f"Error loading dashboard: {str(e)}", 'danger')
+        return render_template(
+            'prediction/dashboard.html',
+            title='Predictive Dashboard',
+            narratives=[]
+        )
 
 @prediction_bp.route('/forecast/<int:narrative_id>')
-@prediction_bp.route('/predict_narrative_complexity/<int:narrative_id>')
 @login_required
-def forecast(narrative_id: int):
-    """Display forecast for a narrative."""
-    # Get narrative
-    narrative = DetectedNarrative.query.get_or_404(narrative_id)
-    
-    # Get metric (default complexity)
-    metric = request.args.get('metric', 'complexity')
-    
-    # Get model type
-    model_type = request.args.get('model', 'prophet')
-    
-    # Force refresh parameter
-    force_refresh = 'refresh' in request.args
-    
-    # Generate forecast
-    with time_operation('generate_forecast'):
-        forecast_data = predictive_modeling_service.forecast_narrative(
-            narrative_id, metric, model_type, force_refresh
+def forecast(narrative_id):
+    """Generate and display a forecast for a narrative."""
+    try:
+        # Get parameters
+        metric = request.args.get('metric', 'complexity')
+        model_type = request.args.get('model', 'arima')
+        force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+        
+        # Get narrative
+        narrative = DetectedNarrative.query.get_or_404(narrative_id)
+        
+        # Generate forecast
+        forecast_data = predictive_modeling.forecast_narrative(
+            narrative_id=narrative_id,
+            metric=metric,
+            model_type=model_type,
+            force_refresh=force_refresh
         )
-    
-    # Check for error
-    if 'error' in forecast_data:
+        
+        if not forecast_data.get('success', False):
+            flash(forecast_data.get('error', 'Unknown error'), 'danger')
+            return render_template(
+                'prediction/error.html',
+                title='Forecast Error',
+                error=forecast_data.get('error', 'Unknown error'),
+                narrative=narrative
+            )
+        
+        return render_template(
+            'prediction/view.html',
+            title=f'Forecast for "{narrative.title}"',
+            narrative=narrative,
+            forecast=forecast_data,
+            metric=metric,
+            model_type=model_type
+        )
+    except Exception as e:
+        logger.exception(f"Error forecasting narrative {narrative_id}: {str(e)}")
+        narrative = DetectedNarrative.query.get(narrative_id)
         return render_template(
             'prediction/error.html',
             title='Forecast Error',
-            narrative=narrative,
-            error=forecast_data['error']
+            error=str(e),
+            narrative=narrative
         )
-    
-    return render_template(
-        'prediction/view.html',
-        title=f'Forecast: {narrative.title}',
-        narrative=narrative,
-        forecast=forecast_data,
-        metric=metric,
-        model_type=model_type
-    )
 
-
-@prediction_bp.route('/threshold/<int:narrative_id>')
+@prediction_bp.route('/api/forecast/<int:narrative_id>')
 @login_required
-def threshold(narrative_id: int):
-    """Display threshold projections for a narrative."""
-    # Get narrative
-    narrative = DetectedNarrative.query.get_or_404(narrative_id)
-    
-    # Get metric
-    metric = request.args.get('metric', 'complexity')
-    
-    # Get model type
-    model_type = request.args.get('model', 'prophet')
-    
-    # Get threshold value
-    threshold_value = float(request.args.get('value', 0.75))
-    
-    # Get direction
-    direction = request.args.get('direction', 'above')
-    
-    # Generate forecast first
-    forecast_data = predictive_modeling_service.forecast_narrative(
-        narrative_id, metric, model_type
-    )
-    
-    # Check for error
-    if 'error' in forecast_data:
+def api_forecast(narrative_id):
+    """API endpoint for narrative forecasts."""
+    try:
+        # Get parameters
+        metric = request.args.get('metric', 'complexity')
+        model_type = request.args.get('model', 'arima')
+        
+        # Generate forecast
+        forecast_data = predictive_modeling.forecast_narrative(
+            narrative_id=narrative_id,
+            metric=metric,
+            model_type=model_type
+        )
+        
+        return jsonify(forecast_data)
+    except Exception as e:
+        logger.exception(f"API error forecasting narrative {narrative_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@prediction_bp.route('/key-factors/<int:narrative_id>')
+@login_required
+def key_factors(narrative_id):
+    """Analyze and display key factors influencing a narrative."""
+    try:
+        # Get parameters
+        metric = request.args.get('metric', 'complexity')
+        
+        # Get narrative
+        narrative = DetectedNarrative.query.get_or_404(narrative_id)
+        
+        # Analyze key factors
+        factors_data = predictive_modeling.analyze_key_factors(
+            narrative_id=narrative_id,
+            metric=metric
+        )
+        
         return render_template(
-            'prediction/error.html',
-            title='Threshold Projection Error',
+            'prediction/key_factors.html',
+            title=f'Key Factors for "{narrative.title}"',
             narrative=narrative,
-            error=forecast_data['error']
+            factors=factors_data,
+            metric=metric
         )
-    
-    # Calculate threshold crossing
-    threshold_data = predictive_modeling_service.find_threshold_crossing(
-        forecast_data, threshold_value, direction
-    )
-    
-    return render_template(
-        'prediction/threshold.html',
-        title=f'Threshold Projection: {narrative.title}',
-        narrative=narrative,
-        forecast=forecast_data,
-        threshold=threshold_data,
-        metric=metric,
-        model_type=model_type
-    )
-
-
-@prediction_bp.route('/factors/<int:narrative_id>')
-@login_required
-def key_factors(narrative_id: int):
-    """Display key factors for a narrative."""
-    # Get narrative
-    narrative = DetectedNarrative.query.get_or_404(narrative_id)
-    
-    # Get metric
-    metric = request.args.get('metric', 'complexity')
-    
-    # Analyze key factors
-    factors_data = predictive_modeling_service.analyze_key_factors(
-        narrative_id, metric
-    )
-    
-    # Check for error
-    if 'error' in factors_data:
+    except Exception as e:
+        logger.exception(f"Error analyzing key factors for {narrative_id}: {str(e)}")
+        narrative = DetectedNarrative.query.get(narrative_id)
         return render_template(
             'prediction/error.html',
             title='Key Factors Analysis Error',
-            narrative=narrative,
-            error=factors_data['error']
+            error=str(e),
+            narrative=narrative
         )
-    
-    return render_template(
-        'prediction/factors.html',
-        title=f'Key Factors: {narrative.title}',
-        narrative=narrative,
-        factors=factors_data,
-        metric=metric
-    )
 
+@prediction_bp.route('/what-if/<int:narrative_id>')
+@login_required
+def what_if(narrative_id):
+    """Simulate and display a what-if scenario for a narrative."""
+    try:
+        # Get parameters
+        metric = request.args.get('metric', 'complexity')
+        model_type = request.args.get('model', 'arima')
+        
+        # Get narrative
+        narrative = DetectedNarrative.query.get_or_404(narrative_id)
+        
+        # Default interventions (empty/none)
+        interventions = {}
+        
+        # Parse intervention parameters if present
+        if request.args.get('counter_strength'):
+            interventions['counter_strength'] = float(request.args.get('counter_strength'))
+        
+        if request.args.get('counter_timing'):
+            interventions['counter_timing'] = int(request.args.get('counter_timing'))
+        
+        # Generate baseline forecast for comparison
+        baseline = predictive_modeling.forecast_narrative(
+            narrative_id=narrative_id,
+            metric=metric,
+            model_type=model_type
+        )
+        
+        # Simulate scenario if interventions specified
+        if interventions:
+            scenario = predictive_modeling.simulate_scenario(
+                narrative_id=narrative_id,
+                interventions=interventions,
+                metric=metric,
+                model_type=model_type
+            )
+        else:
+            # If no interventions specified, return template with baseline only
+            scenario = None
+        
+        return render_template(
+            'prediction/what_if.html',
+            title=f'What-If Analysis for "{narrative.title}"',
+            narrative=narrative,
+            baseline=baseline,
+            scenario=scenario,
+            interventions=interventions,
+            metric=metric,
+            model_type=model_type
+        )
+    except Exception as e:
+        logger.exception(f"Error simulating what-if for {narrative_id}: {str(e)}")
+        narrative = DetectedNarrative.query.get(narrative_id)
+        return render_template(
+            'prediction/error.html',
+            title='What-If Analysis Error',
+            error=str(e),
+            narrative=narrative
+        )
+
+@prediction_bp.route('/threshold/<int:narrative_id>')
+@login_required
+def threshold(narrative_id):
+    """Display threshold crossing projections for a narrative."""
+    try:
+        # Get parameters
+        metric = request.args.get('metric', 'complexity')
+        model_type = request.args.get('model', 'arima')
+        threshold_value = float(request.args.get('threshold', '0.75'))
+        direction = request.args.get('direction', 'above')
+        
+        # Get narrative
+        narrative = DetectedNarrative.query.get_or_404(narrative_id)
+        
+        # Generate forecast
+        forecast_data = predictive_modeling.forecast_narrative(
+            narrative_id=narrative_id,
+            metric=metric,
+            model_type=model_type
+        )
+        
+        if not forecast_data.get('success', False):
+            flash(forecast_data.get('error', 'Unknown error'), 'danger')
+            return render_template(
+                'prediction/error.html',
+                title='Threshold Analysis Error',
+                error=forecast_data.get('error', 'Unknown error'),
+                narrative=narrative
+            )
+        
+        # Find threshold crossings
+        threshold_data = predictive_modeling.find_threshold_crossing(
+            forecast_data=forecast_data,
+            threshold_value=threshold_value,
+            direction=direction
+        )
+        
+        return render_template(
+            'prediction/threshold.html',
+            title=f'Threshold Analysis for "{narrative.title}"',
+            narrative=narrative,
+            forecast=forecast_data,
+            threshold=threshold_data,
+            threshold_value=threshold_value,
+            direction=direction,
+            metric=metric
+        )
+    except Exception as e:
+        logger.exception(f"Error analyzing threshold for {narrative_id}: {str(e)}")
+        narrative = DetectedNarrative.query.get(narrative_id)
+        return render_template(
+            'prediction/error.html',
+            title='Threshold Analysis Error',
+            error=str(e),
+            narrative=narrative
+        )
+
+@prediction_bp.route('/anomalies/<int:narrative_id>')
+@login_required
+def anomalies(narrative_id):
+    """Detect and display anomalies for a narrative."""
+    try:
+        # Get parameters
+        days = int(request.args.get('days', '30'))
+        
+        # Get narrative
+        narrative = DetectedNarrative.query.get_or_404(narrative_id)
+        
+        # Detect anomalies
+        anomaly_data = predictive_modeling.detect_anomalies(
+            narrative_id=narrative_id,
+            days=days
+        )
+        
+        return render_template(
+            'prediction/anomalies.html',
+            title=f'Anomaly Detection for "{narrative.title}"',
+            narrative=narrative,
+            anomalies=anomaly_data,
+            days=days
+        )
+    except Exception as e:
+        logger.exception(f"Error detecting anomalies for {narrative_id}: {str(e)}")
+        narrative = DetectedNarrative.query.get(narrative_id)
+        return render_template(
+            'prediction/error.html',
+            title='Anomaly Detection Error',
+            error=str(e),
+            narrative=narrative
+        )
 
 @prediction_bp.route('/multiple')
 @login_required
 def multiple_forecasts():
-    """Display multiple forecasts for comparison."""
-    # Get narrative IDs from request
-    narrative_ids_str = request.args.get('ids', '')
-    
-    if not narrative_ids_str:
-        # Show form to select narratives
-        narratives = DetectedNarrative.query.filter(
-            DetectedNarrative.status != 'debunked'
-        ).order_by(
-            DetectedNarrative.last_updated.desc()
-        ).limit(20).all()
+    """Generate and display multiple narrative forecasts for comparison."""
+    try:
+        # Get parameters
+        narrative_ids = request.args.getlist('narratives')
+        metric = request.args.get('metric', 'complexity')
+        days_horizon = int(request.args.get('horizon', '7'))
+        
+        # If no narratives specified, show selection form
+        if not narrative_ids:
+            narratives = (DetectedNarrative.query
+                        .filter(DetectedNarrative.status == 'active')
+                        .order_by(DetectedNarrative.first_detected.desc())
+                        .limit(20)
+                        .all())
+            
+            return render_template(
+                'prediction/multiple_select.html',
+                title='Compare Multiple Narratives',
+                narratives=narratives,
+                metric=metric,
+                days_horizon=days_horizon
+            )
+        
+        # Get narratives and generate forecasts
+        selected_narratives = []
+        forecasts = {}
+        
+        for narrative_id in narrative_ids:
+            try:
+                narrative_id = int(narrative_id)
+                narrative = DetectedNarrative.query.get(narrative_id)
+                
+                if narrative:
+                    selected_narratives.append(narrative)
+                    
+                    # Generate forecast
+                    forecast = predictive_modeling.forecast_narrative(
+                        narrative_id=narrative_id,
+                        metric=metric,
+                        days_horizon=days_horizon
+                    )
+                    
+                    if forecast.get('success', False):
+                        forecasts[narrative_id] = forecast
+            except Exception as e:
+                logger.warning(f"Error forecasting narrative {narrative_id}: {str(e)}")
+        
+        if not forecasts:
+            flash("No valid forecasts could be generated for the selected narratives.", "warning")
+            return redirect(url_for('prediction.multiple_forecasts'))
         
         return render_template(
-            'prediction/select_multiple.html',
-            title='Compare Multiple Narratives',
-            narratives=narratives
+            'prediction/multiple_view.html',
+            title='Narrative Comparison',
+            narratives=selected_narratives,
+            forecasts=forecasts,
+            metric=metric,
+            days_horizon=days_horizon
         )
-    
-    # Parse narrative IDs
-    try:
-        narrative_ids = [int(id_str) for id_str in narrative_ids_str.split(',')]
-    except ValueError:
-        abort(400, 'Invalid narrative IDs')
-    
-    # Get metric
-    metric = request.args.get('metric', 'complexity')
-    
-    # Get model type
-    model_type = request.args.get('model', 'prophet')
-    
-    # Get narratives
-    narratives = {}
-    forecasts = {}
-    
-    for narrative_id in narrative_ids:
-        narrative = DetectedNarrative.query.get(narrative_id)
-        if narrative:
-            narratives[narrative_id] = narrative
-            
-            # Generate forecast
-            forecast_data = predictive_modeling_service.forecast_narrative(
-                narrative_id, metric, model_type
-            )
-            
-            if 'error' not in forecast_data:
-                forecasts[narrative_id] = forecast_data
-    
-    return render_template(
-        'prediction/multiple.html',
-        title='Multiple Forecasts Comparison',
-        narratives=narratives,
-        forecasts=forecasts,
-        metric=metric,
-        model_type=model_type
-    )
-
-
-@prediction_bp.route('/whatif/<int:narrative_id>', methods=['GET', 'POST'])
-@prediction_bp.route('/what-if/<int:narrative_id>', methods=['GET', 'POST'])
-@prediction_bp.route('/what_if_analysis/<int:narrative_id>', methods=['GET', 'POST'])
-@login_required
-def what_if(narrative_id: int):
-    """What-if scenario modeling for a narrative."""
-    # Get narrative
-    narrative = DetectedNarrative.query.get_or_404(narrative_id)
-    
-    # Get metric
-    metric = request.args.get('metric', 'complexity')
-    
-    # Get model type
-    model_type = request.args.get('model', 'prophet')
-    
-    if request.method == 'POST':
-        # Process scenario inputs
-        try:
-            scenario_name = request.form.get('scenario_name', 'Custom Scenario')
-            
-            # Process interventions
-            interventions = {}
-            
-            # Step intervention
-            if 'step_date' in request.form and request.form.get('step_value'):
-                interventions['step'] = {
-                    'type': 'step',
-                    'date': request.form.get('step_date'),
-                    'value': float(request.form.get('step_value', 0))
-                }
-            
-            # Trend intervention
-            if 'trend_factor' in request.form:
-                interventions['trend'] = {
-                    'type': 'trend',
-                    'factor': float(request.form.get('trend_factor', 1.0)),
-                    'start_date': request.form.get('trend_start_date')
-                }
-            
-            # Counter-message intervention
-            if 'counter_date' in request.form:
-                interventions['counter_message'] = {
-                    'type': 'counter_message',
-                    'date': request.form.get('counter_date'),
-                    'impact': float(request.form.get('counter_impact', -0.1)),
-                    'decay': float(request.form.get('counter_decay', 0.9))
-                }
-            
-            # Generate scenario
-            scenario_data = predictive_modeling_service.simulate_scenario(
-                narrative_id, interventions, metric, model_type
-            )
-            
-            # Check for error
-            if 'error' in scenario_data:
-                return render_template(
-                    'prediction/error.html',
-                    title='Scenario Error',
-                    narrative=narrative,
-                    error=scenario_data['error']
-                )
-            
-            # Show results
-            return render_template(
-                'prediction/scenario_results.html',
-                title=f'Scenario Results: {narrative.title}',
-                narrative=narrative,
-                scenario=scenario_data,
-                scenario_name=scenario_name,
-                metric=metric,
-                model_type=model_type
-            )
-        except Exception as e:
-            logger.error(f"Error processing scenario: {e}")
-            abort(400, f"Invalid scenario parameters: {e}")
-    
-    # Show scenario form
-    return render_template(
-        'prediction/what_if.html',
-        title=f'What-If Scenario: {narrative.title}',
-        narrative=narrative,
-        metric=metric,
-        model_type=model_type
-    )
-
-
-@prediction_bp.route('/api/forecast/<int:narrative_id>')
-@login_required
-def api_forecast(narrative_id: int):
-    """API endpoint for narrative forecasts."""
-    # Get parameters
-    metric = request.args.get('metric', 'complexity')
-    model_type = request.args.get('model', 'prophet')
-    force_refresh = 'refresh' in request.args
-    
-    # Generate forecast
-    forecast_data = predictive_modeling_service.forecast_narrative(
-        narrative_id, metric, model_type, force_refresh
-    )
-    
-    return jsonify(forecast_data)
-
-
-@prediction_bp.route('/api/threshold/<int:narrative_id>')
-@login_required
-def api_threshold(narrative_id: int):
-    """API endpoint for threshold projections."""
-    # Get parameters
-    metric = request.args.get('metric', 'complexity')
-    model_type = request.args.get('model', 'prophet')
-    threshold_value = float(request.args.get('value', 0.75))
-    direction = request.args.get('direction', 'above')
-    
-    # Generate forecast first
-    forecast_data = predictive_modeling_service.forecast_narrative(
-        narrative_id, metric, model_type
-    )
-    
-    # Check for error
-    if 'error' in forecast_data:
-        return jsonify({'error': forecast_data['error']})
-    
-    # Calculate threshold crossing
-    threshold_data = predictive_modeling_service.find_threshold_crossing(
-        forecast_data, threshold_value, direction
-    )
-    
-    return jsonify(threshold_data)
-
-
-@prediction_bp.route('/api/factors/<int:narrative_id>')
-@login_required
-def api_factors(narrative_id: int):
-    """API endpoint for key factors."""
-    # Get parameters
-    metric = request.args.get('metric', 'complexity')
-    
-    # Analyze key factors
-    factors_data = predictive_modeling_service.analyze_key_factors(
-        narrative_id, metric
-    )
-    
-    return jsonify(factors_data)
-
-
-@prediction_bp.route('/api/scenario/<int:narrative_id>', methods=['POST'])
-@login_required
-def api_scenario(narrative_id: int):
-    """API endpoint for what-if scenarios."""
-    try:
-        # Get parameters from JSON body
-        data = request.get_json(force=True)
-        
-        metric = data.get('metric', 'complexity')
-        model_type = data.get('model_type', 'prophet')
-        interventions = data.get('interventions', {})
-        
-        # Generate scenario
-        scenario_data = predictive_modeling_service.simulate_scenario(
-            narrative_id, interventions, metric, model_type
-        )
-        
-        return jsonify(scenario_data)
     except Exception as e:
-        logger.error(f"Error processing scenario API request: {e}")
-        return jsonify({'error': str(e)}), 400
+        logger.exception(f"Error comparing multiple narratives: {str(e)}")
+        flash(f"Error generating comparison: {str(e)}", 'danger')
+        return redirect(url_for('prediction.dashboard'))
+
+@prediction_bp.route('/trending')
+@login_required
+def trending():
+    """Display trending narratives based on predictive analysis."""
+    try:
+        # Get parameters
+        days = int(request.args.get('days', '7'))
+        limit = int(request.args.get('limit', '10'))
+        
+        # Get trending narratives
+        trending_data = predictive_modeling.get_trending_narratives(
+            days=days,
+            limit=limit
+        )
+        
+        return render_template(
+            'prediction/trending.html',
+            title='Trending Narratives',
+            trending=trending_data,
+            days=days
+        )
+    except Exception as e:
+        logger.exception(f"Error getting trending narratives: {str(e)}")
+        flash(f"Error loading trending narratives: {str(e)}", 'danger')
+        return redirect(url_for('prediction.dashboard'))
+
+@prediction_bp.route('/batch-jobs')
+@login_required
+def batch_jobs():
+    """Manage batch prediction jobs."""
+    try:
+        # Check if batch job requested
+        if request.args.get('run') == 'true':
+            # Start batch prediction job
+            predictive_modeling.run_batch_predictions()
+            flash("Batch prediction job started successfully.", "success")
+        
+        # Get active models
+        models = predictive_modeling.get_all_active_models()
+        
+        return render_template(
+            'prediction/batch_jobs.html',
+            title='Batch Prediction Jobs',
+            models=models
+        )
+    except Exception as e:
+        logger.exception(f"Error with batch prediction jobs: {str(e)}")
+        flash(f"Error: {str(e)}", 'danger')
+        return redirect(url_for('prediction.dashboard'))

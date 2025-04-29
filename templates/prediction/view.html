@@ -1,310 +1,236 @@
-{% extends "base.html" %}
-
-{% block title %}Narrative Complexity Prediction{% endblock %}
+{% extends 'base.html' %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row mb-4">
-        <div class="col-12">
+    <h1>{{ title }}</h1>
+    
+    <div class="row mb-3">
+        <div class="col-md-12">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item"><a href="/prediction/dashboard">Predictions</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Narrative Prediction</li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('prediction.dashboard') }}">Predictive Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Narrative Forecast</li>
                 </ol>
             </nav>
-            <h1 class="display-5">Narrative Complexity Prediction</h1>
-            <p class="lead">
-                Forecasting complexity trajectory for detected misinformation narratives.
-            </p>
         </div>
     </div>
-
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Narrative Information</h5>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Narrative Information</h5>
                 </div>
                 <div class="card-body">
                     <h5 class="card-title">{{ narrative.title }}</h5>
-                    <p class="card-text text-muted">
-                        <small>ID: {{ narrative.id }} | First detected: {{ narrative.first_detected.strftime('%Y-%m-%d') }}</small>
-                    </p>
-                    <div class="mb-3">
-                        <strong>Current Status:</strong> {{ narrative.status|capitalize }}
-                    </div>
-                    <div class="mb-3">
-                        <strong>Current Confidence Score:</strong> {{ "%.2f"|format(narrative.confidence_score|float) }}
-                    </div>
-                    <div class="mb-3">
-                        <p>{{ narrative.description }}</p>
-                    </div>
-                    <div class="mt-4">
-                        <a href="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.id) }}" class="btn btn-outline-primary">
-                            <i class="bi bi-graph-up-arrow"></i> Run What-If Analysis
-                        </a>
+                    <p class="card-text text-muted">ID: {{ narrative.id }}</p>
+                    <p class="card-text"><strong>First Detected:</strong> {{ narrative.first_detected }}</p>
+                    <p class="card-text"><strong>Confidence:</strong> {{ "%.2f"|format(narrative.confidence_score) }}</p>
+                    <p class="card-text"><strong>Status:</strong> <span class="badge bg-{{ 'success' if narrative.status == 'active' else 'warning' }}">{{ narrative.status }}</span></p>
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('prediction.key_factors', narrative_id=narrative.id) }}" class="btn btn-outline-primary btn-sm">View Key Factors</a>
+                        <a href="{{ url_for('prediction.what_if', narrative_id=narrative.id) }}" class="btn btn-outline-warning btn-sm">What-If Analysis</a>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="col-md-6">
+            
             <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Prediction Parameters</h5>
+                <div class="card-header">
+                    <h5>Forecast Settings</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('prediction.predict_narrative_complexity', narrative_id=narrative.id) }}" method="GET">
+                    <form method="get" action="{{ url_for('prediction.forecast', narrative_id=narrative.id) }}">
                         <div class="mb-3">
-                            <label for="days" class="form-label">Days to Predict</label>
-                            <input type="number" class="form-control" id="days" name="days" 
-                                   value="{{ days_ahead }}" min="1" max="60" required>
-                            <div class="form-text">Number of days to forecast into the future (1-60).</div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="confidence" class="form-label">Confidence Level</label>
-                            <select class="form-select" id="confidence" name="confidence">
-                                <option value="0.99" {% if confidence_level == 0.99 %}selected{% endif %}>99% (Conservative)</option>
-                                <option value="0.95" {% if confidence_level == 0.95 %}selected{% endif %}>95% (Standard)</option>
-                                <option value="0.90" {% if confidence_level == 0.90 %}selected{% endif %}>90% (Moderate)</option>
-                                <option value="0.80" {% if confidence_level == 0.80 %}selected{% endif %}>80% (Broad)</option>
+                            <label for="metric" class="form-label">Metric</label>
+                            <select name="metric" id="metric" class="form-select">
+                                <option value="complexity" {{ 'selected' if metric == 'complexity' else '' }}>Complexity</option>
+                                <option value="spread" {{ 'selected' if metric == 'spread' else '' }}>Spread</option>
+                                <option value="threat" {{ 'selected' if metric == 'threat' else '' }}>Threat</option>
                             </select>
-                            <div class="form-text">Confidence level for prediction intervals.</div>
                         </div>
-                        
-                        <button type="submit" class="btn btn-primary">Update Prediction</button>
+                        <div class="mb-3">
+                            <label for="model" class="form-label">Model Type</label>
+                            <select name="model" id="model" class="form-select">
+                                <option value="arima" {{ 'selected' if model_type == 'arima' else '' }}>ARIMA</option>
+                                <option value="prophet" {{ 'selected' if model_type == 'prophet' else '' }}>Prophet</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="refresh" name="refresh">
+                            <label class="form-check-label" for="refresh">Force Refresh</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Forecast</button>
                     </form>
                 </div>
             </div>
         </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Complexity Prediction Results</h5>
+        
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>{{ metric|title }} Forecast</h5>
+                    <span class="badge bg-info">{{ model_type|upper }}</span>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <div id="chart" style="height: 400px;"></div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card">
-                                <div class="card-header bg-info text-white">
-                                    <h6 class="mb-0">Prediction Summary</h6>
+                    {% if forecast %}
+                        <div id="forecast-chart" style="height: 300px;"></div>
+                        
+                        <div class="row mt-4">
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-subtitle mb-2 text-muted">Peak Day</h6>
+                                        <h5 class="card-title">{{ forecast.peak_day }}</h5>
+                                    </div>
                                 </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <strong>Current Complexity:</strong>
-                                        <span id="current-complexity">{{ "%.2f"|format(prediction.current_complexity|float) }}</span>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-subtitle mb-2 text-muted">Peak Value</h6>
+                                        <h5 class="card-title">{{ "%.2f"|format(forecast.peak_value) }}</h5>
                                     </div>
-                                    <div class="mb-3">
-                                        <strong>End Prediction:</strong>
-                                        <span id="final-prediction">{{ "%.2f"|format(prediction.predictions[-1]|float) }}</span>
-                                    </div>
-                                    <div class="mb-3">
-                                        <strong>Trend Direction:</strong>
-                                        {% if prediction.trend_direction == 'strong_increase' %}
-                                            <span class="text-danger">Strong Increase ↑↑</span>
-                                        {% elif prediction.trend_direction == 'moderate_increase' %}
-                                            <span class="text-warning">Moderate Increase ↑</span>
-                                        {% elif prediction.trend_direction == 'stable' %}
-                                            <span class="text-info">Stable →</span>
-                                        {% elif prediction.trend_direction == 'moderate_decrease' %}
-                                            <span class="text-success">Moderate Decrease ↓</span>
-                                        {% elif prediction.trend_direction == 'strong_decrease' %}
-                                            <span class="text-success">Strong Decrease ↓↓</span>
-                                        {% endif %}
-                                    </div>
-                                    <div class="mb-3">
-                                        <strong>Prediction Date:</strong>
-                                        <span>{{ prediction.prediction_date[:10] }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-subtitle mb-2 text-muted">Trend Direction</h6>
+                                        <h5 class="card-title">
+                                            {% if forecast.trend_direction == 'up' %}
+                                                <i class="fas fa-arrow-up text-danger"></i> Increasing
+                                            {% elif forecast.trend_direction == 'down' %}
+                                                <i class="fas fa-arrow-down text-success"></i> Decreasing
+                                            {% else %}
+                                                <i class="fas fa-arrows-alt-h text-warning"></i> Stable
+                                            {% endif %}
+                                        </h5>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Interpretation & Recommendations</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>Trend Interpretation</h6>
-                            
-                            {% if prediction.trend_direction in ['strong_increase', 'moderate_increase'] %}
-                                <div class="alert alert-danger">
-                                    <i class="bi bi-exclamation-triangle-fill"></i> <strong>Increasing Threat:</strong> This narrative is projected to gain complexity and possibly reach more audiences.
-                                </div>
-                            {% elif prediction.trend_direction == 'stable' %}
-                                <div class="alert alert-info">
-                                    <i class="bi bi-info-circle-fill"></i> <strong>Stable Trend:</strong> This narrative is expected to maintain its current complexity level.
-                                </div>
-                            {% else %}
-                                <div class="alert alert-success">
-                                    <i class="bi bi-check-circle-fill"></i> <strong>Decreasing Trend:</strong> This narrative is projected to decrease in complexity and reach.
-                                </div>
-                            {% endif %}
-                            
-                            <p>
-                                The prediction is based on historical complexity data and statistical modeling. 
-                                The confidence interval (shaded area) shows the range where the actual values are likely to fall 
-                                with {{ confidence_level * 100 }}% confidence.
-                            </p>
-                        </div>
                         
-                        <div class="col-md-6">
-                            <h6>Recommended Actions</h6>
-                            <ul>
-                                {% if prediction.trend_direction in ['strong_increase', 'moderate_increase'] %}
-                                    <li>Prioritize counter-narrative development for this narrative</li>
-                                    <li>Monitor closely for evolution or mutation of narrative elements</li>
-                                    <li>Consider <a href="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.id) }}">what-if analysis</a> to evaluate intervention strategies</li>
-                                    <li>Set up alerts for significant changes in propagation metrics</li>
-                                {% elif prediction.trend_direction == 'stable' %}
-                                    <li>Continue routine monitoring of this narrative</li>
-                                    <li>Maintain existing counter-measures if already in place</li>
-                                    <li>Review effectiveness of current strategies</li>
-                                    <li>Consider what-if analysis if complexity level is high despite stability</li>
-                                {% else %}
-                                    <li>Reduce priority level for this narrative</li>
-                                    <li>Document successful counter-measures for future reference</li>
-                                    <li>Continue minimal monitoring to ensure trend continues</li>
-                                    <li>Consider analyzing factors that led to decreasing trend</li>
-                                {% endif %}
-                            </ul>
+                        <hr>
+                        
+                        <h6 class="mt-4">Forecast Values</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Forecasted Value</th>
+                                        <th>Lower Bound</th>
+                                        <th>Upper Bound</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for i in range(forecast.dates|length) %}
+                                        <tr>
+                                            <td>{{ forecast.dates[i] }}</td>
+                                            <td>{{ "%.3f"|format(forecast.values[i]) }}</td>
+                                            <td>{{ "%.3f"|format(forecast.lower_bound[i]) }}</td>
+                                            <td>{{ "%.3f"|format(forecast.upper_bound[i]) }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            No forecast data available.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('prediction.threshold', narrative_id=narrative.id, metric=metric, model=model_type) }}" class="btn btn-outline-info">View Threshold Projections</a>
+                        <a href="{{ url_for('prediction.api_forecast', narrative_id=narrative.id, metric=metric, model=model_type) }}" class="btn btn-outline-secondary" target="_blank">API JSON</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script>
-// Parse data from the prediction
-const dates = {{ prediction.dates|tojson }};
-const predictedValues = {{ prediction.predictions|tojson }};
-const upperBound = {{ prediction.upper_bound|tojson }};
-const lowerBound = {{ prediction.lower_bound|tojson }};
-
-// Create prediction trace
-const predictionTrace = {
-    x: dates,
-    y: predictedValues,
-    type: 'scatter',
-    mode: 'lines+markers',
-    name: 'Predicted Complexity',
-    line: {
-        color: '#007bff',
-        width: 3
-    },
-    marker: {
-        size: 8
-    }
-};
-
-// Create upper bound trace
-const upperBoundTrace = {
-    x: dates,
-    y: upperBound,
-    type: 'scatter',
-    mode: 'lines',
-    name: 'Upper Bound',
-    line: {
-        color: 'rgba(0, 123, 255, 0.3)',
-        width: 0
-    }
-};
-
-// Create lower bound trace
-const lowerBoundTrace = {
-    x: dates,
-    y: lowerBound,
-    type: 'scatter',
-    mode: 'lines',
-    name: 'Lower Bound',
-    line: {
-        color: 'rgba(0, 123, 255, 0.3)',
-        width: 0
-    },
-    fill: 'tonexty',
-    fillcolor: 'rgba(0, 123, 255, 0.2)'
-};
-
-// Layout configuration
-const layout = {
-    title: 'Complexity Prediction ({{ days_ahead }} Days)',
-    xaxis: {
-        title: 'Date'
-    },
-    yaxis: {
-        title: 'Complexity Score',
-        range: [0, 10]
-    },
-    margin: {
-        l: 50,
-        r: 50,
-        b: 80,
-        t: 80
-    },
-    legend: {
-        x: 0.01,
-        y: 0.99,
-        bgcolor: 'rgba(255, 255, 255, 0.7)',
-        bordercolor: 'rgba(0, 0, 0, 0.1)',
-        borderwidth: 1
-    },
-    shapes: [{
-        type: 'rect',
-        x0: dates[0],
-        y0: 0,
-        x1: dates[dates.length - 1],
-        y1: 3,
-        fillcolor: 'rgba(0, 255, 0, 0.1)',
-        line: {
-            width: 0
-        }
-    }, {
-        type: 'rect',
-        x0: dates[0],
-        y0: 3,
-        x1: dates[dates.length - 1],
-        y1: 7,
-        fillcolor: 'rgba(255, 255, 0, 0.1)',
-        line: {
-            width: 0
-        }
-    }, {
-        type: 'rect',
-        x0: dates[0],
-        y0: 7,
-        x1: dates[dates.length - 1],
-        y1: 10,
-        fillcolor: 'rgba(255, 0, 0, 0.1)',
-        line: {
-            width: 0
-        }
-    }]
-};
-
-// Combine traces and render the chart
-const data = [lowerBoundTrace, upperBoundTrace, predictionTrace];
-Plotly.newPlot('chart', data, layout, {responsive: true});
+{% if forecast %}
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('forecast-chart').getContext('2d');
+        
+        // Parse data from forecast
+        const dates = {{ forecast.dates|tojson }};
+        const values = {{ forecast.values|tojson }};
+        const lowerBounds = {{ forecast.lower_bound|tojson }};
+        const upperBounds = {{ forecast.upper_bound|tojson }};
+        
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [
+                    {
+                        label: '{{ metric|title }} Forecast',
+                        data: values,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'Upper Bound',
+                        data: upperBounds,
+                        borderColor: 'rgba(255, 99, 132, 0.5)',
+                        backgroundColor: 'rgba(0, 0, 0, 0)',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        tension: 0.3,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Lower Bound',
+                        data: lowerBounds,
+                        borderColor: 'rgba(75, 192, 192, 0.5)',
+                        backgroundColor: 'rgba(0, 0, 0, 0)',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        tension: 0.3,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '{{ metric|title }} Value'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    legend: {
+                        position: 'top'
+                    }
+                }
+            }
+        });
+    });
 </script>
+{% endif %}
 {% endblock %}

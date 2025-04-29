@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ title }}</h1>
+    
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('prediction.dashboard') }}">Predictive Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Error</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5>Error Occurred</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <h4 class="alert-heading">An error occurred during prediction!</h4>
+                        <p>{{ error }}</p>
+                    </div>
+                    
+                    {% if narrative %}
+                    <div class="mt-4">
+                        <h5>Narrative Information</h5>
+                        <table class="table table-bordered">
+                            <tr>
+                                <th width="150">ID</th>
+                                <td>{{ narrative.id }}</td>
+                            </tr>
+                            <tr>
+                                <th>Title</th>
+                                <td>{{ narrative.title }}</td>
+                            </tr>
+                            <tr>
+                                <th>First Detected</th>
+                                <td>{{ narrative.first_detected }}</td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td>{{ narrative.status }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group">
+                        <a href="{{ url_for('prediction.dashboard') }}" class="btn btn-secondary">Return to Dashboard</a>
+                        {% if narrative %}
+                        <a href="{{ url_for('prediction.forecast', narrative_id=narrative.id, model='arima') }}" class="btn btn-primary">Try with ARIMA Model</a>
+                        <a href="{{ url_for('prediction.forecast', narrative_id=narrative.id, metric='spread') }}" class="btn btn-info">Try with Spread Metric</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
