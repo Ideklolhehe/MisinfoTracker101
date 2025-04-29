@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+
+{% block title %}Web Sources - Web Scraping{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('web_scraping.dashboard') }}">Web Scraping</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Sources</li>
+                </ol>
+            </nav>
+            <h1 class="mb-4">Web Sources Management</h1>
+            <p class="text-muted">Manage web sources for automated data collection.</p>
+        </div>
+    </div>
+
+    <!-- Add Source button row -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0">Add a new web source</h5>
+                            <p class="text-muted">Set up a new data source for automated collection</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSourceModal">
+                            <i class="fas fa-plus-circle me-2"></i> Add Source
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sources List -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Web Sources</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if sources|length > 0 %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>URL</th>
+                                    <th>Status</th>
+                                    <th>Last Run</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in sources %}
+                                <tr>
+                                    <td>{{ source.name }}</td>
+                                    <td>
+                                        {% if source.source_type == 'web_page' %}
+                                        <span class="badge bg-primary">Web Page</span>
+                                        {% elif source.source_type == 'web_crawl' %}
+                                        <span class="badge bg-success">Web Crawler</span>
+                                        {% elif source.source_type == 'web_search' %}
+                                        <span class="badge bg-info">Web Search</span>
+                                        {% elif source.source_type == 'rss' %}
+                                        <span class="badge bg-warning">RSS Feed</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ source.source_type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ source.url }}" target="_blank" class="text-truncate d-inline-block" style="max-width: 200px;">
+                                            {{ source.url }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% if source.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ source.last_ingestion|default('Never') }}</td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm btn-outline-primary run-source-btn" 
+                                                    data-source-id="{{ source.id }}" 
+                                                    title="Run source now">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary toggle-source-btn" 
+                                                    data-source-id="{{ source.id }}" 
+                                                    data-is-active="{{ source.is_active|lower }}"
+                                                    title="{{ 'Deactivate' if source.is_active else 'Activate' }}">
+                                                <i class="fas {{ 'fa-pause' if source.is_active else 'fa-play-circle' }}"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-info view-source-btn" 
+                                                    data-source-id="{{ source.id }}"
+                                                    data-source-name="{{ source.name }}"
+                                                    data-source-url="{{ source.url }}"
+                                                    data-source-type="{{ source.source_type }}"
+                                                    data-source-config="{{ source.config|tojson }}"
+                                                    title="View details">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger delete-source-btn" 
+                                                    data-source-id="{{ source.id }}" 
+                                                    data-source-name="{{ source.name }}"
+                                                    title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info m-3">
+                        No web sources have been added yet. Click the "Add Source" button to add your first web source.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Source Type Information -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Source Types</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <h6><i class="fas fa-file-alt text-primary me-2"></i> Web Page</h6>
+                                <p>Monitors a single web page for changes. The system will extract the content from the page and compare it with previous versions to detect changes.</p>
+                                <ul>
+                                    <li>Good for: Specific articles, documents, or pages that might be updated</li>
+                                    <li>Frequency: Can be checked frequently (daily or hourly)</li>
+                                </ul>
+                            </div>
+                            <div class="mb-4">
+                                <h6><i class="fas fa-spider text-success me-2"></i> Web Crawler</h6>
+                                <p>Crawls a website starting from a specific URL, following links to discover and extract content from multiple pages within the same domain.</p>
+                                <ul>
+                                    <li>Good for: Comprehensive monitoring of entire websites or sections</li>
+                                    <li>Frequency: Less frequent (weekly) due to higher resource usage</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <h6><i class="fas fa-search text-info me-2"></i> Web Search</h6>
+                                <p>Uses web search engines to find content matching specific search terms. The results are extracted and analyzed for patterns and potential misinformation.</p>
+                                <ul>
+                                    <li>Good for: Monitoring topics, tracking narratives across the web</li>
+                                    <li>Frequency: Regular intervals (daily) to track evolving topics</li>
+                                </ul>
+                            </div>
+                            <div class="mb-4">
+                                <h6><i class="fas fa-rss text-warning me-2"></i> RSS Feed</h6>
+                                <p>Subscribes to an RSS feed to automatically receive updates when new content is published. Ideal for news sites and blogs that offer RSS.</p>
+                                <ul>
+                                    <li>Good for: News sites, blogs, and regularly updated content sources</li>
+                                    <li>Frequency: Can be checked frequently (hourly) with minimal resource usage</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Source Modal -->
+<div class="modal fade" id="addSourceModal" tabindex="-1" aria-labelledby="addSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addSourceModalLabel">Add Web Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{{ url_for('web_scraping.sources') }}" id="addSourceForm">
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add_source">
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Source Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                        <div class="form-text">A descriptive name for this source</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="url" class="form-label">URL</label>
+                        <input type="url" class="form-control" id="url" name="url" required>
+                        <div class="form-text">The URL for this source (starting with http:// or https://)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="source_type" class="form-label">Source Type</label>
+                        <select class="form-select" id="source_type" name="source_type" required>
+                            <option value="" selected disabled>Select a source type</option>
+                            <option value="web_page">Web Page</option>
+                            <option value="web_crawl">Web Crawler</option>
+                            <option value="web_search">Web Search</option>
+                            <option value="rss">RSS Feed</option>
+                        </select>
+                        <div class="form-text">Select the type of source you want to add</div>
+                    </div>
+                    
+                    <!-- Dynamic configuration options based on source type -->
+                    <div class="source-config" id="web_page_config" style="display: none;">
+                        <h6 class="mt-4 mb-3">Web Page Configuration</h6>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="extract_links" name="extract_links">
+                            <label class="form-check-label" for="extract_links">
+                                Extract and analyze links
+                            </label>
+                            <div class="form-text">If checked, links found on the page will also be extracted and analyzed</div>
+                        </div>
+                    </div>
+                    
+                    <div class="source-config" id="web_crawl_config" style="display: none;">
+                        <h6 class="mt-4 mb-3">Web Crawler Configuration</h6>
+                        <div class="mb-3">
+                            <label for="max_pages" class="form-label">Maximum Pages</label>
+                            <input type="number" class="form-control" id="max_pages" name="max_pages" value="5" min="1" max="100">
+                            <div class="form-text">Maximum number of pages to crawl (higher values will take longer)</div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="same_domain_only" name="same_domain_only" checked>
+                            <label class="form-check-label" for="same_domain_only">
+                                Stay on same domain only
+                            </label>
+                            <div class="form-text">If checked, the crawler will only follow links to pages on the same domain</div>
+                        </div>
+                    </div>
+                    
+                    <div class="source-config" id="web_search_config" style="display: none;">
+                        <h6 class="mt-4 mb-3">Web Search Configuration</h6>
+                        <div class="mb-3">
+                            <label for="search_term" class="form-label">Search Term</label>
+                            <input type="text" class="form-control" id="search_term" name="search_term">
+                            <div class="form-text">The search term to use (leave blank to use the URL domain as the search term)</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="search_engine" class="form-label">Search Engine</label>
+                            <select class="form-select" id="search_engine" name="search_engine">
+                                <option value="bing" selected>Bing</option>
+                                <option value="google">Google</option>
+                                <option value="duckduckgo">DuckDuckGo</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="limit" class="form-label">Result Limit</label>
+                            <input type="number" class="form-control" id="limit" name="limit" value="10" min="1" max="50">
+                            <div class="form-text">Maximum number of search results to process</div>
+                        </div>
+                    </div>
+                    
+                    <div class="source-config" id="rss_config" style="display: none;">
+                        <h6 class="mt-4 mb-3">RSS Feed Configuration</h6>
+                        <div class="form-text mb-3">
+                            No additional configuration needed for RSS feeds. The system will automatically detect and process the feed items.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Source</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Source Modal -->
+<div class="modal fade" id="viewSourceModal" tabindex="-1" aria-labelledby="viewSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewSourceModalLabel">Source Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Information</h6>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th>Name:</th>
+                                <td id="view-source-name"></td>
+                            </tr>
+                            <tr>
+                                <th>URL:</th>
+                                <td id="view-source-url"></td>
+                            </tr>
+                            <tr>
+                                <th>Type:</th>
+                                <td id="view-source-type"></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Configuration</h6>
+                        <div id="view-source-config" class="border rounded p-3 bg-light">
+                            <code></code>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6>Recent Activity</h6>
+                        <div id="view-source-activity" class="border rounded p-3">
+                            <p class="text-muted">No recent activity data available</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteConfirmModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteConfirmText">Are you sure you want to delete this source?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{{ url_for('web_scraping.sources') }}" id="deleteSourceForm">
+                    <input type="hidden" name="action" value="delete_source">
+                    <input type="hidden" name="source_id" id="delete-source-id">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Show/hide configuration options based on source type
+    document.getElementById('source_type').addEventListener('change', function() {
+        // Hide all config sections
+        document.querySelectorAll('.source-config').forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        // Show the selected config section
+        const selectedType = this.value;
+        if (selectedType) {
+            const configSection = document.getElementById(selectedType + '_config');
+            if (configSection) {
+                configSection.style.display = 'block';
+            }
+        }
+    });
+    
+    // Handle run source buttons
+    document.querySelectorAll('.run-source-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const sourceId = this.getAttribute('data-source-id');
+            
+            // Create and submit a form
+            const form = document.createElement('form');
+            form.method = 'post';
+            form.action = '{{ url_for("web_scraping.sources") }}';
+            
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'run_source';
+            
+            const sourceIdInput = document.createElement('input');
+            sourceIdInput.type = 'hidden';
+            sourceIdInput.name = 'source_id';
+            sourceIdInput.value = sourceId;
+            
+            form.appendChild(actionInput);
+            form.appendChild(sourceIdInput);
+            document.body.appendChild(form);
+            form.submit();
+        });
+    });
+    
+    // Handle toggle status buttons
+    document.querySelectorAll('.toggle-source-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const sourceId = this.getAttribute('data-source-id');
+            const isActive = this.getAttribute('data-is-active') === 'true';
+            
+            // Create and submit a form
+            const form = document.createElement('form');
+            form.method = 'post';
+            form.action = '{{ url_for("web_scraping.sources") }}';
+            
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'toggle_status';
+            
+            const sourceIdInput = document.createElement('input');
+            sourceIdInput.type = 'hidden';
+            sourceIdInput.name = 'source_id';
+            sourceIdInput.value = sourceId;
+            
+            const isActiveInput = document.createElement('input');
+            isActiveInput.type = 'hidden';
+            isActiveInput.name = 'is_active';
+            isActiveInput.value = !isActive;
+            
+            form.appendChild(actionInput);
+            form.appendChild(sourceIdInput);
+            form.appendChild(isActiveInput);
+            document.body.appendChild(form);
+            form.submit();
+        });
+    });
+    
+    // Handle view source buttons
+    document.querySelectorAll('.view-source-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const name = this.getAttribute('data-source-name');
+            const url = this.getAttribute('data-source-url');
+            const type = this.getAttribute('data-source-type');
+            const config = JSON.parse(this.getAttribute('data-source-config') || '{}');
+            
+            document.getElementById('view-source-name').textContent = name;
+            document.getElementById('view-source-url').textContent = url;
+            
+            let typeDisplay = type;
+            if (type === 'web_page') typeDisplay = 'Web Page';
+            else if (type === 'web_crawl') typeDisplay = 'Web Crawler';
+            else if (type === 'web_search') typeDisplay = 'Web Search';
+            else if (type === 'rss') typeDisplay = 'RSS Feed';
+            
+            document.getElementById('view-source-type').textContent = typeDisplay;
+            
+            // Format config nicely
+            document.querySelector('#view-source-config code').textContent = JSON.stringify(config, null, 2);
+            
+            // Show the modal
+            new bootstrap.Modal(document.getElementById('viewSourceModal')).show();
+        });
+    });
+    
+    // Handle delete source buttons
+    document.querySelectorAll('.delete-source-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const sourceId = this.getAttribute('data-source-id');
+            const sourceName = this.getAttribute('data-source-name');
+            
+            document.getElementById('deleteConfirmText').textContent = `Are you sure you want to delete the source "${sourceName}"?`;
+            document.getElementById('delete-source-id').value = sourceId;
+            
+            new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}
