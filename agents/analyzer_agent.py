@@ -141,19 +141,22 @@ class AnalyzerAgent:
                 velocity = 0
                 
             # Categorize content by performing entity analysis
-            all_entities = []
             entity_categories = {}
             
             for instance in instances[:min(20, len(instances))]:  # Analyze up to 20 instances
-                entities = self.text_processor.extract_entities(instance.content)
-                all_entities.extend(entities)
+                # The extract_entities method returns a dictionary with category keys 
+                # and lists of entity strings as values
+                entity_dict = self.text_processor.extract_entities(instance.content)
                 
-            # Group entities by type
-            for entity in all_entities:
-                category = entity.get('label', 'MISC')
-                if category not in entity_categories:
-                    entity_categories[category] = []
-                entity_categories[category].append(entity['text'])
+                # Merge entity results from this instance with our accumulated results
+                for category, entities in entity_dict.items():
+                    if category not in entity_categories:
+                        entity_categories[category] = []
+                    
+                    # Add any new entities to our accumulated list
+                    for entity in entities:
+                        if entity not in entity_categories[category]:
+                            entity_categories[category].append(entity)
             
             # Calculate propagation score - higher when spreading fast across sources
             # Basic formula: combines volume, unique sources, and velocity
