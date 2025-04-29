@@ -9,7 +9,10 @@ from typing import Dict, Any, List, Optional
 from flask import Blueprint, render_template, request, jsonify, abort, redirect, url_for
 from flask_login import login_required, current_user
 
-from services.predictive_modeling import predictive_modeling_service
+from services.predictive_modeling import PredictiveModeling
+
+# Initialize service with thread safety
+predictive_modeling_service = PredictiveModeling()
 from models import DetectedNarrative
 from app import db
 from utils.metrics import time_operation
