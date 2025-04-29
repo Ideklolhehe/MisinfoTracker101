@@ -1,564 +1,990 @@
 """
-Predictive modeling service for misinformation complexity trajectory.
-Uses linear regression and statistical analysis to forecast complexity evolution.
+Predictive modeling services for the CIVILIAN system.
+Provides trajectory forecasting, threshold projections, and scenario analysis.
 """
 
-import json
 import logging
+import json
+import os
+import time
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Union, Tuple, Any, Callable
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple, Union
+from sqlalchemy import func, and_, or_, desc
 
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
-import statsmodels.api as sm
+from utils.app_context import with_app_context
+from utils.environment import get_config, get_int_config, get_bool_config
+from utils.metrics import time_operation
+from utils.concurrency import ThreadSafeDict
 
 from app import db
-from models import DetectedNarrative
-from services.time_series_analyzer import TimeSeriesAnalyzer
+from models import DetectedNarrative, NarrativeInstance
 
+# Configure module logger
 logger = logging.getLogger(__name__)
 
-class PredictiveModeling:
-    """Service for predictive modeling of misinformation complexity trajectory."""
+# Cache for model forecasts
+forecast_cache = ThreadSafeDict()
+
+# Helper for float configs
+def get_float_config(key: str, default: float) -> float:
+    """Get a float configuration value."""
+    return float(get_config(key, default=default, cast=float))
+
+# Model configuration
+FORECAST_HORIZON = get_int_config('FORECAST_HORIZON', default=30)  # days
+PROPHET_CONFIDENCE = get_float_config('PROPHET_CONFIDENCE', default=0.8)  # 80% confidence interval
+FORECAST_REFRESH_INTERVAL = get_int_config('FORECAST_REFRESH_INTERVAL', default=86400)  # seconds (1 day)
+
+
+class TimeSeriesModel:
+    """Base class for time series forecasting models."""
     
-    def __init__(self):
-        """Initialize the predictive modeling service."""
-        self.model = LinearRegression()
-        self.X_train = None
-        self.X_test = None
-        self.y_train = None
-        self.y_test = None
-        self.model_trained = False
-    
-    def train_model(
-        self, 
-        data: pd.DataFrame, 
-        target_column: str, 
-        feature_columns: List[str], 
-        test_size: float = 0.2, 
-        random_state: int = 42
-    ):
+    def __init__(self, name: str):
         """
-        Trains the linear regression model.
+        Initialize the model.
         
         Args:
-            data: The input dataframe containing features and target variable.
-            target_column: The name of the column to be predicted.
-            feature_columns: A list of column names to be used as features.
-            test_size: The proportion of the dataset to include in the test split.
-            random_state: Random state for reproducibility.
+            name: Model name
+        """
+        self.name = name
+        
+    def fit(self, data: pd.DataFrame) -> 'TimeSeriesModel':
+        """
+        Fit the model to data.
+        
+        Args:
+            data: DataFrame with 'ds' (dates) and 'y' (target) columns
             
-        Raises:
-            ValueError: If the target column or feature columns are not found in the data.
+        Returns:
+            Self for chaining
+        """
+        raise NotImplementedError("Subclasses must implement fit()")
+        
+    def predict(self, periods: int = FORECAST_HORIZON) -> pd.DataFrame:
+        """
+        Generate forecast for future periods.
+        
+        Args:
+            periods: Number of periods to forecast
+            
+        Returns:
+            DataFrame with forecast
+        """
+        raise NotImplementedError("Subclasses must implement predict()")
+        
+    def get_components(self) -> Dict[str, Any]:
+        """
+        Get model components (trend, seasonality, etc.).
+        
+        Returns:
+            Dictionary of components
+        """
+        return {}
+
+
+class ProphetModel(TimeSeriesModel):
+    """Facebook Prophet forecasting model."""
+    
+    def __init__(self, name: str = "prophet", interval_width: float = PROPHET_CONFIDENCE):
+        """
+        Initialize Prophet model.
+        
+        Args:
+            name: Model name
+            interval_width: Width of prediction intervals (0-1)
+        """
+        super().__init__(name)
+        self.interval_width = interval_width
+        self.model = None
+        
+    def fit(self, data: pd.DataFrame) -> 'ProphetModel':
+        """
+        Fit Prophet model to data.
+        
+        Args:
+            data: DataFrame with 'ds' (dates) and 'y' (target) columns
+            
+        Returns:
+            Self for chaining
         """
         try:
-            if target_column not in data.columns:
-                raise ValueError(f"Target column '{target_column}' not found in the data.")
+            from prophet import Prophet
             
-            for col in feature_columns:
-                if col not in data.columns:
-                    raise ValueError(f"Feature column '{col}' not found in the data.")
-            
-            X = data[feature_columns]
-            y = data[target_column]
-            
-            self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state
+            self.model = Prophet(
+                interval_width=self.interval_width,
+                daily_seasonality=False,
+                weekly_seasonality=True,
+                yearly_seasonality=True,
+                changepoint_prior_scale=0.05
             )
             
-            self.model.fit(self.X_train, self.y_train)
-            self.model_trained = True
-            
-        except ValueError as e:
-            logger.error(f"Error during model training: {e}")
-            raise e
+            # Add additional regressors if available
+            if 'propagation' in data.columns:
+                self.model.add_regressor('propagation')
+                
+            if 'threat' in data.columns:
+                self.model.add_regressor('threat')
+                
+            # Fit the model
+            with time_operation(f"fit_{self.name}"):
+                self.model.fit(data)
+                
+            logger.info(f"Fitted Prophet model to {len(data)} data points")
+            return self
+        except ImportError:
+            logger.error("Prophet package not available. Install with 'pip install prophet'")
+            raise
         except Exception as e:
-            logger.error(f"Unexpected error during model training: {e}")
-            raise Exception(f"Error during model training: {e}")
-    
-    def predict(self, new_data: pd.DataFrame) -> np.ndarray:
+            logger.error(f"Error fitting Prophet model: {e}")
+            raise
+            
+    def predict(self, periods: int = FORECAST_HORIZON) -> pd.DataFrame:
         """
-        Predicts the target variable for new data.
+        Generate forecast for future periods.
         
         Args:
-            new_data: The input dataframe containing the same features used for training.
+            periods: Number of days to forecast
             
         Returns:
-            The predicted values.
-            
-        Raises:
-            ValueError: If the model has not been trained yet.
+            DataFrame with forecast
         """
-        if not self.model_trained:
-            raise ValueError("Model has not been trained yet. Call train_model() first.")
-        
+        if self.model is None:
+            logger.error("Model not fitted. Call fit() first")
+            raise ValueError("Model not fitted")
+            
         try:
-            predictions = self.model.predict(new_data)
-            return predictions
+            # Create future dataframe
+            future = self.model.make_future_dataframe(periods=periods)
+            
+            # Add regressor values if needed
+            # For demonstration, we'll use the last value for regressors
+            if hasattr(self.model, 'extra_regressors'):
+                for regressor in self.model.extra_regressors:
+                    name = regressor['name']
+                    if name == 'propagation':
+                        # Use the last value or a reasonable default
+                        future[name] = 0.5
+                    elif name == 'threat':
+                        # Use the last value or a reasonable default
+                        future[name] = 2
+                        
+            # Generate forecast
+            with time_operation(f"predict_{self.name}"):
+                forecast = self.model.predict(future)
+                
+            logger.info(f"Generated {periods} day forecast with Prophet")
+            return forecast
         except Exception as e:
-            logger.error(f"Error during prediction: {e}")
-            raise Exception(f"Error during prediction: {e}")
-    
-    def calculate_confidence_interval(
-        self, new_data: pd.DataFrame, alpha: float = 0.05
-    ) -> Tuple[np.ndarray, np.ndarray]:
+            logger.error(f"Error generating Prophet forecast: {e}")
+            raise
+            
+    def get_components(self) -> Dict[str, Any]:
         """
-        Calculates the confidence interval for the predictions.
-        
-        Args:
-            new_data: The input dataframe for which to calculate confidence intervals.
-            alpha: The significance level for the confidence interval.
-            
-        Returns:
-            A tuple containing the lower and upper bounds of the confidence interval.
-            
-        Raises:
-            ValueError: If the model has not been trained yet.
-        """
-        if not self.model_trained:
-            raise ValueError("Model has not been trained yet. Call train_model() first.")
-        
-        try:
-            X = self.X_train
-            y = self.y_train
-            
-            # Add a constant for the intercept
-            X = sm.add_constant(X)
-            model = sm.OLS(y, X).fit()
-            
-            new_data_with_const = sm.add_constant(new_data)
-            predictions = model.get_prediction(new_data_with_const)
-            lower, upper = predictions.conf_int(alpha=alpha).T
-            
-            return lower, upper
-        except Exception as e:
-            logger.error(f"Error calculating confidence interval: {e}")
-            raise Exception(f"Error calculating confidence interval: {e}")
-    
-    def evaluate_model(self) -> float:
-        """
-        Evaluates the model on the test set using Mean Squared Error.
+        Get model components (trend, seasonality, etc.).
         
         Returns:
-            The Mean Squared Error.
-            
-        Raises:
-            ValueError: If the model has not been trained yet.
+            Dictionary of components
         """
-        if not self.model_trained:
-            raise ValueError("Model has not been trained yet. Call train_model() first.")
-        
+        if self.model is None:
+            logger.error("Model not fitted. Call fit() first")
+            return {}
+            
         try:
-            y_pred = self.model.predict(self.X_test)
-            mse = mean_squared_error(self.y_test, y_pred)
-            return mse
+            components = {}
+            forecast = self.predict(periods=FORECAST_HORIZON)
+            
+            # Extract trend component
+            if 'trend' in forecast:
+                components['trend'] = forecast[['ds', 'trend']].to_dict(orient='records')
+                
+            # Extract seasonal components
+            for column in forecast.columns:
+                if column.startswith(('yearly', 'weekly', 'daily')):
+                    components[column] = forecast[['ds', column]].to_dict(orient='records')
+                    
+            return components
         except Exception as e:
-            logger.error(f"Error evaluating model: {e}")
-            raise Exception(f"Error evaluating model: {e}")
-    
-    def identify_key_factors(self) -> Dict[str, float]:
-        """
-        Identifies key factors driving complexity based on model coefficients.
-        
-        Returns:
-            A dictionary of feature names and their corresponding coefficients.
-            
-        Raises:
-            ValueError: If the model has not been trained yet.
-        """
-        if not self.model_trained:
-            raise ValueError("Model has not been trained yet. Call train_model() first.")
-        
-        try:
-            coefficients = self.model.coef_
-            feature_names = self.X_train.columns
-            factor_importance = dict(zip(feature_names, coefficients))
-            return factor_importance
-        except Exception as e:
-            logger.error(f"Error identifying key factors: {e}")
-            raise Exception(f"Error identifying key factors: {e}")
-    
-    def what_if_scenario(
-        self, baseline_data: pd.DataFrame, intervention_changes: Dict[str, float]
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Models 'what-if' scenarios by changing feature values and predicting the outcome.
-        
-        Args:
-            baseline_data: The baseline data representing the current state.
-            intervention_changes: A dictionary of feature names and their corresponding changes.
-            
-        Returns:
-            A tuple containing the predicted values for the baseline and the intervention scenario.
-            
-        Raises:
-            ValueError: If the model has not been trained yet.
-            ValueError: If the intervention change keys are not found in the baseline data.
-        """
-        if not self.model_trained:
-            raise ValueError("Model has not been trained yet. Call train_model() first.")
-        
-        try:
-            for feature in intervention_changes:
-                if feature not in baseline_data.columns:
-                    raise ValueError(f"Intervention feature '{feature}' not found in the baseline data.")
-            
-            intervention_data = baseline_data.copy()
-            for feature, change in intervention_changes.items():
-                intervention_data[feature] = intervention_data[feature] + change
-            
-            baseline_prediction = self.predict(baseline_data)
-            intervention_prediction = self.predict(intervention_data)
-            
-            return baseline_prediction, intervention_prediction
-        except ValueError as e:
-            logger.error(f"Error in what-if scenario: {e}")
-            raise e
-        except Exception as e:
-            logger.error(f"Unexpected error in what-if scenario: {e}")
-            raise Exception(f"Error running what-if scenario: {e}")
+            logger.error(f"Error extracting model components: {e}")
+            return {}
 
-class ComplexityPredictionService:
-    """Service for predicting future complexity of misinformation narratives."""
+
+class DartsModel(TimeSeriesModel):
+    """Darts forecasting model wrapper."""
     
-    @staticmethod
-    def predict_narrative_complexity(
-        narrative_id: int, days_ahead: int = 7, confidence_level: float = 0.95
-    ) -> Dict[str, Any]:
+    def __init__(
+        self, 
+        name: str = "darts_rnn",
+        model_type: str = "RNN",
+        input_chunk_length: int = 14,
+        output_chunk_length: int = 7
+    ):
         """
-        Predict future complexity for a specific narrative.
+        Initialize Darts model.
         
         Args:
-            narrative_id: ID of the narrative to predict
-            days_ahead: Number of days to predict into the future
-            confidence_level: Confidence level for prediction intervals (0-1)
+            name: Model name
+            model_type: Type of model to use (RNN, ARIMA, etc.)
+            input_chunk_length: Input sequence length for RNN models
+            output_chunk_length: Output sequence length for RNN models
+        """
+        super().__init__(name)
+        self.model_type = model_type
+        self.input_chunk_length = input_chunk_length
+        self.output_chunk_length = output_chunk_length
+        self.model = None
+        self.series = None
+        
+    def fit(self, data: pd.DataFrame) -> 'DartsModel':
+        """
+        Fit Darts model to data.
+        
+        Args:
+            data: DataFrame with 'ds' (dates) and 'y' (target) columns
             
         Returns:
-            Dictionary with prediction results
+            Self for chaining
         """
         try:
-            # Get the narrative
-            narrative = DetectedNarrative.query.get(narrative_id)
-            if not narrative:
-                logger.warning(f"Narrative {narrative_id} not found")
-                return {"error": f"Narrative {narrative_id} not found"}
+            from darts import TimeSeries
+            from darts.models import RNNModel, AutoARIMA, ExponentialSmoothing
             
-            # Get historical complexity data
-            historical_data = TimeSeriesAnalyzer._get_historical_complexity_data(narrative_id)
+            # Convert to Darts TimeSeries
+            self.series = TimeSeries.from_dataframe(
+                data,
+                time_col='ds',
+                value_cols='y'
+            )
             
-            if not historical_data or len(historical_data['timestamps']) < 3:
-                logger.warning(f"Insufficient historical data for narrative {narrative_id}")
-                return {"error": "Insufficient historical data for prediction"}
-            
-            # Prepare data for modeling
-            data = ComplexityPredictionService._prepare_prediction_data(historical_data)
-            
-            if data is None or data.empty:
-                return {"error": "Failed to prepare data for prediction"}
-            
-            # Train model for overall complexity
-            predictor = PredictiveModeling()
-            try:
-                predictor.train_model(
-                    data=data,
-                    target_column='overall_score',
-                    feature_columns=['days_since_start']
+            # Choose model based on type
+            if self.model_type == 'RNN':
+                self.model = RNNModel(
+                    model='LSTM',
+                    input_chunk_length=self.input_chunk_length,
+                    output_chunk_length=self.output_chunk_length,
+                    random_state=42,
+                    n_epochs=100,
+                    force_reset=True
                 )
-            except Exception as e:
-                logger.error(f"Error training prediction model: {e}")
-                return {"error": f"Failed to train prediction model: {e}"}
+            elif self.model_type == 'ARIMA':
+                self.model = AutoARIMA()
+            elif self.model_type == 'ETS':
+                self.model = ExponentialSmoothing()
+            else:
+                raise ValueError(f"Unknown model type: {self.model_type}")
+                
+            # Fit the model
+            with time_operation(f"fit_{self.name}"):
+                self.model.fit(self.series)
+                
+            logger.info(f"Fitted {self.model_type} model to {len(data)} data points")
+            return self
+        except ImportError:
+            logger.error("Darts package not available. Install with 'pip install darts'")
+            raise
+        except Exception as e:
+            logger.error(f"Error fitting {self.model_type} model: {e}")
+            raise
             
-            # Generate future dates for prediction
-            future_dates = [(datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d') 
-                           for i in range(1, days_ahead + 1)]
+    def predict(self, periods: int = FORECAST_HORIZON) -> pd.DataFrame:
+        """
+        Generate forecast for future periods.
+        
+        Args:
+            periods: Number of periods to forecast
             
-            # Prepare prediction data
-            last_day = data['days_since_start'].max()
-            future_days = pd.DataFrame({
-                'days_since_start': [last_day + i for i in range(1, days_ahead + 1)]
+        Returns:
+            DataFrame with forecast
+        """
+        if self.model is None or self.series is None:
+            logger.error("Model not fitted. Call fit() first")
+            raise ValueError("Model not fitted")
+            
+        try:
+            # Generate forecast
+            with time_operation(f"predict_{self.name}"):
+                prediction = self.model.predict(periods)
+                
+            # Convert back to DataFrame
+            forecast = prediction.pd_dataframe().reset_index()
+            forecast.columns = ['ds', 'yhat']
+            
+            # Add current datetime as model doesn't return it
+            forecast['forecast_date'] = datetime.now()
+            
+            logger.info(f"Generated {periods} period forecast with {self.model_type}")
+            return forecast
+        except Exception as e:
+            logger.error(f"Error generating forecast: {e}")
+            raise
+            
+    def get_components(self) -> Dict[str, Any]:
+        """
+        Get model components (trend, seasonality, etc.).
+        
+        Returns:
+            Dictionary of components (empty for most Darts models)
+        """
+        return {}
+
+
+class DeepARModel(TimeSeriesModel):
+    """DeepAR forecasting model using GluonTS."""
+    
+    def __init__(
+        self,
+        name: str = "deepar",
+        freq: str = "D",
+        prediction_length: int = FORECAST_HORIZON,
+        epochs: int = 10
+    ):
+        """
+        Initialize DeepAR model.
+        
+        Args:
+            name: Model name
+            freq: Time series frequency (D for daily)
+            prediction_length: Forecast horizon
+            epochs: Training epochs
+        """
+        super().__init__(name)
+        self.freq = freq
+        self.prediction_length = prediction_length
+        self.epochs = epochs
+        self.model = None
+        self.last_train_date = None
+        
+    def fit(self, data: pd.DataFrame) -> 'DeepARModel':
+        """
+        Fit DeepAR model to data.
+        
+        Args:
+            data: DataFrame with 'ds' (dates) and 'y' (target) columns
+            
+        Returns:
+            Self for chaining
+        """
+        try:
+            from gluonts.dataset.pandas import PandasDataset
+            from gluonts.dataset.common import ListDataset
+            from gluonts.model.deepar import DeepAREstimator
+            from gluonts.mx.trainer import Trainer
+            
+            # Remember the last training date
+            self.last_train_date = data['ds'].max()
+            
+            # Prepare data in GluonTS format
+            train_data = PandasDataset(
+                data,
+                target='y',
+                timestamp='ds',
+                freq=self.freq
+            )
+            
+            # Create and train model
+            self.model = DeepAREstimator(
+                freq=self.freq,
+                prediction_length=self.prediction_length,
+                trainer=Trainer(
+                    epochs=self.epochs,
+                    learning_rate=1e-3,
+                    num_batches_per_epoch=100
+                )
+            )
+            
+            with time_operation(f"fit_{self.name}"):
+                self.predictor = self.model.train(train_data)
+                
+            logger.info(f"Fitted DeepAR model to {len(data)} data points")
+            return self
+        except ImportError:
+            logger.error("GluonTS package not available. Install with 'pip install gluonts'")
+            raise
+        except Exception as e:
+            logger.error(f"Error fitting DeepAR model: {e}")
+            raise
+            
+    def predict(self, periods: int = None) -> pd.DataFrame:
+        """
+        Generate forecast for future periods.
+        
+        Args:
+            periods: Number of periods to forecast (ignored, uses prediction_length)
+            
+        Returns:
+            DataFrame with forecast
+        """
+        if self.model is None or self.predictor is None:
+            logger.error("Model not fitted. Call fit() first")
+            raise ValueError("Model not fitted")
+            
+        if periods and periods != self.prediction_length:
+            logger.warning(
+                f"DeepAR uses fixed prediction length ({self.prediction_length}). "
+                f"Ignoring requested periods ({periods})"
+            )
+            
+        try:
+            # Generate forecast
+            with time_operation(f"predict_{self.name}"):
+                # This is a simplified example, normally you'd create proper test data
+                forecast = list(self.predictor.predict(num_samples=100))
+                
+            # Convert forecast to DataFrame
+            dates = pd.date_range(
+                start=self.last_train_date,
+                periods=self.prediction_length + 1,
+                freq=self.freq
+            )[1:]  # Skip the last training point
+            
+            result = pd.DataFrame({
+                'ds': dates,
+                'yhat': forecast[0].mean,
+                'yhat_lower': forecast[0].quantile(0.1),
+                'yhat_upper': forecast[0].quantile(0.9)
             })
             
-            # Make predictions
-            predictions = predictor.predict(future_days)
-            
-            # Calculate confidence intervals
-            alpha = 1 - confidence_level
-            try:
-                lower_bound, upper_bound = predictor.calculate_confidence_interval(future_days, alpha)
-            except Exception as e:
-                logger.warning(f"Error calculating confidence intervals: {e}")
-                # Fallback: Use simple heuristic for confidence intervals
-                prediction_std = np.std(data['overall_score']) 
-                z_score = 1.96  # Approx. 95% confidence
-                lower_bound = predictions - z_score * prediction_std
-                upper_bound = predictions + z_score * prediction_std
-            
-            # Format predictions to be within valid range
-            predictions = np.clip(predictions, 0, 10)
-            lower_bound = np.clip(lower_bound, 0, 10)
-            upper_bound = np.clip(upper_bound, 0, 10)
-            
-            # Calculate trend direction and key insights
-            current_complexity = data['overall_score'].iloc[-1]
-            final_prediction = predictions[-1]
-            
-            if final_prediction > current_complexity * 1.2:
-                trend = "strong_increase"
-                insight = "Significant increase in complexity projected."
-            elif final_prediction > current_complexity * 1.05:
-                trend = "moderate_increase"
-                insight = "Moderate increase in complexity projected."
-            elif final_prediction < current_complexity * 0.8:
-                trend = "strong_decrease"
-                insight = "Significant decrease in complexity projected."
-            elif final_prediction < current_complexity * 0.95:
-                trend = "moderate_decrease"
-                insight = "Moderate decrease in complexity projected."
-            else:
-                trend = "stable"
-                insight = "Complexity level projected to remain relatively stable."
-            
-            # Prepare response
-            result = {
-                'narrative_id': narrative_id,
-                'title': narrative.title,
-                'current_complexity': float(current_complexity),
-                'dates': future_dates,
-                'predicted_complexity': predictions.tolist(),
-                'lower_bound': lower_bound.tolist(),
-                'upper_bound': upper_bound.tolist(),
-                'trend_direction': trend,
-                'main_insight': insight,
-                'confidence_level': confidence_level,
-                'data_points_used': len(data),
-                'prediction_date': datetime.now().isoformat()
-            }
-            
+            logger.info(f"Generated {self.prediction_length} day forecast with DeepAR")
             return result
-            
         except Exception as e:
-            logger.error(f"Error predicting narrative complexity: {e}")
-            return {"error": str(e)}
+            logger.error(f"Error generating DeepAR forecast: {e}")
+            raise
+
+
+class PredictiveModeling:
+    """
+    Service for predictive modeling of narrative complexity and key metrics.
+    """
     
-    @staticmethod
-    def predict_multiple_narratives(
-        days_ahead: int = 7, min_data_points: int = 3, limit: int = 10
-    ) -> Dict[str, Any]:
+    def __init__(self):
+        """Initialize the service."""
+        self.models = {}
+        
+    @with_app_context
+    def get_narrative_time_series(
+        self,
+        narrative_id: int,
+        metric: str = 'complexity',
+        interval: str = 'day'
+    ) -> pd.DataFrame:
         """
-        Predict complexity for multiple narratives.
+        Get time series data for a narrative.
         
         Args:
-            days_ahead: Number of days to predict into the future
-            min_data_points: Minimum number of historical data points required
-            limit: Maximum number of narratives to predict
+            narrative_id: ID of the narrative
+            metric: Metric to retrieve (complexity, propagation, threat)
+            interval: Time interval (day, week, month)
             
         Returns:
-            Dictionary with prediction results for multiple narratives
+            DataFrame with time series data
         """
+        # Determine date trunc function based on interval
+        if interval == 'week':
+            date_trunc = func.date_trunc('week', NarrativeInstance.detected_at)
+        elif interval == 'month':
+            date_trunc = func.date_trunc('month', NarrativeInstance.detected_at)
+        else:
+            date_trunc = func.date_trunc('day', NarrativeInstance.detected_at)
+            
         try:
-            # Get active narratives
-            narratives = DetectedNarrative.query.filter_by(status='active').all()
-            
-            predictions = []
-            for narrative in narratives[:limit]:
-                # Check if we have sufficient historical data
-                historical_data = TimeSeriesAnalyzer._get_historical_complexity_data(narrative.id)
+            # Get narrative to ensure it exists
+            narrative = DetectedNarrative.query.get(narrative_id)
+            if not narrative:
+                logger.error(f"Narrative {narrative_id} not found")
+                return pd.DataFrame()
                 
-                if historical_data and len(historical_data['timestamps']) >= min_data_points:
-                    # Make prediction
-                    prediction = ComplexityPredictionService.predict_narrative_complexity(
-                        narrative.id, days_ahead
-                    )
+            # Get time series based on metric
+            if metric == 'complexity':
+                # For complexity, get data from the narrative's historical complexity scores
+                # This is stored in meta_data as a JSON array
+                if not narrative.meta_data:
+                    logger.warning(f"No meta_data for narrative {narrative_id}")
+                    return pd.DataFrame()
                     
-                    if "error" not in prediction:
-                        predictions.append(prediction)
+                meta_data = json.loads(narrative.meta_data)
+                if 'complexity_history' not in meta_data:
+                    logger.warning(f"No complexity history for narrative {narrative_id}")
+                    return pd.DataFrame()
+                    
+                # Convert to DataFrame
+                history = meta_data['complexity_history']
+                if not history:
+                    return pd.DataFrame()
+                    
+                df = pd.DataFrame(history)
+                df['ds'] = pd.to_datetime(df['date'])
+                df['y'] = df['complexity']
+                
+                return df[['ds', 'y']]
+            elif metric in ('propagation', 'threat'):
+                # For propagation and threat, query from instances
+                query = db.session.query(
+                    date_trunc.label('date'),
+                    func.avg(func.cast(func.json_extract(
+                        NarrativeInstance.meta_data, f'$.{metric}'
+                    ), db.Float)).label('value')
+                ).filter(
+                    NarrativeInstance.narrative_id == narrative_id
+                ).group_by(
+                    date_trunc
+                ).order_by(
+                    date_trunc
+                )
+                
+                result = query.all()
+                
+                # Convert to DataFrame
+                df = pd.DataFrame([(r.date, r.value) for r in result], columns=['ds', 'y'])
+                df['ds'] = pd.to_datetime(df['ds'])
+                
+                return df
+            else:
+                logger.warning(f"Unknown metric: {metric}")
+                return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error retrieving time series for narrative {narrative_id}: {e}")
+            return pd.DataFrame()
             
-            if not predictions:
-                return {"error": "No narratives with sufficient data for prediction"}
+    def forecast_narrative(
+        self,
+        narrative_id: int,
+        metric: str = 'complexity',
+        model_type: str = 'prophet',
+        force_refresh: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Generate a forecast for a narrative metric.
+        
+        Args:
+            narrative_id: ID of the narrative
+            metric: Metric to forecast
+            model_type: Type of model to use
+            force_refresh: Whether to force a refresh of the forecast
             
-            # Sort by prediction certainty (inverse of confidence interval width)
-            for pred in predictions:
-                if 'lower_bound' in pred and 'upper_bound' in pred:
-                    avg_interval = np.mean([u - l for u, l in zip(pred['upper_bound'], pred['lower_bound'])])
-                    pred['certainty_score'] = 1.0 / (1.0 + avg_interval)
-                else:
-                    pred['certainty_score'] = 0
+        Returns:
+            Forecast results
+        """
+        # Check cache first
+        cache_key = f"{narrative_id}_{metric}_{model_type}"
+        if not force_refresh and cache_key in forecast_cache:
+            cached = forecast_cache[cache_key]
+            # Check if cache is still valid
+            if time.time() - cached.get('timestamp', 0) < FORECAST_REFRESH_INTERVAL:
+                logger.info(f"Using cached forecast for {cache_key}")
+                return cached
+                
+        # Get time series data
+        df = self.get_narrative_time_series(narrative_id, metric)
+        if df.empty:
+            logger.warning(f"No time series data for narrative {narrative_id}, metric {metric}")
+            return {
+                'error': 'No data available for forecasting',
+                'narrative_id': narrative_id,
+                'metric': metric
+            }
             
-            # Sort by certainty (highest first)
-            predictions.sort(key=lambda x: x.get('certainty_score', 0), reverse=True)
+        # Create and fit model
+        try:
+            if model_type == 'prophet':
+                model = ProphetModel()
+            elif model_type.startswith('darts'):
+                # Parse model type, e.g. darts_rnn
+                parts = model_type.split('_')
+                darts_type = parts[1].upper() if len(parts) > 1 else 'RNN'
+                model = DartsModel(model_type=darts_type)
+            elif model_type == 'deepar':
+                model = DeepARModel()
+            else:
+                logger.error(f"Unknown model type: {model_type}")
+                return {
+                    'error': f'Unknown model type: {model_type}',
+                    'narrative_id': narrative_id,
+                    'metric': metric
+                }
+                
+            # Fit model
+            model.fit(df)
+            
+            # Generate forecast
+            forecast = model.predict()
+            
+            # Create result dictionary
+            result = {
+                'narrative_id': narrative_id,
+                'metric': metric,
+                'model_type': model_type,
+                'forecast_date': datetime.now().isoformat(),
+                'timestamp': time.time(),
+                'forecast_periods': FORECAST_HORIZON,
+                'historical_data': df.to_dict(orient='records'),
+                'forecast_data': forecast.to_dict(orient='records'),
+                'components': model.get_components()
+            }
+            
+            # Cache the result
+            forecast_cache[cache_key] = result
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error forecasting for narrative {narrative_id}: {e}")
+            return {
+                'error': str(e),
+                'narrative_id': narrative_id,
+                'metric': metric
+            }
+            
+    def find_threshold_crossing(
+        self,
+        forecast: Dict[str, Any],
+        threshold: float,
+        direction: str = 'above'
+    ) -> Dict[str, Any]:
+        """
+        Find when a forecast crosses a threshold.
+        
+        Args:
+            forecast: Forecast dictionary from forecast_narrative()
+            threshold: Threshold value
+            direction: Direction of crossing ('above' or 'below')
+            
+        Returns:
+            Dictionary with crossing information
+        """
+        if 'error' in forecast:
+            return {'error': forecast['error']}
+            
+        try:
+            # Convert forecast data to DataFrame
+            df = pd.DataFrame(forecast['forecast_data'])
+            
+            # Determine which column to use
+            value_col = 'yhat'  # Default
+            
+            # Convert dates
+            df['ds'] = pd.to_datetime(df['ds'])
+            
+            # Find crossing points
+            if direction == 'above':
+                crossings = df[df[value_col] >= threshold]
+            else:
+                crossings = df[df[value_col] <= threshold]
+                
+            if crossings.empty:
+                return {
+                    'narrative_id': forecast['narrative_id'],
+                    'metric': forecast['metric'],
+                    'threshold': threshold,
+                    'direction': direction,
+                    'crosses_threshold': False,
+                    'message': f"Forecast does not cross the {threshold} threshold"
+                }
+                
+            # Get the first crossing
+            first_crossing = crossings.iloc[0]
+            
+            # Calculate days until crossing
+            days_until = (first_crossing['ds'] - datetime.now()).days
             
             return {
-                'narrative_count': len(predictions),
-                'predictions': predictions,
-                'prediction_date': datetime.now().isoformat()
+                'narrative_id': forecast['narrative_id'],
+                'metric': forecast['metric'],
+                'threshold': threshold,
+                'direction': direction,
+                'crosses_threshold': True,
+                'crossing_date': first_crossing['ds'].isoformat(),
+                'days_until_crossing': days_until,
+                'crossing_value': float(first_crossing[value_col]),
+                'message': f"Forecast crosses the {threshold} threshold in {days_until} days"
+            }
+        except Exception as e:
+            logger.error(f"Error finding threshold crossing: {e}")
+            return {
+                'error': str(e),
+                'narrative_id': forecast['narrative_id'],
+                'metric': forecast['metric'],
+                'threshold': threshold
             }
             
-        except Exception as e:
-            logger.error(f"Error predicting multiple narratives: {e}")
-            return {"error": str(e)}
-    
-    @staticmethod
-    def what_if_analysis(
-        narrative_id: int, intervention_scenario: str, days_ahead: int = 14
+    def analyze_key_factors(
+        self,
+        narrative_id: int,
+        metric: str = 'complexity'
     ) -> Dict[str, Any]:
         """
-        Perform 'what-if' analysis for different intervention scenarios.
+        Analyze key factors influencing a metric for a narrative.
         
         Args:
-            narrative_id: ID of the narrative to analyze
-            intervention_scenario: Type of intervention to model ('counter_narrative', 
-                                  'debunking', 'visibility_reduction')
-            days_ahead: Number of days to predict into the future
+            narrative_id: ID of the narrative
+            metric: Metric to analyze
             
         Returns:
-            Dictionary with what-if analysis results
+            Dictionary with key factors
         """
         try:
-            # Get the narrative
-            narrative = DetectedNarrative.query.get(narrative_id)
-            if not narrative:
-                logger.warning(f"Narrative {narrative_id} not found")
-                return {"error": f"Narrative {narrative_id} not found"}
+            # Get related metrics data
+            complexity_df = self.get_narrative_time_series(narrative_id, 'complexity')
+            propagation_df = self.get_narrative_time_series(narrative_id, 'propagation')
+            threat_df = self.get_narrative_time_series(narrative_id, 'threat')
             
-            # Get historical complexity data
-            historical_data = TimeSeriesAnalyzer._get_historical_complexity_data(narrative_id)
+            # Merge dataframes
+            if complexity_df.empty or propagation_df.empty or threat_df.empty:
+                logger.warning(f"Missing data for key factor analysis of narrative {narrative_id}")
+                return {
+                    'narrative_id': narrative_id,
+                    'metric': metric,
+                    'error': 'Insufficient data for key factor analysis'
+                }
+                
+            # Perform simple correlation analysis
+            merged = complexity_df.merge(
+                propagation_df.rename(columns={'y': 'propagation'}),
+                on='ds',
+                how='inner'
+            ).merge(
+                threat_df.rename(columns={'y': 'threat'}),
+                on='ds',
+                how='inner'
+            )
             
-            if not historical_data or len(historical_data['timestamps']) < 3:
-                logger.warning(f"Insufficient historical data for narrative {narrative_id}")
-                return {"error": "Insufficient historical data for what-if analysis"}
+            if merged.empty:
+                return {
+                    'narrative_id': narrative_id,
+                    'metric': metric,
+                    'error': 'No overlapping data points for correlation analysis'
+                }
+                
+            # Calculate correlations
+            corr = merged.corr()
             
-            # Prepare data for modeling
-            data = ComplexityPredictionService._prepare_prediction_data(historical_data)
+            # Get correlations with target metric
+            target_col = 'y' if metric == 'complexity' else metric
+            correlations = corr[target_col].drop(target_col).to_dict()
             
-            if data is None or data.empty:
-                return {"error": "Failed to prepare data for what-if analysis"}
+            # Sort by absolute correlation
+            sorted_corr = sorted(
+                correlations.items(),
+                key=lambda x: abs(x[1]),
+                reverse=True
+            )
             
-            # Add additional features for intervention modeling
-            data['counter_narrative_active'] = 0
-            data['debunking_active'] = 0
-            data['visibility_reduced'] = 0
-            
-            # Train base model with all features
-            feature_columns = [
-                'days_since_start', 
-                'counter_narrative_active', 
-                'debunking_active', 
-                'visibility_reduced'
-            ]
-            
-            predictor = PredictiveModeling()
-            try:
-                predictor.train_model(
-                    data=data,
-                    target_column='overall_score',
-                    feature_columns=feature_columns
-                )
-            except Exception as e:
-                logger.error(f"Error training what-if model: {e}")
-                return {"error": f"Failed to train what-if model: {e}"}
-            
-            # Prepare baseline prediction data
-            last_day = data['days_since_start'].max()
-            baseline_data = pd.DataFrame({
-                'days_since_start': [last_day + i for i in range(1, days_ahead + 1)],
-                'counter_narrative_active': [0] * days_ahead,
-                'debunking_active': [0] * days_ahead,
-                'visibility_reduced': [0] * days_ahead
-            })
-            
-            # Prepare intervention data
-            intervention_data = baseline_data.copy()
-            
-            # Set intervention parameters based on scenario
-            if intervention_scenario == 'counter_narrative':
-                intervention_data['counter_narrative_active'] = 1
-                scenario_name = "Counter-narrative Campaign"
-                scenario_description = "Publication of counter-narratives that directly address this misinformation"
-            elif intervention_scenario == 'debunking':
-                intervention_data['debunking_active'] = 1
-                scenario_name = "Fact-checking & Debunking"
-                scenario_description = "Systematic fact-checking and debunking of claims in this narrative"
-            elif intervention_scenario == 'visibility_reduction':
-                intervention_data['visibility_reduced'] = 1
-                scenario_name = "Visibility Reduction"
-                scenario_description = "Reduction in visibility and reach of this narrative on platforms"
-            else:
-                return {"error": f"Unknown intervention scenario: {intervention_scenario}"}
-            
-            # Make predictions
-            baseline_predictions = predictor.predict(baseline_data)
-            intervention_predictions = predictor.predict(intervention_data)
-            
-            # Format predictions to be within valid range
-            baseline_predictions = np.clip(baseline_predictions, 0, 10)
-            intervention_predictions = np.clip(intervention_predictions, 0, 10)
-            
-            # Generate dates
-            future_dates = [(datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d') 
-                           for i in range(1, days_ahead + 1)]
-            
-            # Calculate impact metrics
-            baseline_final = baseline_predictions[-1]
-            intervention_final = intervention_predictions[-1]
-            absolute_reduction = baseline_final - intervention_final
-            relative_reduction = (baseline_final - intervention_final) / baseline_final if baseline_final > 0 else 0
-            
-            # Prepare response
+            # Build result
             result = {
                 'narrative_id': narrative_id,
-                'title': narrative.title,
-                'dates': future_dates,
-                'baseline_predictions': baseline_predictions.tolist(),
-                'intervention_predictions': intervention_predictions.tolist(),
-                'scenario': scenario_name,
-                'scenario_description': scenario_description,
-                'impact_metrics': {
-                    'absolute_reduction': float(absolute_reduction),
-                    'relative_reduction': float(relative_reduction) * 100,  # as percentage
-                },
-                'analysis_date': datetime.now().isoformat()
+                'metric': metric,
+                'correlations': [
+                    {'factor': k, 'correlation': v}
+                    for k, v in sorted_corr
+                ],
+                'sample_size': len(merged)
             }
             
+            # Try to use more advanced feature importance if available
+            try:
+                from sklearn.ensemble import RandomForestRegressor
+                from sklearn.inspection import permutation_importance
+                
+                # Prepare data for random forest
+                X = merged.drop(['ds', target_col], axis=1)
+                y = merged[target_col]
+                
+                if len(X) >= 10:  # Minimum samples for meaningful analysis
+                    # Fit random forest
+                    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+                    rf.fit(X, y)
+                    
+                    # Calculate feature importance
+                    perm_importance = permutation_importance(
+                        rf, X, y, n_repeats=10, random_state=42
+                    )
+                    
+                    # Sort features by importance
+                    feature_importance = {
+                        feature: float(importance)
+                        for feature, importance in zip(
+                            X.columns,
+                            perm_importance.importances_mean
+                        )
+                    }
+                    
+                    sorted_importance = sorted(
+                        feature_importance.items(),
+                        key=lambda x: x[1],
+                        reverse=True
+                    )
+                    
+                    result['feature_importance'] = [
+                        {'factor': k, 'importance': v}
+                        for k, v in sorted_importance
+                    ]
+            except Exception as e:
+                logger.warning(f"Could not perform advanced feature importance: {e}")
+                
             return result
-            
         except Exception as e:
-            logger.error(f"Error in what-if analysis: {e}")
-            return {"error": str(e)}
-    
-    @staticmethod
-    def _prepare_prediction_data(historical_data: Dict[str, Any]) -> Optional[pd.DataFrame]:
+            logger.error(f"Error analyzing key factors for narrative {narrative_id}: {e}")
+            return {
+                'error': str(e),
+                'narrative_id': narrative_id,
+                'metric': metric
+            }
+            
+    def simulate_scenario(
+        self,
+        narrative_id: int,
+        interventions: Dict[str, Any],
+        metric: str = 'complexity',
+        model_type: str = 'prophet'
+    ) -> Dict[str, Any]:
         """
-        Prepare historical data for prediction modeling.
+        Simulate a what-if scenario with interventions.
         
         Args:
-            historical_data: Dictionary with historical complexity data
+            narrative_id: ID of the narrative
+            interventions: Dictionary of interventions
+            metric: Metric to forecast
+            model_type: Type of model to use
             
         Returns:
-            DataFrame prepared for prediction modeling or None if preparation fails
+            Dictionary with scenario results
         """
         try:
-            # Extract data
-            timestamps = historical_data['timestamps']
-            overall_scores = historical_data['overall_scores']
+            # Get baseline forecast
+            baseline = self.forecast_narrative(narrative_id, metric, model_type)
+            if 'error' in baseline:
+                return baseline
+                
+            # Get time series data
+            df = self.get_narrative_time_series(narrative_id, metric)
+            if df.empty:
+                logger.warning(f"No time series data for narrative {narrative_id}, metric {metric}")
+                return {
+                    'error': 'No data available for scenario modeling',
+                    'narrative_id': narrative_id,
+                    'metric': metric
+                }
+                
+            # Apply interventions to create modified dataframe
+            modified_df = df.copy()
             
-            # Convert to DataFrame
-            data = pd.DataFrame({
-                'timestamp': timestamps,
-                'overall_score': overall_scores
-            })
+            # Example intervention types:
+            # 1. 'step': Add a one-time step change at a specific date
+            # 2. 'trend': Change the overall trend by a factor
+            # 3. 'counter_message': Simulate effect of a counter-message
             
-            # Convert timestamps to datetime
-            data['datetime'] = pd.to_datetime(data['timestamp'], unit='s')
+            intervention_effects = []
             
-            # Calculate days since first observation
-            first_date = data['datetime'].min()
-            data['days_since_start'] = (data['datetime'] - first_date).dt.total_seconds() / (24 * 3600)
-            
-            return data
-            
+            for name, intervention in interventions.items():
+                intervention_type = intervention.get('type')
+                
+                if intervention_type == 'step':
+                    # Add a step change at a specific date
+                    date = pd.to_datetime(intervention.get('date'))
+                    value = float(intervention.get('value', 0))
+                    
+                    # Add a step change column
+                    modified_df[f'step_{name}'] = (modified_df['ds'] >= date).astype(float)
+                    
+                    intervention_effects.append({
+                        'name': name,
+                        'type': 'step',
+                        'date': date.isoformat(),
+                        'value': value,
+                        'description': f"Step change of {value} on {date.strftime('%Y-%m-%d')}"
+                    })
+                    
+                elif intervention_type == 'trend':
+                    # Change trend by a factor
+                    factor = float(intervention.get('factor', 1.0))
+                    
+                    # Add a trend modifier column
+                    start_date = pd.to_datetime(intervention.get('start_date', df['ds'].min()))
+                    modified_df[f'trend_{name}'] = (
+                        (modified_df['ds'] - start_date).dt.days * (factor - 1) / 30
+                    )
+                    
+                    intervention_effects.append({
+                        'name': name,
+                        'type': 'trend',
+                        'factor': factor,
+                        'start_date': start_date.isoformat(),
+                        'description': f"Trend change by factor {factor} from {start_date.strftime('%Y-%m-%d')}"
+                    })
+                    
+                elif intervention_type == 'counter_message':
+                    # Simulate counter-message effect
+                    date = pd.to_datetime(intervention.get('date'))
+                    impact = float(intervention.get('impact', -0.1))
+                    decay = float(intervention.get('decay', 0.9))
+                    
+                    # Add counter-message effect column
+                    days_since = (modified_df['ds'] - date).dt.days
+                    effect = np.zeros(len(modified_df))
+                    mask = days_since >= 0
+                    effect[mask] = impact * (decay ** days_since[mask])
+                    modified_df[f'counter_{name}'] = effect
+                    
+                    intervention_effects.append({
+                        'name': name,
+                        'type': 'counter_message',
+                        'date': date.isoformat(),
+                        'impact': impact,
+                        'decay': decay,
+                        'description': f"Counter-message with initial impact {impact} on {date.strftime('%Y-%m-%d')}"
+                    })
+                    
+            # Create and fit model with modified data
+            if model_type == 'prophet':
+                model = ProphetModel(name=f"scenario_{narrative_id}")
+                
+                # Add intervention regressors
+                for name in interventions.keys():
+                    intervention_type = interventions[name].get('type')
+                    if intervention_type == 'step':
+                        model.model.add_regressor(f'step_{name}')
+                    elif intervention_type == 'trend':
+                        model.model.add_regressor(f'trend_{name}')
+                    elif intervention_type == 'counter_message':
+                        model.model.add_regressor(f'counter_{name}')
+                        
+                # Fit model
+                model.fit(modified_df)
+                
+                # Generate forecast
+                forecast = model.predict()
+                
+                # Create result dictionary
+                result = {
+                    'narrative_id': narrative_id,
+                    'metric': metric,
+                    'model_type': model_type,
+                    'scenario_name': 'Custom Scenario',
+                    'forecast_date': datetime.now().isoformat(),
+                    'interventions': intervention_effects,
+                    'baseline_forecast': baseline['forecast_data'],
+                    'scenario_forecast': forecast.to_dict(orient='records'),
+                }
+                
+                return result
+            else:
+                # Other model types not fully implemented for scenario modeling
+                return {
+                    'error': f'Scenario modeling not implemented for model type: {model_type}',
+                    'narrative_id': narrative_id,
+                    'metric': metric
+                }
         except Exception as e:
-            logger.error(f"Error preparing prediction data: {e}")
-            return None
+            logger.error(f"Error simulating scenario for narrative {narrative_id}: {e}")
+            return {
+                'error': str(e),
+                'narrative_id': narrative_id,
+                'metric': metric
+            }
+
+
+# Create singleton instance
+predictive_modeling_service = PredictiveModeling()
+
+
+# Function moved to the top of the file

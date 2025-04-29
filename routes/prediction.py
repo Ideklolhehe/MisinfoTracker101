@@ -1,332 +1,388 @@
 """
-Routes for predictive modeling of misinformation narratives.
+Routes for predictive modeling, forecasting, and what-if scenarios.
 """
 
 import logging
 import json
-from flask import Blueprint, request, jsonify, render_template, abort
+from typing import Dict, Any, List, Optional
+
+from flask import Blueprint, render_template, request, jsonify, abort, redirect, url_for
 from flask_login import login_required, current_user
 
-from app import db
+from services.predictive_modeling import predictive_modeling_service
 from models import DetectedNarrative
-from services.predictive_modeling import ComplexityPredictionService
-from utils.app_context import ensure_app_context
+from app import db
+from utils.metrics import time_operation
 
+# Configure module logger
 logger = logging.getLogger(__name__)
 
-# Create Blueprint
-prediction_bp = Blueprint('prediction', __name__)
+# Create blueprint
+prediction_bp = Blueprint('prediction', __name__, url_prefix='/prediction')
 
-@prediction_bp.route('/prediction/complexity/<int:narrative_id>', methods=['GET'])
+
+@prediction_bp.route('/')
 @login_required
-def predict_narrative_complexity(narrative_id):
-    """
-    Predict future complexity for a specific narrative.
+def dashboard():
+    """Predictive modeling dashboard."""
+    # Get top narratives to display
+    narratives = DetectedNarrative.query.filter(
+        DetectedNarrative.status != 'debunked'
+    ).order_by(
+        DetectedNarrative.last_updated.desc()
+    ).limit(10).all()
     
-    Args:
-        narrative_id: ID of the narrative to predict
-        
-    Returns:
-        HTML page with complexity prediction
-    """
-    try:
-        # Check if user has access
-        if current_user.role not in ['admin', 'analyst', 'researcher']:
-            abort(403, "Insufficient privileges to access prediction tools")
-        
-        # Get the narrative
-        narrative = DetectedNarrative.query.get(narrative_id)
-        if not narrative:
-            abort(404, f"Narrative with ID {narrative_id} not found")
-        
-        # Get days ahead parameter (default: 7 days)
-        days_ahead = request.args.get('days', 7, type=int)
-        
-        # Get confidence level parameter (default: 0.95)
-        confidence_level = request.args.get('confidence', 0.95, type=float)
-        
-        # Make prediction
-        prediction = ComplexityPredictionService.predict_narrative_complexity(
-            narrative_id, days_ahead, confidence_level
+    return render_template(
+        'prediction/dashboard.html',
+        title='Predictive Modeling Dashboard',
+        narratives=narratives
+    )
+
+
+@prediction_bp.route('/forecast/<int:narrative_id>')
+@login_required
+def forecast(narrative_id: int):
+    """Display forecast for a narrative."""
+    # Get narrative
+    narrative = DetectedNarrative.query.get_or_404(narrative_id)
+    
+    # Get metric (default complexity)
+    metric = request.args.get('metric', 'complexity')
+    
+    # Get model type
+    model_type = request.args.get('model', 'prophet')
+    
+    # Force refresh parameter
+    force_refresh = 'refresh' in request.args
+    
+    # Generate forecast
+    with time_operation('generate_forecast'):
+        forecast_data = predictive_modeling_service.forecast_narrative(
+            narrative_id, metric, model_type, force_refresh
         )
-        
-        if "error" in prediction:
-            return render_template(
-                'error.html', 
-                message=f"Prediction failed: {prediction['error']}"
-            ), 400
-        
+    
+    # Check for error
+    if 'error' in forecast_data:
         return render_template(
-            'prediction/view.html',
+            'prediction/error.html',
+            title='Forecast Error',
             narrative=narrative,
-            prediction=prediction,
-            days_ahead=days_ahead,
-            confidence_level=confidence_level
+            error=forecast_data['error']
         )
-        
-    except Exception as e:
-        logger.error(f"Error in complexity prediction endpoint: {e}")
-        return render_template('error.html', message=str(e)), 500
-
-@prediction_bp.route('/prediction/api/complexity/<int:narrative_id>', methods=['GET'])
-@login_required
-def api_predict_narrative_complexity(narrative_id):
-    """
-    API endpoint to predict future complexity for a narrative.
     
-    Args:
-        narrative_id: ID of the narrative to predict
-        
-    Returns:
-        JSON with prediction results
-    """
-    try:
-        # Check if user has access
-        if current_user.role not in ['admin', 'analyst', 'researcher']:
-            return jsonify({"error": "Insufficient privileges"}), 403
-        
-        # Get days ahead parameter (default: 7 days)
-        days_ahead = request.args.get('days', 7, type=int)
-        
-        # Get confidence level parameter (default: 0.95)
-        confidence_level = request.args.get('confidence', 0.95, type=float)
-        
-        # Make prediction
-        prediction = ComplexityPredictionService.predict_narrative_complexity(
-            narrative_id, days_ahead, confidence_level
-        )
-        
-        if "error" in prediction:
-            return jsonify({"error": prediction["error"]}), 400
-        
-        return jsonify(prediction)
-        
-    except Exception as e:
-        logger.error(f"Error in complexity prediction API endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
+    return render_template(
+        'prediction/view.html',
+        title=f'Forecast: {narrative.title}',
+        narrative=narrative,
+        forecast=forecast_data,
+        metric=metric,
+        model_type=model_type
+    )
 
-@prediction_bp.route('/prediction/multiple', methods=['GET'])
+
+@prediction_bp.route('/threshold/<int:narrative_id>')
 @login_required
-def predict_multiple_narratives():
-    """
-    Predict complexity for multiple narratives.
+def threshold(narrative_id: int):
+    """Display threshold projections for a narrative."""
+    # Get narrative
+    narrative = DetectedNarrative.query.get_or_404(narrative_id)
     
-    Returns:
-        HTML page with multiple predictions
-    """
-    try:
-        # Check if user has access
-        if current_user.role not in ['admin', 'analyst', 'researcher']:
-            abort(403, "Insufficient privileges to access prediction tools")
-        
-        # Get days ahead parameter (default: 7 days)
-        days_ahead = request.args.get('days', 7, type=int)
-        
-        # Get limit parameter (default: 10)
-        limit = request.args.get('limit', 10, type=int)
-        
-        # Make predictions
-        predictions = ComplexityPredictionService.predict_multiple_narratives(
-            days_ahead, min_data_points=3, limit=limit
+    # Get metric
+    metric = request.args.get('metric', 'complexity')
+    
+    # Get model type
+    model_type = request.args.get('model', 'prophet')
+    
+    # Get threshold value
+    threshold_value = float(request.args.get('value', 0.75))
+    
+    # Get direction
+    direction = request.args.get('direction', 'above')
+    
+    # Generate forecast first
+    forecast_data = predictive_modeling_service.forecast_narrative(
+        narrative_id, metric, model_type
+    )
+    
+    # Check for error
+    if 'error' in forecast_data:
+        return render_template(
+            'prediction/error.html',
+            title='Threshold Projection Error',
+            narrative=narrative,
+            error=forecast_data['error']
         )
-        
-        if "error" in predictions:
-            return render_template(
-                'error.html', 
-                message=f"Multiple predictions failed: {predictions['error']}"
-            ), 400
+    
+    # Calculate threshold crossing
+    threshold_data = predictive_modeling_service.find_threshold_crossing(
+        forecast_data, threshold_value, direction
+    )
+    
+    return render_template(
+        'prediction/threshold.html',
+        title=f'Threshold Projection: {narrative.title}',
+        narrative=narrative,
+        forecast=forecast_data,
+        threshold=threshold_data,
+        metric=metric,
+        model_type=model_type
+    )
+
+
+@prediction_bp.route('/factors/<int:narrative_id>')
+@login_required
+def key_factors(narrative_id: int):
+    """Display key factors for a narrative."""
+    # Get narrative
+    narrative = DetectedNarrative.query.get_or_404(narrative_id)
+    
+    # Get metric
+    metric = request.args.get('metric', 'complexity')
+    
+    # Analyze key factors
+    factors_data = predictive_modeling_service.analyze_key_factors(
+        narrative_id, metric
+    )
+    
+    # Check for error
+    if 'error' in factors_data:
+        return render_template(
+            'prediction/error.html',
+            title='Key Factors Analysis Error',
+            narrative=narrative,
+            error=factors_data['error']
+        )
+    
+    return render_template(
+        'prediction/factors.html',
+        title=f'Key Factors: {narrative.title}',
+        narrative=narrative,
+        factors=factors_data,
+        metric=metric
+    )
+
+
+@prediction_bp.route('/multiple')
+@login_required
+def multiple_forecasts():
+    """Display multiple forecasts for comparison."""
+    # Get narrative IDs from request
+    narrative_ids_str = request.args.get('ids', '')
+    
+    if not narrative_ids_str:
+        # Show form to select narratives
+        narratives = DetectedNarrative.query.filter(
+            DetectedNarrative.status != 'debunked'
+        ).order_by(
+            DetectedNarrative.last_updated.desc()
+        ).limit(20).all()
         
         return render_template(
-            'prediction/multiple.html',
-            predictions=predictions,
-            days_ahead=days_ahead,
-            limit=limit
+            'prediction/select_multiple.html',
+            title='Compare Multiple Narratives',
+            narratives=narratives
         )
-        
-    except Exception as e:
-        logger.error(f"Error in multiple predictions endpoint: {e}")
-        return render_template('error.html', message=str(e)), 500
-
-@prediction_bp.route('/prediction/api/multiple', methods=['GET'])
-@login_required
-def api_predict_multiple_narratives():
-    """
-    API endpoint to predict complexity for multiple narratives.
     
-    Returns:
-        JSON with multiple prediction results
-    """
+    # Parse narrative IDs
     try:
-        # Check if user has access
-        if current_user.role not in ['admin', 'analyst', 'researcher']:
-            return jsonify({"error": "Insufficient privileges"}), 403
-        
-        # Get days ahead parameter (default: 7 days)
-        days_ahead = request.args.get('days', 7, type=int)
-        
-        # Get limit parameter (default: 10)
-        limit = request.args.get('limit', 10, type=int)
-        
-        # Make predictions
-        predictions = ComplexityPredictionService.predict_multiple_narratives(
-            days_ahead, min_data_points=3, limit=limit
-        )
-        
-        if "error" in predictions:
-            return jsonify({"error": predictions["error"]}), 400
-        
-        return jsonify(predictions)
-        
-    except Exception as e:
-        logger.error(f"Error in multiple predictions API endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@prediction_bp.route('/prediction/what-if/<int:narrative_id>', methods=['GET', 'POST'])
-@login_required
-def what_if_analysis(narrative_id):
-    """
-    Perform 'what-if' analysis for different intervention scenarios.
+        narrative_ids = [int(id_str) for id_str in narrative_ids_str.split(',')]
+    except ValueError:
+        abort(400, 'Invalid narrative IDs')
     
-    Args:
-        narrative_id: ID of the narrative to analyze
-        
-    Returns:
-        HTML page with what-if analysis
-    """
-    try:
-        # Check if user has access
-        if current_user.role not in ['admin', 'analyst']:
-            abort(403, "Insufficient privileges to access what-if analysis")
-        
-        # Get the narrative
+    # Get metric
+    metric = request.args.get('metric', 'complexity')
+    
+    # Get model type
+    model_type = request.args.get('model', 'prophet')
+    
+    # Get narratives
+    narratives = {}
+    forecasts = {}
+    
+    for narrative_id in narrative_ids:
         narrative = DetectedNarrative.query.get(narrative_id)
-        if not narrative:
-            abort(404, f"Narrative with ID {narrative_id} not found")
-        
-        # Default values
-        days_ahead = 14
-        scenario = 'counter_narrative'
-        analysis_result = None
-        
-        if request.method == 'POST':
-            # Get parameters from form
-            days_ahead = request.form.get('days_ahead', 14, type=int)
-            scenario = request.form.get('scenario', 'counter_narrative')
+        if narrative:
+            narratives[narrative_id] = narrative
             
-            # Validate scenario
-            valid_scenarios = ['counter_narrative', 'debunking', 'visibility_reduction']
-            if scenario not in valid_scenarios:
-                return render_template(
-                    'error.html', 
-                    message=f"Invalid scenario: {scenario}"
-                ), 400
-            
-            # Perform what-if analysis
-            analysis_result = ComplexityPredictionService.what_if_analysis(
-                narrative_id, scenario, days_ahead
+            # Generate forecast
+            forecast_data = predictive_modeling_service.forecast_narrative(
+                narrative_id, metric, model_type
             )
             
-            if "error" in analysis_result:
+            if 'error' not in forecast_data:
+                forecasts[narrative_id] = forecast_data
+    
+    return render_template(
+        'prediction/multiple.html',
+        title='Multiple Forecasts Comparison',
+        narratives=narratives,
+        forecasts=forecasts,
+        metric=metric,
+        model_type=model_type
+    )
+
+
+@prediction_bp.route('/whatif/<int:narrative_id>', methods=['GET', 'POST'])
+@login_required
+def what_if(narrative_id: int):
+    """What-if scenario modeling for a narrative."""
+    # Get narrative
+    narrative = DetectedNarrative.query.get_or_404(narrative_id)
+    
+    # Get metric
+    metric = request.args.get('metric', 'complexity')
+    
+    # Get model type
+    model_type = request.args.get('model', 'prophet')
+    
+    if request.method == 'POST':
+        # Process scenario inputs
+        try:
+            scenario_name = request.form.get('scenario_name', 'Custom Scenario')
+            
+            # Process interventions
+            interventions = {}
+            
+            # Step intervention
+            if 'step_date' in request.form and request.form.get('step_value'):
+                interventions['step'] = {
+                    'type': 'step',
+                    'date': request.form.get('step_date'),
+                    'value': float(request.form.get('step_value', 0))
+                }
+            
+            # Trend intervention
+            if 'trend_factor' in request.form:
+                interventions['trend'] = {
+                    'type': 'trend',
+                    'factor': float(request.form.get('trend_factor', 1.0)),
+                    'start_date': request.form.get('trend_start_date')
+                }
+            
+            # Counter-message intervention
+            if 'counter_date' in request.form:
+                interventions['counter_message'] = {
+                    'type': 'counter_message',
+                    'date': request.form.get('counter_date'),
+                    'impact': float(request.form.get('counter_impact', -0.1)),
+                    'decay': float(request.form.get('counter_decay', 0.9))
+                }
+            
+            # Generate scenario
+            scenario_data = predictive_modeling_service.simulate_scenario(
+                narrative_id, interventions, metric, model_type
+            )
+            
+            # Check for error
+            if 'error' in scenario_data:
                 return render_template(
-                    'error.html', 
-                    message=f"What-if analysis failed: {analysis_result['error']}"
-                ), 400
-        
-        return render_template(
-            'prediction/what_if.html',
-            narrative=narrative,
-            days_ahead=days_ahead,
-            scenario=scenario,
-            analysis=analysis_result
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in what-if analysis endpoint: {e}")
-        return render_template('error.html', message=str(e)), 500
-
-@prediction_bp.route('/prediction/api/what-if/<int:narrative_id>', methods=['GET'])
-@login_required
-def api_what_if_analysis(narrative_id):
-    """
-    API endpoint to perform 'what-if' analysis.
-    
-    Args:
-        narrative_id: ID of the narrative to analyze
-        
-    Returns:
-        JSON with what-if analysis results
-    """
-    try:
-        # Check if user has access
-        if current_user.role not in ['admin', 'analyst']:
-            return jsonify({"error": "Insufficient privileges"}), 403
-        
-        # Get days ahead parameter (default: 14 days)
-        days_ahead = request.args.get('days', 14, type=int)
-        
-        # Get scenario parameter (default: counter_narrative)
-        scenario = request.args.get('scenario', 'counter_narrative')
-        
-        # Validate scenario
-        valid_scenarios = ['counter_narrative', 'debunking', 'visibility_reduction']
-        if scenario not in valid_scenarios:
-            return jsonify({"error": f"Invalid scenario: {scenario}"}), 400
-        
-        # Perform what-if analysis
-        analysis_result = ComplexityPredictionService.what_if_analysis(
-            narrative_id, scenario, days_ahead
-        )
-        
-        if "error" in analysis_result:
-            return jsonify({"error": analysis_result["error"]}), 400
-        
-        return jsonify(analysis_result)
-        
-    except Exception as e:
-        logger.error(f"Error in what-if analysis API endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@prediction_bp.route('/prediction/dashboard', methods=['GET'])
-@login_required
-def prediction_dashboard():
-    """
-    View prediction dashboard with summary of predictions across narratives.
-    
-    Returns:
-        HTML page with prediction dashboard
-    """
-    try:
-        # Check if user has access
-        if current_user.role not in ['admin', 'analyst', 'researcher']:
-            abort(403, "Insufficient privileges to access prediction dashboard")
-        
-        # Get predictions for multiple narratives
-        predictions = ComplexityPredictionService.predict_multiple_narratives(
-            days_ahead=7, min_data_points=3, limit=10
-        )
-        
-        if "error" in predictions:
+                    'prediction/error.html',
+                    title='Scenario Error',
+                    narrative=narrative,
+                    error=scenario_data['error']
+                )
+            
+            # Show results
             return render_template(
-                'error.html', 
-                message=f"Failed to generate prediction dashboard: {predictions['error']}"
-            ), 400
+                'prediction/scenario_results.html',
+                title=f'Scenario Results: {narrative.title}',
+                narrative=narrative,
+                scenario=scenario_data,
+                scenario_name=scenario_name,
+                metric=metric,
+                model_type=model_type
+            )
+        except Exception as e:
+            logger.error(f"Error processing scenario: {e}")
+            abort(400, f"Invalid scenario parameters: {e}")
+    
+    # Show scenario form
+    return render_template(
+        'prediction/what_if.html',
+        title=f'What-If Scenario: {narrative.title}',
+        narrative=narrative,
+        metric=metric,
+        model_type=model_type
+    )
+
+
+@prediction_bp.route('/api/forecast/<int:narrative_id>')
+@login_required
+def api_forecast(narrative_id: int):
+    """API endpoint for narrative forecasts."""
+    # Get parameters
+    metric = request.args.get('metric', 'complexity')
+    model_type = request.args.get('model', 'prophet')
+    force_refresh = 'refresh' in request.args
+    
+    # Generate forecast
+    forecast_data = predictive_modeling_service.forecast_narrative(
+        narrative_id, metric, model_type, force_refresh
+    )
+    
+    return jsonify(forecast_data)
+
+
+@prediction_bp.route('/api/threshold/<int:narrative_id>')
+@login_required
+def api_threshold(narrative_id: int):
+    """API endpoint for threshold projections."""
+    # Get parameters
+    metric = request.args.get('metric', 'complexity')
+    model_type = request.args.get('model', 'prophet')
+    threshold_value = float(request.args.get('value', 0.75))
+    direction = request.args.get('direction', 'above')
+    
+    # Generate forecast first
+    forecast_data = predictive_modeling_service.forecast_narrative(
+        narrative_id, metric, model_type
+    )
+    
+    # Check for error
+    if 'error' in forecast_data:
+        return jsonify({'error': forecast_data['error']})
+    
+    # Calculate threshold crossing
+    threshold_data = predictive_modeling_service.find_threshold_crossing(
+        forecast_data, threshold_value, direction
+    )
+    
+    return jsonify(threshold_data)
+
+
+@prediction_bp.route('/api/factors/<int:narrative_id>')
+@login_required
+def api_factors(narrative_id: int):
+    """API endpoint for key factors."""
+    # Get parameters
+    metric = request.args.get('metric', 'complexity')
+    
+    # Analyze key factors
+    factors_data = predictive_modeling_service.analyze_key_factors(
+        narrative_id, metric
+    )
+    
+    return jsonify(factors_data)
+
+
+@prediction_bp.route('/api/scenario/<int:narrative_id>', methods=['POST'])
+@login_required
+def api_scenario(narrative_id: int):
+    """API endpoint for what-if scenarios."""
+    try:
+        # Get parameters from JSON body
+        data = request.get_json(force=True)
         
-        # Get trending narratives
-        trending_narratives = []
+        metric = data.get('metric', 'complexity')
+        model_type = data.get('model_type', 'prophet')
+        interventions = data.get('interventions', {})
         
-        for pred in predictions.get('predictions', []):
-            if pred.get('trend_direction', '') in ['strong_increase', 'moderate_increase']:
-                trending_narratives.append(pred)
-        
-        # Sort by current complexity (highest first)
-        trending_narratives.sort(key=lambda x: x.get('current_complexity', 0), reverse=True)
-        
-        return render_template(
-            'prediction/dashboard.html',
-            predictions=predictions,
-            trending_narratives=trending_narratives
+        # Generate scenario
+        scenario_data = predictive_modeling_service.simulate_scenario(
+            narrative_id, interventions, metric, model_type
         )
         
+        return jsonify(scenario_data)
     except Exception as e:
-        logger.error(f"Error in prediction dashboard endpoint: {e}")
-        return render_template('error.html', message=str(e)), 500
+        logger.error(f"Error processing scenario API request: {e}")
+        return jsonify({'error': str(e)}), 400

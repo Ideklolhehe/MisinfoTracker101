@@ -1,0 +1,137 @@
+Below is a roadmap and code examples for adding **Predictive Modeling** capabilities—trajectory forecasting, threshold projections, confidence intervals, driver analysis, and what-if scenarios—to your Narrative Complexity Analyzer.
+
+## Summary  
+You can leverage specialized time-series libraries such as **Prophet** for tractable forecasts with built-in uncertainty quantification  ([Time Series Forecasting with Prophet: An High Level mini-Guide ...](https://medium.com/%40nachi-keta/time-series-forecasting-with-prophet-an-high-level-mini-guide-and-optimization-tips-db02019d6de2?utm_source=chatgpt.com)), **Darts** for a unified API across classical and deep models  ([Time Series Made Easy in Python — darts documentation](https://unit8co.github.io/darts/?utm_source=chatgpt.com)), and **DeepAR** (via GluonTS) for multi-series neural forecasting  ([DeepAR Forecasting Algorithm | GeeksforGeeks](https://www.geeksforgeeks.org/deepar-forecasting-algorithm/?utm_source=chatgpt.com)).  For threshold predictions, utilize **exceedance probability forecasting** to estimate the chance of narratives crossing critical complexity levels  ([An Introduction to Exceedance Probability Forecasting - Medium](https://medium.com/towards-data-science/an-introduction-to-exceedance-probability-forecasting-4c96c0e7772c?utm_source=chatgpt.com)).  Confidence intervals come out-of-the-box in both Prophet and Statsmodels state-space models  ([Forecasting in statsmodels](https://www.statsmodels.org/stable/examples/notebooks/generated/statespace_forecasting.html?utm_source=chatgpt.com), [confidence and prediction intervals with StatsModels - Stack Overflow](https://stackoverflow.com/questions/17559408/confidence-and-prediction-intervals-with-statsmodels?utm_source=chatgpt.com)).  Identify key complexity drivers via **permutation feature importance** or **tsfresh** automated feature extraction  ([Feature importances with a forest of trees - Scikit-learn](https://scikit-learn.org/stable/auto_examples/ensemble/plot_forest_importances.html?utm_source=chatgpt.com), [Creating Powerful Time Series Features with tsfresh - GeeksforGeeks](https://www.geeksforgeeks.org/creating-powerful-time-series-features-with-tsfresh/?utm_source=chatgpt.com)).  Finally, deploy **Monte Carlo simulations** for what-if scenario planning and **CausalImpact** for intervention analysis  ([Scenario Analysis in Python: Advanced Investment Risk ... - Medium](https://medium.com/coinmonks/scenario-analysis-in-python-advanced-investment-risk-analysis-d7d550237295?utm_source=chatgpt.com), [WillianFuks/tfcausalimpact: Python Causal Impact ... - GitHub](https://github.com/WillianFuks/tfcausalimpact?utm_source=chatgpt.com)).
+
+---
+
+## 1. AI-Powered Complexity Trajectory Forecasting  
+
+### 1.1 Facebook Prophet  
+```python
+from fbprophet import Prophet
+import pandas as pd
+
+df = pd.DataFrame({
+    'ds': timestamps,       # datetime list
+    'y': complexity_scores  # daily complexity metric
+})
+m = Prophet(interval_width=0.8)  # 80% confidence interval
+m.fit(df)
+future = m.make_future_dataframe(periods=30)
+forecast = m.predict(future)
+```
+Prophet automatically estimates trend and seasonality, and returns prediction intervals via `yhat_lower` and `yhat_upper`  ([Time Series Forecasting with Prophet: An High Level mini-Guide ...](https://medium.com/%40nachi-keta/time-series-forecasting-with-prophet-an-high-level-mini-guide-and-optimization-tips-db02019d6de2?utm_source=chatgpt.com)).
+
+### 1.2 Darts  
+```python
+from darts import TimeSeries
+from darts.models import RNNModel
+
+series = TimeSeries.from_times_and_values(timestamps, complexity_scores)
+model = RNNModel(model='LSTM', input_chunk_length=14, output_chunk_length=7)
+model.fit(series)
+forecast = model.predict(30)
+```
+Darts provides a scikit-learn-style API for classic (ARIMA) and neural (LSTM, TCN) models under one roof  ([Time Series Made Easy in Python — darts documentation](https://unit8co.github.io/darts/?utm_source=chatgpt.com)).
+
+### 1.3 DeepAR (GluonTS)  
+```python
+from gluonts.model.deepar import DeepAREstimator
+from gluonts.trainer import Trainer
+from darts import TimeSeries
+
+# Convert to GluonTS format then:
+estimator = DeepAREstimator(
+    freq="D",
+    prediction_length=30,
+    trainer=Trainer(epochs=20)
+)
+predictor = estimator.train(training_data)
+forecast_it, ts_it = predictor.predict(test_data)
+```
+DeepAR excels at forecasting multiple related narrative streams together, capturing shared patterns  ([DeepAR Forecasting Algorithm | GeeksforGeeks](https://www.geeksforgeeks.org/deepar-forecasting-algorithm/?utm_source=chatgpt.com)).
+
+---
+
+## 2. Projected Timeline to Critical Thresholds  
+
+### 2.1 Exceedance Probability Forecasting  
+```python
+# After obtaining forecasted series with Prophet or Darts:
+threshold = critical_value
+prob_exceed = (forecast['yhat'] > threshold).mean()
+```
+Exceedance probability methods estimate the chance a metric will surpass a defined threshold in the forecast horizon  ([An Introduction to Exceedance Probability Forecasting - Medium](https://medium.com/towards-data-science/an-introduction-to-exceedance-probability-forecasting-4c96c0e7772c?utm_source=chatgpt.com)).
+
+---
+
+## 3. Confidence Intervals for Predictions  
+
+### 3.1 In Prophet  
+Prophet’s `predict()` yields `yhat_lower` and `yhat_upper`, representing the lower and upper bounds of the chosen prediction interval  ([Time Series Forecasting with Prophet: An High Level mini-Guide ...](https://medium.com/%40nachi-keta/time-series-forecasting-with-prophet-an-high-level-mini-guide-and-optimization-tips-db02019d6de2?utm_source=chatgpt.com)).
+
+### 3.2 In Statsmodels  
+```python
+import statsmodels.api as sm
+
+model = sm.tsa.SARIMAX(df.y, order=(1,1,1)).fit()
+pred = model.get_forecast(steps=30)
+ci = pred.conf_int()  # DataFrame with lower & upper
+```
+State-space models in Statsmodels support confidence and prediction intervals via `get_forecast().conf_int()`  ([Forecasting in statsmodels](https://www.statsmodels.org/stable/examples/notebooks/generated/statespace_forecasting.html?utm_source=chatgpt.com), [confidence and prediction intervals with StatsModels - Stack Overflow](https://stackoverflow.com/questions/17559408/confidence-and-prediction-intervals-with-statsmodels?utm_source=chatgpt.com)).
+
+---
+
+## 4. Key Factor Identification for Complexity Drivers  
+
+### 4.1 Permutation Feature Importance (scikit-learn)  
+```python
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.inspection import permutation_importance
+
+rf = RandomForestRegressor().fit(X_features, y_complexity)
+imp = permutation_importance(rf, X_features, y_complexity, n_repeats=10)
+```
+Permutation importance quantifies each feature’s impact on forecast error by shuffling inputs  ([Feature importances with a forest of trees - Scikit-learn](https://scikit-learn.org/stable/auto_examples/ensemble/plot_forest_importances.html?utm_source=chatgpt.com)).
+
+### 4.2 Automated Feature Extraction (tsfresh)  
+```python
+from tsfresh import extract_features
+
+extracted = extract_features(df_timeseries, column_id="narrative_id", column_sort="timestamp")
+```
+tsfresh can generate hundreds of time-series features (e.g., mean, autocorrelation) to feed into a driver analysis model  ([Creating Powerful Time Series Features with tsfresh - GeeksforGeeks](https://www.geeksforgeeks.org/creating-powerful-time-series-features-with-tsfresh/?utm_source=chatgpt.com)).
+
+---
+
+## 5. What-If Scenario Modeling for Intervention Planning  
+
+### 5.1 Monte Carlo Simulation  
+```python
+import numpy as np
+
+def simulate_trajectories(mu, sigma, steps, sims=1000):
+    return np.cumsum(mu + sigma * np.random.randn(sims, steps), axis=1)
+
+simulated = simulate_trajectories(pred_mean, pred_std, 30)
+```
+Monte Carlo generates randomized future paths to assess variability and plan interventions under uncertainty  ([Scenario Analysis in Python: Advanced Investment Risk ... - Medium](https://medium.com/coinmonks/scenario-analysis-in-python-advanced-investment-risk-analysis-d7d550237295?utm_source=chatgpt.com)).
+
+### 5.2 CausalImpact (Google’s Bayesian Structural Time Series)  
+```python
+from causalimpact import CausalImpact
+
+ci = CausalImpact(data, pre_period, post_period)
+ci.summary()
+```
+CausalImpact estimates the effect of an intervention by comparing observed vs. counterfactual forecasted series  ([WillianFuks/tfcausalimpact: Python Causal Impact ... - GitHub](https://github.com/WillianFuks/tfcausalimpact?utm_source=chatgpt.com)).
+
+---
+
+**Next Steps:**  
+- Integrate these modules into your Flask service as new endpoints (e.g., `/forecast`, `/drivers`, `/scenario`)  
+- Persist training data and forecasts in a time-series database (InfluxDB, TimescaleDB)  
+- Schedule regular retraining and rebuild trajectory models via Celery or Airflow  
+
+This architecture equips you with AI-driven forecasting, clear uncertainty quantification, driver insights, and scenario planning—transforming complexity analysis into a proactive decision-support system.
