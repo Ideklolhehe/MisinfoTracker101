@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Correlation Analysis{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Narrative Correlation Analysis</h1>
+        <a href="{{ url_for('comparative.dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Comparative Dashboard
+        </a>
+    </div>
+    
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        <i class="fas fa-exclamation-triangle mr-2"></i> {{ error }}
+    </div>
+    {% endif %}
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Select Narratives for Correlation Analysis</h5>
+        </div>
+        <div class="card-body">
+            <p>Correlation analysis measures how closely two narratives follow each other in their propagation patterns over time. A high correlation may indicate coordinated campaigns or causal relationships between narratives.</p>
+            
+            <form method="POST" action="{{ url_for('comparative.correlation') }}">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="narrative_id_1" class="form-label">First Narrative:</label>
+                            <select name="narrative_id_1" id="narrative_id_1" class="form-select" required>
+                                <option value="" disabled {% if not narrative_1 %}selected{% endif %}>Select narrative</option>
+                                {% for narrative in narratives %}
+                                <option value="{{ narrative.id }}" {% if narrative_1 and narrative_1.id == narrative.id %}selected{% endif %}>
+                                    {{ narrative.title }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="narrative_id_2" class="form-label">Second Narrative:</label>
+                            <select name="narrative_id_2" id="narrative_id_2" class="form-select" required>
+                                <option value="" disabled {% if not narrative_2 %}selected{% endif %}>Select narrative</option>
+                                {% for narrative in narratives %}
+                                <option value="{{ narrative.id }}" {% if narrative_2 and narrative_2.id == narrative.id %}selected{% endif %}>
+                                    {{ narrative.title }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sync-alt mr-2"></i> Analyze Correlation
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    {% if correlation_data %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Correlation Results</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">Correlation Coefficient</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            <span class="display-4">{{ "%.2f"|format(correlation_data.correlation) }}</span>
+                            <p class="mt-2 mb-0">
+                                <span class="badge 
+                                    {% if correlation_data.correlation_strength == 'Very Strong' %}bg-success
+                                    {% elif correlation_data.correlation_strength == 'Strong' %}bg-primary
+                                    {% elif correlation_data.correlation_strength == 'Moderate' %}bg-info
+                                    {% elif correlation_data.correlation_strength == 'Weak' %}bg-warning
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ correlation_data.correlation_strength }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-info">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0">Lead/Lag Relationship</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            <p class="card-text">
+                                {% if correlation_data.lag_analysis.lag > 0 %}
+                                <strong>{{ narrative_1.title }}</strong> leads <strong>{{ narrative_2.title }}</strong> by {{ correlation_data.lag_analysis.lag }} days
+                                {% elif correlation_data.lag_analysis.lag < 0 %}
+                                <strong>{{ narrative_2.title }}</strong> leads <strong>{{ narrative_1.title }}</strong> by {{ -correlation_data.lag_analysis.lag }} days
+                                {% else %}
+                                No significant lead/lag relationship detected
+                                {% endif %}
+                            </p>
+                            <p class="mb-0">
+                                <span class="badge bg-info">{{ correlation_data.lag_analysis.significance|title }} Significance</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0">Shared Sources</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            <span class="display-5">{{ correlation_data.shared_sources.count }}</span>
+                            <p class="mb-0">
+                                <small>
+                                    {{ "%.1f"|format(correlation_data.shared_sources.percentage1 * 100) }}% of Narrative 1's sources<br>
+                                    {{ "%.1f"|format(correlation_data.shared_sources.percentage2 * 100) }}% of Narrative 2's sources
+                                </small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="chart-container" class="mb-4">
+                {{ correlation_data.chart_html|safe }}
+            </div>
+            
+            {% if correlation_data.shared_sources.sources %}
+            <h5>Shared Sources</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Source ID</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for source in correlation_data.shared_sources.sources %}
+                        <tr>
+                            <td>{{ source.id }}</td>
+                            <td>{{ source.name }}</td>
+                            <td>{{ source.type }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            
+            <div class="alert alert-info mt-4">
+                <i class="fas fa-info-circle mr-2"></i>
+                <strong>Interpretation:</strong>
+                {% if correlation_data.correlation > 0.6 %}
+                These narratives show a strong correlation, suggesting a possible coordinated campaign or causal relationship. 
+                {% if correlation_data.lag_analysis.lag != 0 %}
+                The presence of a lead/lag relationship suggests that one narrative may be influencing the other.
+                {% endif %}
+                {% elif correlation_data.correlation > 0.3 %}
+                These narratives show a moderate correlation. While there may be some relationship between them, it is not conclusive evidence of coordination.
+                {% else %}
+                These narratives show a weak correlation, suggesting they are likely independent of each other.
+                {% endif %}
+                
+                {% if correlation_data.shared_sources.count > 3 %}
+                The significant number of shared sources ({{ correlation_data.shared_sources.count }}) further supports the possibility of coordination.
+                {% elif correlation_data.shared_sources.count > 0 %}
+                The limited number of shared sources suggests some overlap but not necessarily coordinated action.
+                {% else %}
+                The absence of shared sources suggests these narratives are being promoted through different channels.
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-print mr-2"></i> Print Results
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Validate that two different narratives are selected
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const narrative1 = document.getElementById('narrative_id_1').value;
+            const narrative2 = document.getElementById('narrative_id_2').value;
+            
+            if (narrative1 === narrative2) {
+                e.preventDefault();
+                alert('Please select two different narratives for correlation analysis.');
+            }
+        });
+    });
+</script>
+{% endblock %}

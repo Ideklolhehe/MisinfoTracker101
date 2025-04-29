@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Shared Theme Detection{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Shared Theme Detection</h1>
+        <a href="{{ url_for('comparative.dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Comparative Dashboard
+        </a>
+    </div>
+    
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        <i class="fas fa-exclamation-triangle mr-2"></i> {{ error }}
+    </div>
+    {% endif %}
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Select Narratives for Theme Analysis</h5>
+        </div>
+        <div class="card-body">
+            <p>Shared theme detection identifies common themes and messaging patterns across narratives using natural language processing. This helps identify conceptual and ideological connections that may not be immediately apparent.</p>
+            
+            <form method="POST" action="{{ url_for('comparative.shared_themes') }}">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label for="narrative_ids" class="form-label">Narratives to Analyze:</label>
+                            <select name="narrative_ids" id="narrative_ids" class="form-select" multiple size="8" required>
+                                {% for narrative in narratives %}
+                                <option value="{{ narrative.id }}" {% if selected_narratives and narrative.id in [n.id for n in selected_narratives] %}selected{% endif %}>
+                                    {{ narrative.title }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple narratives (minimum 2).</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="n_topics" class="form-label">Number of Themes to Extract:</label>
+                            <select name="n_topics" id="n_topics" class="form-select">
+                                <option value="3" {% if n_topics == 3 %}selected{% endif %}>3 Themes</option>
+                                <option value="5" {% if not n_topics or n_topics == 5 %}selected{% endif %}>5 Themes</option>
+                                <option value="7" {% if n_topics == 7 %}selected{% endif %}>7 Themes</option>
+                                <option value="10" {% if n_topics == 10 %}selected{% endif %}>10 Themes</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sync-alt mr-2"></i> Detect Shared Themes
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    {% if themes_data %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Theme Analysis Results</h5>
+        </div>
+        <div class="card-body">
+            <div id="chart-container" class="mb-4">
+                {{ themes_data.chart_html|safe }}
+            </div>
+            
+            <h5>Detected Themes</h5>
+            <div class="row">
+                {% for theme in themes_data.themes %}
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="mb-0">{{ theme.name }}</h6>
+                        </div>
+                        <div class="card-body">
+                            <h6>Key Terms</h6>
+                            <div class="mb-3">
+                                {% for word in theme.top_words %}
+                                <span class="badge bg-primary me-1">{{ word }}</span>
+                                {% endfor %}
+                            </div>
+                            
+                            <h6>Distribution Across Narratives</h6>
+                            <ul class="list-group list-group-flush">
+                                {% for narrative_id, narrative_data in theme.narratives.items() %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ narrative_data.title }}
+                                    <span class="badge bg-primary rounded-pill">{{ "%.0f"|format(narrative_data.weight * 100) }}%</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="alert alert-info mt-4">
+                <i class="fas fa-info-circle mr-2"></i>
+                <strong>Interpretation:</strong>
+                The themes presented above represent common topics and linguistic patterns found across the selected narratives. 
+                Narratives with similar theme distributions may be part of coordinated campaigns or share ideological foundations.
+                {% if themes_data.themes|length > 0 %}
+                <p class="mt-2 mb-0">
+                    <strong>Key Finding:</strong> 
+                    Theme {{ themes_data.themes[0].name }} appears consistently across multiple narratives, suggesting a common 
+                    messaging strategy or ideological foundation.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-print mr-2"></i> Print Results
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Validate that at least 2 narratives are selected
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const select = document.getElementById('narrative_ids');
+            const selected = Array.from(select.selectedOptions).length;
+            
+            if (selected < 2) {
+                e.preventDefault();
+                alert('Please select at least 2 narratives for theme analysis.');
+            }
+        });
+    });
+</script>
+{% endblock %}

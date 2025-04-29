@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Growth Rate Analysis{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Narrative Growth Rate Analysis</h1>
+        <a href="{{ url_for('comparative.dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Comparative Dashboard
+        </a>
+    </div>
+    
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        <i class="fas fa-exclamation-triangle mr-2"></i> {{ error }}
+    </div>
+    {% endif %}
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Growth Rate Analysis for "{{ narrative.title }}"</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <p>{{ narrative.description }}</p>
+                    <p>
+                        <strong>First detected:</strong> {{ growth_data.narrative.first_detected }}<br>
+                        <strong>Status:</strong> 
+                        <span class="badge {% if narrative.status == 'active' %}bg-success{% elif narrative.status == 'archived' %}bg-secondary{% else %}bg-danger{% endif %}">
+                            {{ narrative.status }}
+                        </span>
+                    </p>
+                </div>
+                <div class="col-md-4">
+                    <form method="POST" action="{{ url_for('comparative.growth_rate', narrative_id=narrative.id) }}" class="card border-light">
+                        <div class="card-header">Time Period</div>
+                        <div class="card-body">
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="time_period" id="week" value="7d" {% if time_period == '7d' %}checked{% endif %} autocomplete="off">
+                                <label class="btn btn-outline-primary" for="week">Week</label>
+
+                                <input type="radio" class="btn-check" name="time_period" id="month" value="30d" {% if time_period == '30d' %}checked{% endif %} autocomplete="off">
+                                <label class="btn btn-outline-primary" for="month">Month</label>
+
+                                <input type="radio" class="btn-check" name="time_period" id="quarter" value="90d" {% if time_period == '90d' %}checked{% endif %} autocomplete="off">
+                                <label class="btn btn-outline-primary" for="quarter">Quarter</label>
+
+                                <input type="radio" class="btn-check" name="time_period" id="all" value="all" {% if time_period == 'all' %}checked{% endif %} autocomplete="off">
+                                <label class="btn btn-outline-primary" for="all">All</label>
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-2 w-100">Update Analysis</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-white bg-primary h-100">
+                        <div class="card-body text-center">
+                            <h2 class="display-5">{{ growth_data.avg_growth_rate|float|round(2)|abs }}%</h2>
+                            <h6 class="card-title">Average Daily Growth</h6>
+                            {% if growth_data.avg_growth_rate > 0 %}
+                            <i class="fas fa-arrow-up fa-2x"></i>
+                            {% else %}
+                            <i class="fas fa-arrow-down fa-2x"></i>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card h-100 
+                        {% if growth_data.status == 'accelerating' %}text-white bg-danger
+                        {% elif growth_data.status == 'decelerating' %}text-white bg-success
+                        {% else %}text-white bg-secondary{% endif %}">
+                        <div class="card-body text-center">
+                            <h2 class="display-5">
+                                {% if growth_data.status == 'accelerating' %}
+                                <i class="fas fa-angle-double-up"></i>
+                                {% elif growth_data.status == 'decelerating' %}
+                                <i class="fas fa-angle-double-down"></i>
+                                {% else %}
+                                <i class="fas fa-arrows-alt-h"></i>
+                                {% endif %}
+                            </h2>
+                            <h6 class="card-title">Trend</h6>
+                            <p class="card-text">{{ growth_data.status|title }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-success h-100">
+                        <div class="card-body text-center">
+                            <h2 class="display-5">{{ growth_data.cumulative_counts[-1] }}</h2>
+                            <h6 class="card-title">Total Instances</h6>
+                            <p class="card-text">Over {{ growth_data.time_points|length }} days</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-info h-100">
+                        <div class="card-body text-center">
+                            {% set last_week = growth_data.daily_counts[-7:] %}
+                            <h2 class="display-5">{{ sum(last_week) }}</h2>
+                            <h6 class="card-title">Last 7 Days</h6>
+                            <p class="card-text">New instances</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="chart-container" class="mb-4">
+                {{ growth_data.chart_html|safe }}
+            </div>
+            
+            <div class="alert {% if growth_data.status == 'accelerating' %}alert-danger{% elif growth_data.status == 'decelerating' %}alert-success{% else %}alert-warning{% endif %} mt-4">
+                <i class="fas fa-info-circle mr-2"></i>
+                <strong>Interpretation:</strong>
+                {% if growth_data.status == 'accelerating' %}
+                This narrative is gaining momentum with an accelerating growth trend. Consider immediate counter-narrative deployment to address this narrative before it spreads further.
+                {% elif growth_data.status == 'decelerating' %}
+                This narrative's spread is slowing down. Existing counter-measures may be working effectively, but continued monitoring is recommended.
+                {% else %}
+                This narrative shows a stable growth pattern. Regular monitoring and preemptive counter-narrative strategies are advised.
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <div class="btn-group">
+                <a href="{{ url_for('counter_narrative.generate_counter', narrative_id=narrative.id) }}" class="btn btn-success">
+                    <i class="fas fa-reply mr-2"></i> Generate Counter Narrative
+                </a>
+                <button class="btn btn-primary" onclick="window.print()">
+                    <i class="fas fa-print mr-2"></i> Print Analysis
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Raw Growth Data</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Daily Count</th>
+                            <th>Cumulative Count</th>
+                            <th>Growth Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for i in range(growth_data.time_points|length) %}
+                        <tr>
+                            <td>{{ growth_data.time_points[i] }}</td>
+                            <td>{{ growth_data.daily_counts[i] }}</td>
+                            <td>{{ growth_data.cumulative_counts[i] }}</td>
+                            <td>{{ "%.2f"|format(growth_data.growth_rates[i] * 100) }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-submit form when time period changes
+        const radioButtons = document.querySelectorAll('input[name="time_period"]');
+        radioButtons.forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                this.closest('form').submit();
+            });
+        });
+    });
+</script>
+{% endblock %}

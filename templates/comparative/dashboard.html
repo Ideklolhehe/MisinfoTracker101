@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Comparative Analysis Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Comparative Analysis Dashboard</h1>
+    
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Comparative Analysis</strong> allows you to examine relationships between narratives, detect patterns, and identify potential coordinated campaigns.
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Side-by-Side Comparison</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p>Compare multiple narratives across different dimensions such as threat level, propagation rate, and complexity score.</p>
+                    <p>This analysis helps identify which narratives are most concerning based on multiple factors.</p>
+                    <div class="mt-auto text-end">
+                        <a href="{{ url_for('comparative.side_by_side') }}" class="btn btn-primary">
+                            <i class="fas fa-columns me-2"></i> Compare Narratives
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Growth Rate Analysis</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p>Analyze how quickly a narrative is spreading over time and whether it's accelerating or decelerating.</p>
+                    <p>Use this to prioritize counter-narrative responses based on which narratives are gaining momentum.</p>
+                    <div class="mt-auto">
+                        <form class="row" action="{{ url_for('comparative.growth_rate', narrative_id=1) }}">
+                            <div class="col-md-8">
+                                <select name="narrative_id" id="growthNarrativeSelect" class="form-select" required>
+                                    <option value="" disabled selected>Select a narrative</option>
+                                    {% for narrative in narratives %}
+                                    <option value="{{ narrative.id }}">{{ narrative.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary w-100" id="analyzeGrowthBtn" disabled>
+                                    <i class="fas fa-chart-line me-2"></i> Analyze
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Correlation Analysis</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p>Measure how closely two narratives follow each other in their propagation patterns over time.</p>
+                    <p>High correlation may indicate coordinated campaigns or causal relationships between narratives.</p>
+                    <div class="mt-auto text-end">
+                        <a href="{{ url_for('comparative.correlation') }}" class="btn btn-primary">
+                            <i class="fas fa-project-diagram me-2"></i> Analyze Correlation
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Shared Theme Detection</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p>Identify common themes and messaging patterns across narratives using natural language processing.</p>
+                    <p>This helps identify conceptual and ideological connections that may not be immediately apparent.</p>
+                    <div class="mt-auto text-end">
+                        <a href="{{ url_for('comparative.shared_themes') }}" class="btn btn-primary">
+                            <i class="fas fa-sitemap me-2"></i> Detect Shared Themes
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Coordinated Source Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <p>Map the network of sources spreading multiple narratives to identify amplification clusters and coordination patterns.</p>
+                    <p>This helps uncover hidden connections between information sources and potential coordinated campaigns.</p>
+                    <div class="text-end">
+                        <a href="{{ url_for('comparative.coordinate_sources') }}" class="btn btn-primary">
+                            <i class="fas fa-network-wired me-2"></i> Analyze Coordinated Sources
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Enable/disable growth rate analysis button based on selection
+        const narrativeSelect = document.getElementById('growthNarrativeSelect');
+        const analyzeButton = document.getElementById('analyzeGrowthBtn');
+        
+        narrativeSelect.addEventListener('change', function() {
+            if (this.value) {
+                analyzeButton.disabled = false;
+            } else {
+                analyzeButton.disabled = true;
+            }
+        });
+        
+        // Update form action when narrative is selected
+        narrativeSelect.addEventListener('change', function() {
+            if (this.value) {
+                const form = this.closest('form');
+                form.action = "{{ url_for('comparative.growth_rate', narrative_id=0) }}".replace('/0', '/' + this.value);
+            }
+        });
+    });
+</script>
+{% endblock %}

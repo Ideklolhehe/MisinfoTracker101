@@ -89,6 +89,10 @@ with app.app_context():
     from routes.prediction import prediction_bp
     from routes.network import network_bp
     
+    # Import counter-narrative and comparative analysis blueprints
+    from routes.counter_narrative import counter_narrative_bp
+    from routes.comparative import comparative_bp
+    
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(api_bp, url_prefix='/api')
@@ -110,6 +114,10 @@ with app.app_context():
     app.register_blueprint(clusters_bp)  # Routes include '/clusters'
     app.register_blueprint(prediction_bp)  # Routes include '/prediction'
     app.register_blueprint(network_bp)  # Routes include '/network'
+    
+    # Register counter-narrative and comparative analysis blueprints
+    app.register_blueprint(counter_narrative_bp)  # Routes include '/counter-narrative'
+    app.register_blueprint(comparative_bp)  # Routes include '/comparative'
     
     # Initialize external API clients
     from services.api_credential_manager import APICredentialManager

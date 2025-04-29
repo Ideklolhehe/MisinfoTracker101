@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Coordinated Source Analysis{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Coordinated Source Analysis</h1>
+        <a href="{{ url_for('comparative.dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Comparative Dashboard
+        </a>
+    </div>
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Select Narratives for Network Analysis</h5>
+        </div>
+        <div class="card-body">
+            <p>Coordinated source analysis maps the network of sources spreading multiple narratives to identify amplification clusters and coordination patterns. This helps uncover hidden connections between information sources and potential coordinated campaigns.</p>
+            
+            <form method="POST" action="{{ url_for('comparative.coordinate_sources') }}">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="analysis_type" id="globalAnalysis" value="global" {% if not selected_narratives %}checked{% endif %}>
+                        <label class="form-check-label" for="globalAnalysis">
+                            <strong>Global Network Analysis</strong> - Analyze coordination across all narratives
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="analysis_type" id="specificAnalysis" value="specific" {% if selected_narratives %}checked{% endif %}>
+                        <label class="form-check-label" for="specificAnalysis">
+                            <strong>Specific Narrative Analysis</strong> - Analyze coordination for selected narratives
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="narrativeSelection" class="mb-3" {% if not selected_narratives %}style="display: none;"{% endif %}>
+                    <label for="narrative_ids" class="form-label">Narratives to Analyze:</label>
+                    <select name="narrative_ids" id="narrative_ids" class="form-select" multiple size="6">
+                        {% for narrative in narratives %}
+                        <option value="{{ narrative.id }}" {% if selected_narratives and narrative.id in [n.id for n in selected_narratives] %}selected{% endif %}>
+                            {{ narrative.title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Hold Ctrl/Cmd to select multiple narratives.</div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sync-alt mr-2"></i> Analyze Coordination
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    {% if source_data %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                Network Analysis Results
+                {% if selected_narratives %}
+                for {{ selected_narratives|length }} Selected Narratives
+                {% else %}
+                for Global Network
+                {% endif %}
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">Sources</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            <span class="display-4">{{ source_data.nodes|length }}</span>
+                            <p class="mb-0">Total Sources</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0">Connections</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            <span class="display-4">{{ source_data.edges|length }}</span>
+                            <p class="mb-0">Source Connections</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-info">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0">Communities</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            <span class="display-4">{{ source_data.communities|length }}</span>
+                            <p class="mb-0">Source Clusters</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-white">
+                            <h6 class="mb-0">Network Density</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            {% set node_count = source_data.nodes|length %}
+                            {% set max_edges = (node_count * (node_count - 1)) / 2 %}
+                            {% set density = (source_data.edges|length / max_edges) if max_edges > 0 else 0 %}
+                            <span class="display-4">{{ "%.2f"|format(density) }}</span>
+                            <p class="mb-0">Connection Density</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="chart-container" class="mb-4">
+                {{ source_data.chart_html|safe }}
+            </div>
+            
+            <h5>Detected Communities</h5>
+            <div class="accordion" id="communitiesAccordion">
+                {% for community in source_data.communities %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="communityHeading{{ community.id }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#communityCollapse{{ community.id }}" aria-expanded="false" aria-controls="communityCollapse{{ community.id }}">
+                            {{ community.name }} ({{ community.nodes|length }} sources)
+                        </button>
+                    </h2>
+                    <div id="communityCollapse{{ community.id }}" class="accordion-collapse collapse" aria-labelledby="communityHeading{{ community.id }}" data-bs-parent="#communitiesAccordion">
+                        <div class="accordion-body">
+                            <p><strong>Source Type:</strong> {{ community.source_type }}</p>
+                            <p><strong>Modularity Score:</strong> {{ "%.3f"|format(community.modularity) }}</p>
+                            
+                            <h6>Sources in Community</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Source ID</th>
+                                            <th>Name</th>
+                                            <th>Narrative Count</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for node_id in community.nodes %}
+                                            {% for node in source_data.nodes %}
+                                                {% if node.id == node_id %}
+                                                <tr>
+                                                    <td>{{ node.id }}</td>
+                                                    <td>{{ node.name }}</td>
+                                                    <td>{{ node.narrative_count }}</td>
+                                                </tr>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <h5 class="mt-4">Strongest Connections</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Source 1</th>
+                            <th>Source 2</th>
+                            <th>Weight</th>
+                            <th>Shared Narratives</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for edge in source_data.edges|sort(attribute='weight', reverse=True)[:10] %}
+                            {% set source1 = None %}
+                            {% set source2 = None %}
+                            {% for node in source_data.nodes %}
+                                {% if node.id == edge.source %}
+                                    {% set source1 = node %}
+                                {% endif %}
+                                {% if node.id == edge.target %}
+                                    {% set source2 = node %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if source1 and source2 %}
+                            <tr>
+                                <td>{{ source1.name }}</td>
+                                <td>{{ source2.name }}</td>
+                                <td>{{ edge.weight }}</td>
+                                <td>{{ edge.shared_narratives|length }}</td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="alert alert-info mt-4">
+                <i class="fas fa-info-circle mr-2"></i>
+                <strong>Interpretation:</strong>
+                {% if source_data.nodes|length > 0 %}
+                This network analysis reveals
+                {% if source_data.communities|length > 1 %}
+                {{ source_data.communities|length }} distinct communities of sources that frequently share narratives, suggesting potential coordination in information dissemination.
+                {% else %}
+                a single community of sources sharing narratives, which may indicate a unified messaging approach.
+                {% endif %}
+                
+                {% if source_data.edges|length > (source_data.nodes|length * 0.5) %}
+                The high connection density suggests significant coordination between sources.
+                {% else %}
+                The relatively low connection density suggests some coordination, but many sources operate independently.
+                {% endif %}
+                {% else %}
+                The analysis did not find sufficient sources or connections to identify coordination patterns.
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-print mr-2"></i> Print Results
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const globalAnalysis = document.getElementById('globalAnalysis');
+        const specificAnalysis = document.getElementById('specificAnalysis');
+        const narrativeSelection = document.getElementById('narrativeSelection');
+        
+        // Toggle narrative selection based on analysis type
+        function toggleNarrativeSelection() {
+            if (specificAnalysis.checked) {
+                narrativeSelection.style.display = 'block';
+            } else {
+                narrativeSelection.style.display = 'none';
+            }
+        }
+        
+        globalAnalysis.addEventListener('change', toggleNarrativeSelection);
+        specificAnalysis.addEventListener('change', toggleNarrativeSelection);
+        
+        // Validate form submission
+        document.querySelector('form').addEventListener('submit', function(e) {
+            if (specificAnalysis.checked) {
+                const select = document.getElementById('narrative_ids');
+                const selected = Array.from(select.selectedOptions).length;
+                
+                if (selected === 0) {
+                    e.preventDefault();
+                    alert('Please select at least one narrative for specific analysis.');
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
