@@ -24,7 +24,8 @@ from app import db
 from models import (
     DetectedNarrative, 
     NarrativeInstance, 
-    CounterMessage
+    CounterMessage,
+    InformationSource
 )
 from utils.time_series import TimeSeriesAnalyzer
 from utils.concurrency import run_in_thread
@@ -70,10 +71,6 @@ class PredictiveModeling:
                 'random_state': 42
             }
         }
-        
-        # Import InformationSource model here to avoid circular imports
-        from models import InformationSource
-        self.InformationSource = InformationSource
     
     def get_narrative_time_series(self, narrative_id: int, days: int = 30) -> pd.DataFrame:
         """
@@ -1664,10 +1661,10 @@ class PredictiveModeling:
         """
         try:
             # Query sources with lower reliability scores
-            sources = self.InformationSource.query.filter_by(
+            sources = InformationSource.query.filter_by(
                 status='active'
             ).order_by(
-                self.InformationSource.reliability_score.asc()
+                InformationSource.reliability_score.asc()
             ).limit(limit).all()
             
             result = []
@@ -1743,7 +1740,7 @@ class PredictiveModeling:
         """
         try:
             # Get the source
-            source = self.InformationSource.query.get(source_id)
+            source = InformationSource.query.get(source_id)
             if not source:
                 logger.error(f"Information source {source_id} not found")
                 return {
