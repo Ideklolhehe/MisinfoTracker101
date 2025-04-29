@@ -1,621 +1,297 @@
 """
-Data scaling utilities for handling large volumes of real-time data.
-This module provides functions for efficient data processing, caching,
-and management of large datasets from internet sources.
+Data scaling utilities for the CIVILIAN system.
+These utilities help prepare and scale data from internet sources for analysis.
 """
 
+import re
 import logging
-import os
-import time
 import json
-import hashlib
-import threading
-import sqlite3
-from typing import Dict, List, Any, Optional, Callable, Union, Generator
-from datetime import datetime, timedelta
-import pickle
-from collections import defaultdict, deque
+from datetime import datetime
+from typing import Dict, List, Any, Optional, Union
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
-# Constants
-CACHE_DIR = "./storage/data_cache"
-DB_PATH = f"{CACHE_DIR}/scaling_cache.db"
-MAX_CACHE_AGE = 86400  # 24 hours in seconds
-CACHE_CLEANUP_INTERVAL = 3600  # 1 hour in seconds
-DEFAULT_BATCH_SIZE = 100
-DEFAULT_PARALLEL_PROCESSES = 5
-DEFAULT_MAX_QUEUE_SIZE = 10000
-
-# Ensure cache directory exists
-os.makedirs(CACHE_DIR, exist_ok=True)
-
-
-class DataCache:
-    """Thread-safe cache for data storage and retrieval."""
+class DataScaler:
+    """A utility class for scaling and normalizing data from various sources."""
     
-    def __init__(self, namespace: str = "default", max_size: int = 1000, ttl: int = MAX_CACHE_AGE):
+    @staticmethod
+    def clean_text(text: str, remove_urls: bool = True, 
+                   remove_html: bool = True, lowercase: bool = False) -> str:
         """
-        Initialize the data cache.
+        Clean text data by removing unwanted elements.
         
         Args:
-            namespace: Cache namespace for isolation
-            max_size: Maximum number of items to store in memory
-            ttl: Time to live in seconds for cached items
-        """
-        self.namespace = namespace
-        self.max_size = max_size
-        self.ttl = ttl
-        self.cache = {}
-        self.access_times = {}
-        self.cache_lock = threading.Lock()
-        
-        # Initialize SQLite cache if needed
-        self._init_db_cache()
-        
-        # Start cleanup thread
-        self.cleanup_thread = threading.Thread(target=self._cleanup_thread, daemon=True)
-        self.cleanup_thread.start()
-        
-        logger.info(f"DataCache initialized: namespace={namespace}, max_size={max_size}")
-    
-    def _init_db_cache(self):
-        """Initialize the SQLite cache database."""
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            
-            # Create cache table if it doesn't exist
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS data_cache (
-                    namespace TEXT,
-                    key TEXT,
-                    value BLOB,
-                    created_at REAL,
-                    expires_at REAL,
-                    PRIMARY KEY (namespace, key)
-                )
-            ''')
-            
-            # Create index on expiration
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_expires_at ON data_cache (expires_at)
-            ''')
-            
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Error initializing cache database: {e}")
-    
-    def _key_to_hash(self, key: str) -> str:
-        """Convert key to a hash for storage."""
-        return hashlib.md5(f"{self.namespace}:{key}".encode()).hexdigest()
-    
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        """
-        Set a value in the cache.
-        
-        Args:
-            key: Cache key
-            value: Value to store
-            ttl: Custom TTL for this value (None for default)
+            text: Input text to clean
+            remove_urls: Whether to remove URLs
+            remove_html: Whether to remove HTML tags
+            lowercase: Whether to convert to lowercase
             
         Returns:
-            True if successful, False otherwise
+            Cleaned text
         """
-        if ttl is None:
-            ttl = self.ttl
-            
-        now = time.time()
-        expires_at = now + ttl
-        hashed_key = self._key_to_hash(key)
+        if not text:
+            return ""
         
-        try:
-            # Store in memory cache
-            with self.cache_lock:
-                self.cache[hashed_key] = value
-                self.access_times[hashed_key] = now
-                
-                # Trim cache if needed
-                if len(self.cache) > self.max_size:
-                    self._trim_cache()
+        # Remove URLs
+        if remove_urls:
+            text = re.sub(r'https?://\S+', '', text)
+            text = re.sub(r'www\.\S+', '', text)
+        
+        # Remove HTML tags
+        if remove_html:
+            text = re.sub(r'<.*?>', '', text)
+        
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+        
+        # Convert to lowercase if requested
+        if lowercase:
+            text = text.lower()
+        
+        return text
+    
+    @staticmethod
+    def extract_keywords(text: str, max_keywords: int = 10) -> List[str]:
+        """
+        Extract key terms from text using simple frequency analysis.
+        
+        Args:
+            text: Input text
+            max_keywords: Maximum number of keywords to extract
             
-            # Store in SQLite cache
+        Returns:
+            List of extracted keywords
+        """
+        if not text:
+            return []
+        
+        # Convert to lowercase
+        text = text.lower()
+        
+        # Remove punctuation and split into words
+        words = re.findall(r'\b[a-z]{3,}\b', text)
+        
+        # Remove common stop words (simplified list)
+        stop_words = {
+            'the', 'and', 'or', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'by',
+            'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before',
+            'after', 'above', 'below', 'from', 'up', 'down', 'this', 'that', 'these',
+            'those', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has',
+            'had', 'having', 'do', 'does', 'did', 'doing', 'but', 'if', 'because', 'as',
+            'until', 'while', 'there', 'here', 'when', 'where', 'why', 'how', 'all', 'any',
+            'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
+            'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'can', 'will',
+            'just', 'should', 'now'
+        }
+        
+        # Filter out stop words and count frequencies
+        filtered_words = [word for word in words if word not in stop_words]
+        
+        if not filtered_words:
+            return []
+        
+        # Count frequencies
+        word_counts = {}
+        for word in filtered_words:
+            word_counts[word] = word_counts.get(word, 0) + 1
+        
+        # Sort by frequency
+        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
+        
+        # Return top keywords
+        keywords = [word for word, count in sorted_words[:max_keywords]]
+        
+        return keywords
+    
+    @staticmethod
+    def normalize_date(date_str: Optional[str]) -> Optional[str]:
+        """
+        Normalize date strings to ISO format.
+        
+        Args:
+            date_str: Date string in various formats
+            
+        Returns:
+            ISO-formatted date string or None if parsing fails
+        """
+        if not date_str:
+            return None
+        
+        # Common date formats to try
+        formats = [
+            '%Y-%m-%d',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%dT%H:%M:%SZ',
+            '%Y-%m-%d %H:%M:%S',
+            '%d-%m-%Y',
+            '%m/%d/%Y',
+            '%d/%m/%Y',
+            '%B %d, %Y',
+            '%d %B %Y',
+            '%Y/%m/%d'
+        ]
+        
+        # Try each format
+        for fmt in formats:
             try:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                
-                # Serialize value
-                serialized = pickle.dumps(value)
-                
-                # Insert or replace
-                cursor.execute(
-                    "INSERT OR REPLACE INTO data_cache VALUES (?, ?, ?, ?, ?)",
-                    (self.namespace, hashed_key, serialized, now, expires_at)
-                )
-                
-                conn.commit()
-                conn.close()
-            except Exception as e:
-                logger.error(f"Error storing in SQLite cache: {e}")
-            
-            return True
-        except Exception as e:
-            logger.error(f"Error setting cache value: {e}")
-            return False
+                dt = datetime.strptime(date_str, fmt)
+                return dt.isoformat()
+            except ValueError:
+                continue
+        
+        # If all formats fail, return original
+        logger.warning(f"Could not normalize date format: {date_str}")
+        return date_str
     
-    def get(self, key: str, default: Any = None) -> Any:
+    @staticmethod
+    def prepare_web_content(content_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Get a value from the cache.
+        Prepare web content for analysis by normalizing and enriching data.
         
         Args:
-            key: Cache key
-            default: Default value if key not found
+            content_data: Dictionary containing web content data
             
         Returns:
-            Cached value or default
+            Processed and enriched content data
         """
-        hashed_key = self._key_to_hash(key)
+        result = {}
         
-        # Try memory cache first
-        with self.cache_lock:
-            if hashed_key in self.cache:
-                self.access_times[hashed_key] = time.time()
-                return self.cache[hashed_key]
+        # Copy basic metadata
+        result['url'] = content_data.get('url', '')
+        result['title'] = content_data.get('title', '')
+        result['source'] = content_data.get('site_name', '')
+        result['author'] = content_data.get('author', '')
         
-        # Try SQLite cache
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            
-            # Get value and check expiration
-            cursor.execute(
-                "SELECT value, expires_at FROM data_cache WHERE namespace = ? AND key = ?",
-                (self.namespace, hashed_key)
-            )
-            
-            result = cursor.fetchone()
-            conn.close()
-            
-            if result:
-                value_blob, expires_at = result
-                
-                # Check if expired
-                if time.time() > expires_at:
-                    self.delete(key)
-                    return default
-                
-                # Deserialize and update memory cache
-                value = pickle.loads(value_blob)
-                with self.cache_lock:
-                    self.cache[hashed_key] = value
-                    self.access_times[hashed_key] = time.time()
-                
-                return value
-        except Exception as e:
-            logger.error(f"Error getting from SQLite cache: {e}")
+        # Set content type
+        result['content_type'] = 'web_page'
         
-        return default
+        # Extract and clean content
+        content = content_data.get('content', '')
+        if content:
+            result['content'] = DataScaler.clean_text(content)
+            
+            # Extract summary (first 500 characters)
+            result['summary'] = DataScaler.clean_text(content[:500])
+            
+            # Extract keywords
+            result['keywords'] = DataScaler.extract_keywords(content)
+        else:
+            result['content'] = ''
+            result['summary'] = ''
+            result['keywords'] = []
+        
+        # Normalize date
+        published_date = content_data.get('published_date')
+        if published_date:
+            result['published_date'] = DataScaler.normalize_date(published_date)
+        else:
+            result['published_date'] = None
+        
+        # Add timestamp for when this data was processed
+        result['processed_at'] = datetime.now().isoformat()
+        
+        # Add metadata field for additional information
+        result['meta_data'] = {
+            'domain': content_data.get('domain', ''),
+            'language': content_data.get('language', 'en'),
+            'content_length': len(content) if content else 0,
+            'scraped_at': content_data.get('scraped_at', datetime.now().isoformat())
+        }
+        
+        return result
     
-    def delete(self, key: str) -> bool:
+    @staticmethod
+    def format_for_detection(web_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Delete a value from the cache.
+        Format web data for the detector agent.
         
         Args:
-            key: Cache key
+            web_data: Processed web content data
             
         Returns:
-            True if successful, False otherwise
+            Data formatted for detection system
         """
-        hashed_key = self._key_to_hash(key)
+        detection_data = {
+            'title': web_data.get('title', ''),
+            'content': web_data.get('content', ''),
+            'source': web_data.get('source', 'web'),
+            'url': web_data.get('url', ''),
+            'published_date': web_data.get('published_date'),
+            'meta_data': json.dumps(web_data.get('meta_data', {})),
+            'content_type': 'web'
+        }
         
-        try:
-            # Remove from memory cache
-            with self.cache_lock:
-                if hashed_key in self.cache:
-                    del self.cache[hashed_key]
-                if hashed_key in self.access_times:
-                    del self.access_times[hashed_key]
-            
-            # Remove from SQLite cache
-            try:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                
-                cursor.execute(
-                    "DELETE FROM data_cache WHERE namespace = ? AND key = ?",
-                    (self.namespace, hashed_key)
-                )
-                
-                conn.commit()
-                conn.close()
-            except Exception as e:
-                logger.error(f"Error deleting from SQLite cache: {e}")
-            
-            return True
-        except Exception as e:
-            logger.error(f"Error deleting cache value: {e}")
-            return False
+        return detection_data
     
-    def clear(self) -> bool:
+    @staticmethod
+    def score_relevance(content: str, keywords: List[str], threshold: float = 0.01) -> float:
         """
-        Clear the entire cache for this namespace.
-        
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Clear memory cache
-            with self.cache_lock:
-                self.cache.clear()
-                self.access_times.clear()
-            
-            # Clear SQLite cache
-            try:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                
-                cursor.execute(
-                    "DELETE FROM data_cache WHERE namespace = ?",
-                    (self.namespace,)
-                )
-                
-                conn.commit()
-                conn.close()
-            except Exception as e:
-                logger.error(f"Error clearing SQLite cache: {e}")
-            
-            return True
-        except Exception as e:
-            logger.error(f"Error clearing cache: {e}")
-            return False
-    
-    def _trim_cache(self):
-        """Trim the memory cache by removing least recently used items."""
-        with self.cache_lock:
-            # Sort by access time
-            items_by_access = sorted(self.access_times.items(), key=lambda x: x[1])
-            
-            # Remove oldest items until under max size
-            items_to_remove = len(self.cache) - self.max_size
-            for i in range(items_to_remove):
-                if i < len(items_by_access):
-                    key = items_by_access[i][0]
-                    if key in self.cache:
-                        del self.cache[key]
-                    if key in self.access_times:
-                        del self.access_times[key]
-    
-    def _cleanup_thread(self):
-        """Background thread to clean up expired items."""
-        while True:
-            try:
-                # Sleep before first cleanup
-                time.sleep(CACHE_CLEANUP_INTERVAL)
-                
-                # Clean up memory cache
-                now = time.time()
-                with self.cache_lock:
-                    expired_keys = []
-                    for key, access_time in self.access_times.items():
-                        if now - access_time > self.ttl:
-                            expired_keys.append(key)
-                    
-                    for key in expired_keys:
-                        if key in self.cache:
-                            del self.cache[key]
-                        if key in self.access_times:
-                            del self.access_times[key]
-                
-                # Clean up SQLite cache
-                try:
-                    conn = sqlite3.connect(DB_PATH)
-                    cursor = conn.cursor()
-                    
-                    cursor.execute(
-                        "DELETE FROM data_cache WHERE expires_at < ?",
-                        (now,)
-                    )
-                    
-                    deleted_count = cursor.rowcount
-                    conn.commit()
-                    conn.close()
-                    
-                    if deleted_count > 0:
-                        logger.debug(f"Cleaned up {deleted_count} expired items from SQLite cache")
-                except Exception as e:
-                    logger.error(f"Error cleaning up SQLite cache: {e}")
-            except Exception as e:
-                logger.error(f"Error in cache cleanup thread: {e}")
-
-
-class BatchProcessor:
-    """Process data in batches for efficient handling of large datasets."""
-    
-    def __init__(self, batch_size: int = DEFAULT_BATCH_SIZE, parallel: int = DEFAULT_PARALLEL_PROCESSES):
-        """
-        Initialize the batch processor.
+        Score the relevance of content based on keywords.
         
         Args:
-            batch_size: Size of each batch
-            parallel: Number of parallel processes/threads
-        """
-        self.batch_size = batch_size
-        self.parallel = parallel
-        logger.info(f"BatchProcessor initialized: batch_size={batch_size}, parallel={parallel}")
-    
-    def process(self, items: List[Any], process_func: Callable[[Any], Any], callback: Optional[Callable[[List[Any]], None]] = None) -> List[Any]:
-        """
-        Process items in batches.
-        
-        Args:
-            items: List of items to process
-            process_func: Function to apply to each item
-            callback: Optional callback function for each completed batch
+            content: Text content to score
+            keywords: List of keywords to search for
+            threshold: Minimum relevance score
             
         Returns:
-            List of processed items
+            Relevance score between 0.0 and 1.0
+        """
+        if not content or not keywords:
+            return 0.0
+        
+        content_lower = content.lower()
+        
+        # Count keyword occurrences
+        keyword_count = 0
+        for keyword in keywords:
+            keyword_lower = keyword.lower()
+            keyword_count += content_lower.count(keyword_lower)
+        
+        # Calculate density (keywords per word)
+        total_words = len(content.split())
+        if total_words == 0:
+            return 0.0
+            
+        density = keyword_count / total_words
+        
+        # Normalize score between 0 and 1
+        score = min(1.0, density * 10)  # Scale up for better distribution
+        
+        # Apply threshold
+        if score < threshold:
+            return 0.0
+            
+        return score
+    
+    @staticmethod
+    def batch_process(data_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Process a batch of data items.
+        
+        Args:
+            data_list: List of data items to process
+            
+        Returns:
+            List of processed data items
         """
         results = []
-        total_items = len(items)
-        processed_count = 0
         
-        # Process in batches
-        for i in range(0, total_items, self.batch_size):
-            batch = items[i:i+self.batch_size]
-            batch_results = []
-            
-            # Process the batch in parallel if enabled
-            if self.parallel > 1 and len(batch) > 1:
-                threads = []
-                lock = threading.Lock()
+        for data in data_list:
+            try:
+                # Prepare data based on content type
+                if data.get('content_type') == 'web_page' or 'url' in data:
+                    processed = DataScaler.prepare_web_content(data)
+                else:
+                    # Skip unknown data types
+                    logger.warning(f"Unknown content type in data: {data.get('content_type')}")
+                    continue
                 
-                def process_item(item):
-                    try:
-                        result = process_func(item)
-                        with lock:
-                            batch_results.append(result)
-                    except Exception as e:
-                        logger.error(f"Error processing item in batch: {e}")
+                results.append(processed)
                 
-                # Create and start threads
-                for item in batch:
-                    thread = threading.Thread(target=process_item, args=(item,))
-                    threads.append(thread)
-                    thread.start()
-                
-                # Wait for all threads to complete
-                for thread in threads:
-                    thread.join()
-            else:
-                # Process sequentially
-                for item in batch:
-                    try:
-                        result = process_func(item)
-                        batch_results.append(result)
-                    except Exception as e:
-                        logger.error(f"Error processing item in batch: {e}")
-            
-            # Add batch results to overall results
-            results.extend(batch_results)
-            processed_count += len(batch)
-            
-            # Call callback if provided
-            if callback is not None:
-                try:
-                    callback(batch_results)
-                except Exception as e:
-                    logger.error(f"Error in batch callback: {e}")
-                    
-            logger.debug(f"Processed batch: {processed_count}/{total_items} items")
+            except Exception as e:
+                logger.error(f"Error processing data item: {e}")
+                continue
         
         return results
-
-
-class StreamBuffer:
-    """Efficient buffer for streaming data processing."""
-    
-    def __init__(self, max_size: int = DEFAULT_MAX_QUEUE_SIZE):
-        """
-        Initialize the stream buffer.
-        
-        Args:
-            max_size: Maximum buffer size before blocking
-        """
-        self.buffer = deque(maxlen=max_size)
-        self.buffer_lock = threading.Lock()
-        self.not_empty = threading.Condition(self.buffer_lock)
-        self.not_full = threading.Condition(self.buffer_lock)
-        self.max_size = max_size
-        self.is_closed = False
-        logger.info(f"StreamBuffer initialized: max_size={max_size}")
-    
-    def put(self, item: Any, block: bool = True, timeout: Optional[float] = None) -> bool:
-        """
-        Add an item to the buffer.
-        
-        Args:
-            item: Item to add
-            block: Whether to block if buffer is full
-            timeout: Maximum time to block in seconds
-            
-        Returns:
-            True if successful, False if buffer full or closed
-        """
-        if self.is_closed:
-            return False
-            
-        with self.buffer_lock:
-            if len(self.buffer) >= self.max_size:
-                if not block:
-                    return False
-                    
-                # Wait for space in buffer
-                if timeout is not None:
-                    end_time = time.time() + timeout
-                    remaining = timeout
-                    
-                    while len(self.buffer) >= self.max_size and remaining > 0:
-                        self.not_full.wait(remaining)
-                        if self.is_closed:
-                            return False
-                        remaining = end_time - time.time()
-                        
-                    if len(self.buffer) >= self.max_size:
-                        return False
-                else:
-                    while len(self.buffer) >= self.max_size:
-                        self.not_full.wait()
-                        if self.is_closed:
-                            return False
-            
-            # Add item to buffer
-            self.buffer.append(item)
-            self.not_empty.notify()
-            return True
-    
-    def get(self, block: bool = True, timeout: Optional[float] = None) -> Optional[Any]:
-        """
-        Get an item from the buffer.
-        
-        Args:
-            block: Whether to block if buffer is empty
-            timeout: Maximum time to block in seconds
-            
-        Returns:
-            Item from buffer or None if empty or timeout
-        """
-        with self.buffer_lock:
-            if not self.buffer:
-                if not block:
-                    return None
-                    
-                # Wait for item in buffer
-                if timeout is not None:
-                    end_time = time.time() + timeout
-                    remaining = timeout
-                    
-                    while not self.buffer and remaining > 0 and not self.is_closed:
-                        self.not_empty.wait(remaining)
-                        remaining = end_time - time.time()
-                        
-                    if not self.buffer:
-                        return None
-                else:
-                    while not self.buffer and not self.is_closed:
-                        self.not_empty.wait()
-                        
-                    if not self.buffer:
-                        return None
-            
-            # Get item from buffer
-            item = self.buffer.popleft()
-            self.not_full.notify()
-            return item
-    
-    def close(self):
-        """Close the buffer, preventing new items from being added."""
-        with self.buffer_lock:
-            self.is_closed = True
-            self.not_empty.notify_all()
-            self.not_full.notify_all()
-    
-    def __iter__(self):
-        """Iterate over items in the buffer."""
-        return self
-    
-    def __next__(self):
-        """Get next item from the buffer."""
-        item = self.get()
-        if item is None and self.is_closed:
-            raise StopIteration
-        return item
-    
-    def stream(self, timeout: Optional[float] = None) -> Generator[Any, None, None]:
-        """
-        Stream items from the buffer.
-        
-        Args:
-            timeout: Maximum time to wait for each item
-            
-        Yields:
-            Items from the buffer
-        """
-        while not self.is_closed or len(self.buffer) > 0:
-            item = self.get(block=True, timeout=timeout)
-            if item is not None:
-                yield item
-            elif self.is_closed:
-                break
-
-
-class DataScaler:
-    """Manager class for data scaling operations."""
-    
-    def __init__(self):
-        """Initialize the data scaler."""
-        self.caches = {}
-        self.batch_processor = BatchProcessor()
-        self.stream_buffers = {}
-        logger.info("DataScaler initialized")
-    
-    def get_cache(self, namespace: str = "default", max_size: int = 1000, ttl: int = MAX_CACHE_AGE) -> DataCache:
-        """
-        Get a cache instance for a namespace.
-        
-        Args:
-            namespace: Cache namespace
-            max_size: Maximum items in memory cache
-            ttl: Time to live for cached items
-            
-        Returns:
-            DataCache instance
-        """
-        if namespace not in self.caches:
-            self.caches[namespace] = DataCache(namespace=namespace, max_size=max_size, ttl=ttl)
-        return self.caches[namespace]
-    
-    def get_batch_processor(self, batch_size: int = DEFAULT_BATCH_SIZE, parallel: int = DEFAULT_PARALLEL_PROCESSES) -> BatchProcessor:
-        """
-        Get a batch processor with custom settings.
-        
-        Args:
-            batch_size: Size of each batch
-            parallel: Number of parallel processes
-            
-        Returns:
-            BatchProcessor instance
-        """
-        if batch_size != self.batch_processor.batch_size or parallel != self.batch_processor.parallel:
-            return BatchProcessor(batch_size=batch_size, parallel=parallel)
-        return self.batch_processor
-    
-    def get_stream_buffer(self, name: str = "default", max_size: int = DEFAULT_MAX_QUEUE_SIZE) -> StreamBuffer:
-        """
-        Get a stream buffer instance.
-        
-        Args:
-            name: Buffer name
-            max_size: Maximum buffer size
-            
-        Returns:
-            StreamBuffer instance
-        """
-        if name not in self.stream_buffers:
-            self.stream_buffers[name] = StreamBuffer(max_size=max_size)
-        return self.stream_buffers[name]
-    
-    def close_stream(self, name: str):
-        """
-        Close a stream buffer.
-        
-        Args:
-            name: Buffer name
-        """
-        if name in self.stream_buffers:
-            self.stream_buffers[name].close()
-
-
-# Create a singleton instance
-data_scaler = DataScaler()

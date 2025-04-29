@@ -1,721 +1,521 @@
 """
-Web Scraping Service for the CIVILIAN system.
-This module integrates web scraping capabilities and data scaling for real-time
-monitoring of internet sources.
+Web scraping service for the CIVILIAN system.
+This service provides functions for web scraping, data collection, and monitoring.
 """
 
-import logging
-import threading
-import time
-import json
 import os
-import re
-from typing import Dict, List, Any, Optional, Set, Tuple
-from datetime import datetime, timedelta
+import json
+import logging
+import time
+import threading
+from datetime import datetime
+from typing import Dict, List, Any, Optional, Union, Tuple
 from urllib.parse import urlparse
-import hashlib
-import queue
-import csv
 
+# Import from app
 from app import db
-from models import DataSource, DetectedNarrative, NarrativeInstance
-from utils.web_scraper import WebScraper, get_website_content, crawl_website, search_for_content
-from utils.data_scaling import data_scaler
-from utils.app_context import with_app_context
+import models
+
+# Import utilities
+from utils.web_scraper import WebScraper
+from utils.data_scaling import DataScaler
 from data_sources.web_source_manager import web_source_manager
+from data_sources.source_base import WebPageSource, WebCrawlSource, WebSearchSource
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
-# Constants
-SCHEDULED_INTERVAL = 900  # 15 minutes
-MAX_SOURCES_PER_INTERVAL = 20
-STORAGE_DIR = "./storage/web_data"
-FOCUSED_DOMAINS_FILE = f"{STORAGE_DIR}/focused_domains.json"
-DEFAULT_DEPTH = 2
-DEFAULT_DOMAIN_RATE_LIMIT = 5  # seconds between requests
-MIN_CONTENT_LENGTH = 500
-
 
 class WebScrapingService:
-    """Service for managing web scraping operations in the CIVILIAN system."""
+    """Service for web scraping and data collection."""
     
     def __init__(self):
         """Initialize the web scraping service."""
-        self.web_scraper = WebScraper()
+        self.scraper = WebScraper()
         self.is_running = False
-        self.stop_event = threading.Event()
-        self.scheduled_thread = None
-        self.focused_domains = self._load_focused_domains()
-        self.search_terms = self._load_search_terms()
+        self.scheduler_thread = None
+        self.lock = threading.RLock()
         
-        # Create storage directory if it doesn't exist
-        os.makedirs(STORAGE_DIR, exist_ok=True)
+        # Monitoring configuration
+        self.focused_domains = []  # List of domains to focus on
+        self.search_terms = []  # List of search terms to monitor
+        self.monitoring_interval = 3600  # Default to hourly checks
         
-        # Initialize data cache for web content
-        self.cache = data_scaler.get_cache(namespace="web_content", max_size=5000)
-        
-        logger.info("WebScrapingService initialized")
-        
-    def _load_focused_domains(self) -> Dict[str, Dict[str, Any]]:
-        """Load focused domains configuration."""
-        if os.path.exists(FOCUSED_DOMAINS_FILE):
-            try:
-                with open(FOCUSED_DOMAINS_FILE, 'r') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"Error loading focused domains: {e}")
-                
-        # Default configuration
-        default_domains = {
-            "news": {
-                "cnn.com": {"rate_limit": 10, "priority": 1},
-                "bbc.com": {"rate_limit": 10, "priority": 1},
-                "reuters.com": {"rate_limit": 10, "priority": 1},
-                "apnews.com": {"rate_limit": 10, "priority": 1},
-                "nytimes.com": {"rate_limit": 10, "priority": 2},
-                "wsj.com": {"rate_limit": 10, "priority": 2}
-            },
-            "fact_checking": {
-                "snopes.com": {"rate_limit": 5, "priority": 1},
-                "factcheck.org": {"rate_limit": 5, "priority": 1},
-                "politifact.com": {"rate_limit": 5, "priority": 1}
-            },
-            "think_tanks": {
-                "brookings.edu": {"rate_limit": 15, "priority": 3},
-                "csis.org": {"rate_limit": 15, "priority": 3},
-                "heritage.org": {"rate_limit": 15, "priority": 3}
-            },
-            "government": {
-                "who.int": {"rate_limit": 30, "priority": 3},
-                "cdc.gov": {"rate_limit": 30, "priority": 2},
-                "nih.gov": {"rate_limit": 30, "priority": 3},
-                "un.org": {"rate_limit": 30, "priority": 3}
-            }
-        }
-        
-        # Save default configuration
+        # Load configuration if available
+        self._load_configuration()
+    
+    def _load_configuration(self):
+        """Load monitoring configuration from the database."""
         try:
-            with open(FOCUSED_DOMAINS_FILE, 'w') as f:
-                json.dump(default_domains, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving default focused domains: {e}")
-            
-        return default_domains
-        
-    def _load_search_terms(self) -> Dict[str, List[str]]:
-        """Load search terms for targeted monitoring."""
-        # These would typically come from a configuration file or database
-        return {
-            "misinformation": [
-                "vaccine misinformation",
-                "election fraud claims",
-                "climate change denial",
-                "conspiracy theories"
-            ],
-            "emerging_narratives": [
-                "breaking news",
-                "trending story",
-                "viral content"
-            ],
-            "security_threats": [
-                "cyber attack",
-                "malware campaign",
-                "data breach",
-                "ransomware"
+            # Load focused domains
+            domains = db.session.query(models.FocusedDomain).filter_by(is_active=True).all()
+            self.focused_domains = [
+                {
+                    'id': domain.id,
+                    'domain': domain.domain,
+                    'category': domain.category,
+                    'priority': domain.priority,
+                    'last_check': domain.last_check.isoformat() if domain.last_check else None
+                }
+                for domain in domains
             ]
-        }
+            
+            # Load search terms
+            terms = db.session.query(models.SearchTerm).filter_by(is_active=True).all()
+            self.search_terms = [
+                {
+                    'id': term.id,
+                    'term': term.term,
+                    'category': term.category,
+                    'last_check': term.last_check.isoformat() if term.last_check else None
+                }
+                for term in terms
+            ]
+            
+            logger.info(f"Loaded {len(self.focused_domains)} domains and {len(self.search_terms)} search terms")
+            
+        except Exception as e:
+            logger.error(f"Error loading monitoring configuration: {e}")
     
     def start_scheduled_scraping(self):
-        """Start scheduled scraping of web sources."""
-        if self.is_running:
-            logger.warning("Scheduled scraping is already running")
-            return
-            
-        self.is_running = True
-        self.stop_event.clear()
-        
-        # Start scheduled thread
-        self.scheduled_thread = threading.Thread(target=self._scheduled_scraping_thread)
-        self.scheduled_thread.daemon = True
-        self.scheduled_thread.start()
-        
-        logger.info("Started scheduled web scraping")
-        
-    def stop_scheduled_scraping(self):
-        """Stop scheduled scraping of web sources."""
-        if not self.is_running:
-            return
-            
-        self.is_running = False
-        self.stop_event.set()
-        
-        if self.scheduled_thread and self.scheduled_thread.is_alive():
-            self.scheduled_thread.join(timeout=5)
-            
-        logger.info("Stopped scheduled web scraping")
-    
-    def _scheduled_scraping_thread(self):
-        """Thread for scheduled scraping of web sources."""
-        while self.is_running and not self.stop_event.is_set():
-            try:
-                self._run_scheduled_scraping()
-            except Exception as e:
-                logger.error(f"Error in scheduled scraping: {e}")
-                
-            # Wait for the next interval or until stopped
-            for _ in range(SCHEDULED_INTERVAL):
-                if self.stop_event.is_set():
-                    break
-                time.sleep(1)
-    
-    @with_app_context
-    def _run_scheduled_scraping(self):
-        """Run a single iteration of scheduled scraping."""
-        logger.info("Starting scheduled web scraping iteration")
-        
-        # Get active web sources from the database
-        sources = DataSource.query.filter(
-            DataSource.is_active == True,
-            DataSource.source_type.like("web_%")
-        ).order_by(DataSource.last_ingestion.asc()).limit(MAX_SOURCES_PER_INTERVAL).all()
-        
-        if not sources:
-            logger.info("No active web sources to process")
-            return
-            
-        logger.info(f"Processing {len(sources)} web sources")
-        
-        # Process sources concurrently
-        processed_count = 0
-        threads = []
-        
-        for source in sources[:MAX_SOURCES_PER_INTERVAL]:
-            thread = threading.Thread(target=self._process_source, args=(source,))
-            thread.daemon = True
-            thread.start()
-            threads.append(thread)
-            
-        # Wait for all threads to complete
-        for thread in threads:
-            thread.join()
-            processed_count += 1
-            
-        logger.info(f"Completed processing {processed_count} web sources")
-        
-        # Run focused domain monitoring (subset each time)
-        self._run_focused_domain_monitoring()
-        
-        # Run search term monitoring (subset each time)
-        self._run_search_term_monitoring()
-    
-    @with_app_context
-    def _process_source(self, source: DataSource):
-        """
-        Process a single web source.
-        
-        Args:
-            source: DataSource object to process
-        """
-        try:
-            # Parse configuration
-            config = json.loads(source.config) if source.config else {}
-            
-            # Get source URL and type
-            source_url = config.get("url", "")
-            source_type = source.source_type.split("_")[1] if "_" in source.source_type else "unknown"
-            
-            if not source_url:
-                logger.warning(f"Missing URL for source {source.name} (ID: {source.id})")
+        """Start scheduled web scraping and monitoring."""
+        with self.lock:
+            if self.is_running:
+                logger.warning("Web scraping service is already running")
                 return
-                
-            logger.info(f"Processing web source: {source.name} (URL: {source_url})")
             
-            # Determine processing strategy based on source type
-            if source_type == "news":
-                # Use crawling for news sites
-                max_pages = config.get("max_pages", 5)
-                results = self.web_scraper.crawl(source_url, max_pages=max_pages)
-                
-            elif source_type == "search":
-                # Use search for search-based sources
-                search_term = config.get("search_term", "")
-                search_engine = config.get("search_engine", "bing")
-                limit = config.get("limit", 10)
-                
-                if not search_term:
-                    logger.warning(f"Missing search term for search source {source.name}")
-                    return
-                    
-                urls = self.web_scraper.search(search_term, search_engine=search_engine, limit=limit)
-                results = self.web_scraper.batch_process(urls)
-                
-            elif source_type == "monitor":
-                # Single URL monitoring
-                result = self.web_scraper.get_content(source_url)
-                results = [result] if result.get("success") else []
-                
-            else:
-                # Default to single URL processing
-                result = self.web_scraper.get_content(source_url)
-                results = [result] if result.get("success") else []
+            self.is_running = True
+            self.scheduler_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
+            self.scheduler_thread.start()
             
-            # Process results
-            process_count = 0
-            for result in results:
-                if result.get("success") and self._is_valid_content(result):
-                    web_source_manager._process_result(result, source)
-                    process_count += 1
-                    
-            # Update source last ingestion timestamp
-            source.last_ingestion = datetime.utcnow()
-            db.session.commit()
-            
-            logger.info(f"Processed {process_count} pages from source {source.name}")
-            
-        except Exception as e:
-            logger.error(f"Error processing source {source.name}: {e}")
-            db.session.rollback()
+            logger.info("Web scraping service started")
     
-    def _is_valid_content(self, result: Dict[str, Any]) -> bool:
-        """
-        Check if content is valid for processing.
-        
-        Args:
-            result: Scraping result
+    def stop_scheduled_scraping(self):
+        """Stop scheduled web scraping and monitoring."""
+        with self.lock:
+            if not self.is_running:
+                logger.warning("Web scraping service is not running")
+                return
             
-        Returns:
-            True if valid, False otherwise
-        """
-        content = result.get("content", "")
-        
-        # Check content length
-        if not content or len(content) < MIN_CONTENT_LENGTH:
-            return False
+            self.is_running = False
+            if self.scheduler_thread:
+                self.scheduler_thread.join(timeout=5.0)
+                self.scheduler_thread = None
             
-        # Check for duplicate content using hash
-        content_hash = result.get("content_hash") or hashlib.md5(content.encode('utf-8')).hexdigest()
-        
-        # Check cache for duplicate
-        if self.cache.get(content_hash):
-            return False
-            
-        # Store in cache to prevent duplicates
-        self.cache.set(content_hash, True)
-        
-        return True
+            logger.info("Web scraping service stopped")
     
-    def _run_focused_domain_monitoring(self):
-        """Run focused domain monitoring for selected domains."""
-        # Select a subset of domains to monitor in this iteration
-        domains_to_monitor = []
-        
-        for category, domains in self.focused_domains.items():
-            # Select domains based on priority (lower number = higher priority)
-            priority_domains = sorted(domains.items(), key=lambda x: x[1].get("priority", 5))
-            
-            # Take top domains from each category
-            domains_to_monitor.extend([domain for domain, _ in priority_domains[:2]])
-        
-        # Randomize further to avoid patterns
-        import random
-        random.shuffle(domains_to_monitor)
-        
-        # Limit total number of domains
-        domains_to_monitor = domains_to_monitor[:5]
-        
-        logger.info(f"Running focused monitoring for domains: {domains_to_monitor}")
-        
-        # Process each domain
-        for domain in domains_to_monitor:
+    def _monitoring_loop(self):
+        """Main monitoring loop for scheduled scraping."""
+        while self.is_running:
             try:
-                self._monitor_focused_domain(domain)
-            except Exception as e:
-                logger.error(f"Error monitoring domain {domain}: {e}")
-    
-    @with_app_context
-    def _monitor_focused_domain(self, domain: str):
-        """
-        Monitor a specific focused domain.
-        
-        Args:
-            domain: Domain to monitor
-        """
-        url = f"https://{domain}"
-        
-        # Find or create a source for this domain
-        source = DataSource.query.filter(
-            DataSource.config.like(f'%"{url}"%'),
-            DataSource.source_type.like("web_%")
-        ).first()
-        
-        if not source:
-            # Create new source
-            source = DataSource(
-                name=f"Focused Monitor: {domain}",
-                source_type="web_monitor",
-                config=json.dumps({"url": url}),
-                is_active=True,
-                meta_data=json.dumps({"origin": "focused_monitoring"})
-            )
-            db.session.add(source)
-            db.session.commit()
-        
-        # Crawl the domain
-        results = self.web_scraper.crawl(url, max_pages=3)
-        
-        # Process results
-        process_count = 0
-        for result in results:
-            if result.get("success") and self._is_valid_content(result):
-                web_source_manager._process_result(result, source)
-                process_count += 1
+                # Run domain monitoring
+                self._monitor_domains()
                 
-        # Update source last ingestion timestamp
-        source.last_ingestion = datetime.utcnow()
-        db.session.commit()
-        
-        logger.info(f"Focused monitoring of {domain} processed {process_count} pages")
+                # Run search term monitoring
+                self._monitor_search_terms()
+                
+                # Run registered web sources
+                web_source_manager.run_all_sources()
+                
+                # Sleep until next cycle
+                for _ in range(self.monitoring_interval):
+                    if not self.is_running:
+                        break
+                    time.sleep(1)
+                    
+            except Exception as e:
+                logger.error(f"Error in monitoring loop: {e}")
+                time.sleep(60)  # Sleep to avoid tight loop
     
-    def _run_search_term_monitoring(self):
-        """Run search term monitoring for selected terms."""
-        # Select a subset of search terms to monitor in this iteration
-        terms_to_monitor = []
-        
-        for category, terms in self.search_terms.items():
-            # Take one term from each category
-            if terms:
-                import random
-                terms_to_monitor.append(random.choice(terms))
-        
-        logger.info(f"Running search term monitoring for: {terms_to_monitor}")
-        
-        # Process each term
-        for term in terms_to_monitor:
+    def _monitor_domains(self):
+        """Monitor focused domains."""
+        for domain_info in self.focused_domains:
             try:
-                self._monitor_search_term(term)
-            except Exception as e:
-                logger.error(f"Error monitoring search term '{term}': {e}")
-    
-    @with_app_context
-    def _monitor_search_term(self, term: str):
-        """
-        Monitor a specific search term.
-        
-        Args:
-            term: Search term to monitor
-        """
-        # Find or create a source for this term
-        source_name = f"Search Monitor: {term}"
-        
-        source = DataSource.query.filter_by(
-            name=source_name,
-            source_type="web_search"
-        ).first()
-        
-        if not source:
-            # Create new source
-            source = DataSource(
-                name=source_name,
-                source_type="web_search",
-                config=json.dumps({"search_term": term}),
-                is_active=True,
-                meta_data=json.dumps({"origin": "search_monitoring"})
-            )
-            db.session.add(source)
-            db.session.commit()
-        
-        # Search for the term
-        urls = self.web_scraper.search(term, limit=5)
-        
-        # Process results
-        results = []
-        for url in urls:
-            result = self.web_scraper.get_content(url)
-            if result.get("success"):
-                results.append(result)
-        
-        # Process valid results
-        process_count = 0
-        for result in results:
-            if self._is_valid_content(result):
-                web_source_manager._process_result(result, source)
-                process_count += 1
+                if not self.is_running:
+                    break
                 
-        # Update source last ingestion timestamp
-        source.last_ingestion = datetime.utcnow()
-        db.session.commit()
-        
-        logger.info(f"Search term monitoring of '{term}' processed {process_count} pages")
+                domain = domain_info['domain']
+                logger.info(f"Monitoring domain: {domain}")
+                
+                # Create URL if needed
+                url = f"https://{domain}" if not domain.startswith(('http://', 'https://')) else domain
+                
+                # Create job
+                max_pages = 5 if domain_info['priority'] <= 2 else 1
+                job_id = web_source_manager.add_url_job(
+                    url=url,
+                    job_type='crawl',
+                    config={
+                        'max_pages': max_pages,
+                        'same_domain_only': True,
+                        'source_name': f"Domain: {domain}",
+                        'category': domain_info.get('category', 'general')
+                    }
+                )
+                
+                # Update last check time
+                try:
+                    with db.session.begin():
+                        domain_model = db.session.query(models.FocusedDomain).get(domain_info['id'])
+                        if domain_model:
+                            domain_model.last_check = datetime.now()
+                            db.session.commit()
+                except Exception as e:
+                    logger.error(f"Error updating domain last check time: {e}")
+                
+                # Add delay between domains
+                time.sleep(2.0)
+                
+            except Exception as e:
+                logger.error(f"Error monitoring domain {domain_info.get('domain')}: {e}")
     
-    def scan_url(self, url: str, depth: int = DEFAULT_DEPTH) -> Dict[str, Any]:
+    def _monitor_search_terms(self):
+        """Monitor search terms."""
+        for term_info in self.search_terms:
+            try:
+                if not self.is_running:
+                    break
+                
+                term = term_info['term']
+                logger.info(f"Monitoring search term: {term}")
+                
+                # Add search job
+                job_id = web_source_manager.add_url_job(
+                    url="https://www.bing.com/search",  # Will be replaced by actual search URL
+                    job_type='search',
+                    config={
+                        'search_term': term,
+                        'search_engine': 'bing',
+                        'limit': 10,
+                        'source_name': f"Search: {term}",
+                        'category': term_info.get('category', 'general')
+                    }
+                )
+                
+                # Update last check time
+                try:
+                    with db.session.begin():
+                        term_model = db.session.query(models.SearchTerm).get(term_info['id'])
+                        if term_model:
+                            term_model.last_check = datetime.now()
+                            db.session.commit()
+                except Exception as e:
+                    logger.error(f"Error updating search term last check time: {e}")
+                
+                # Add delay between search terms
+                time.sleep(5.0)
+                
+            except Exception as e:
+                logger.error(f"Error monitoring search term {term_info.get('term')}: {e}")
+    
+    def scan_url(self, url: str, depth: int = 1) -> str:
         """
-        Scan a specific URL and its linked pages.
+        Scan a URL for content.
         
         Args:
             url: URL to scan
-            depth: Crawl depth
+            depth: How many pages to crawl (1 = single page only)
             
         Returns:
-            Dictionary with scan results
+            Job ID for tracking the scan
         """
-        logger.info(f"Scanning URL: {url} with depth {depth}")
-        
-        # Validate URL format
-        if not url.startswith(("http://", "https://")):
-            url = f"https://{url}"
-            
-        # Set up crawl parameters
-        domain = urlparse(url).netloc
-        
-        # Get content with specified depth
-        if depth <= 1:
-            # Single page
-            result = self.web_scraper.get_content(url)
-            results = [result] if result.get("success") else []
-        else:
-            # Crawl
-            results = self.web_scraper.crawl(url, max_pages=depth)
-            
-        # Process and return results
-        processed_results = []
-        for result in results:
-            if result.get("success"):
-                # Extract key information
-                processed_result = {
-                    "url": result.get("url", ""),
-                    "title": result.get("metadata", {}).get("title", ""),
-                    "description": result.get("metadata", {}).get("description", ""),
-                    "content_length": len(result.get("content", "")),
-                    "extracted_at": datetime.utcnow().isoformat()
-                }
-                processed_results.append(processed_result)
-                
-        return {
-            "domain": domain,
-            "base_url": url,
-            "depth": depth,
-            "pages_found": len(results),
-            "pages_extracted": len(processed_results),
-            "results": processed_results
+        job_type = 'single' if depth <= 1 else 'crawl'
+        config = {
+            'url': url,
+            'source_name': f"Manual Scan: {url}",
+            'max_pages': depth
         }
+        
+        return web_source_manager.add_url_job(url, job_type, config)
     
-    def search_and_monitor(self, search_term: str, limit: int = 10) -> Dict[str, Any]:
+    def search_and_monitor(self, search_term: str, limit: int = 10) -> Optional[str]:
         """
-        Search for a term and set up monitoring for the results.
+        Search for content and set up monitoring.
         
         Args:
             search_term: Term to search for
             limit: Maximum number of results
             
         Returns:
-            Dictionary with search results and monitoring info
+            Job ID for tracking the search
         """
-        logger.info(f"Searching and monitoring term: {search_term}")
-        
-        # Search for the term
-        urls = self.web_scraper.search(search_term, limit=limit)
-        
-        # Create a source for monitoring
-        with db.session.no_autoflush:
-            source_name = f"Search Monitor: {search_term}"
+        try:
+            # Add search job
+            job_id = web_source_manager.add_url_job(
+                url="https://www.bing.com/search",  # Will be replaced by actual search URL
+                job_type='search',
+                config={
+                    'search_term': search_term,
+                    'search_engine': 'bing',
+                    'limit': limit,
+                    'source_name': f"Search: {search_term}"
+                }
+            )
             
-            # Check if source already exists
-            source = DataSource.query.filter_by(
-                name=source_name,
-                source_type="web_search"
-            ).first()
+            # Also add search term to monitoring list
+            self.add_search_term(search_term)
             
-            if not source:
-                # Create new source
-                source = DataSource(
-                    name=source_name,
-                    source_type="web_search",
-                    config=json.dumps({"search_term": search_term}),
-                    is_active=True,
-                    meta_data=json.dumps({"origin": "search_monitoring"})
-                )
-                db.session.add(source)
-                db.session.commit()
-        
-        # Process URLs
-        results = []
-        for url in urls:
-            result = self.web_scraper.get_content(url)
-            if result.get("success"):
-                # Add to results
-                results.append({
-                    "url": result.get("url", ""),
-                    "title": result.get("metadata", {}).get("title", ""),
-                    "description": result.get("metadata", {}).get("description", ""),
-                    "content_length": len(result.get("content", "")),
-                })
-                
-                # Process for narratives
-                if self._is_valid_content(result):
-                    web_source_manager._process_result(result, source)
-        
-        return {
-            "search_term": search_term,
-            "urls_found": len(urls),
-            "results_processed": len(results),
-            "source_id": source.id if source else None,
-            "results": results
-        }
+            return job_id
+            
+        except Exception as e:
+            logger.error(f"Error searching for '{search_term}': {e}")
+            return None
     
-    def add_focused_domain(self, domain: str, category: str, priority: int = 2) -> bool:
+    def add_focused_domain(self, domain: str, category: str = 'general', priority: int = 2) -> bool:
         """
-        Add a domain to focused monitoring.
+        Add a domain to the focused domains list.
         
         Args:
-            domain: Domain to add
-            category: Category for the domain
-            priority: Priority level (1=highest)
+            domain: Domain to focus on
+            category: Category for this domain
+            priority: Priority level (1-3, lower is higher priority)
             
         Returns:
             True if successful, False otherwise
         """
         try:
-            # Clean domain format
+            # Clean domain
             domain = domain.lower()
-            if domain.startswith(("http://", "https://")):
-                domain = urlparse(domain).netloc
-                
-            # Check if category exists, create if not
-            if category not in self.focused_domains:
-                self.focused_domains[category] = {}
-                
-            # Add domain with settings
-            self.focused_domains[category][domain] = {
-                "rate_limit": DEFAULT_DOMAIN_RATE_LIMIT,
-                "priority": priority
-            }
+            if domain.startswith('http://'):
+                domain = domain[7:]
+            if domain.startswith('https://'):
+                domain = domain[8:]
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            domain = domain.split('/')[0]  # Remove path
             
-            # Save updated configuration
-            with open(FOCUSED_DOMAINS_FILE, 'w') as f:
-                json.dump(self.focused_domains, f, indent=2)
+            # Check if domain already exists
+            existing = db.session.query(models.FocusedDomain).filter_by(domain=domain).first()
+            if existing:
+                # Update existing
+                with db.session.begin():
+                    existing.category = category
+                    existing.priority = priority
+                    existing.is_active = True
+                    existing.updated_at = datetime.now()
+                    db.session.commit()
                 
-            logger.info(f"Added domain {domain} to focused monitoring (category: {category}, priority: {priority})")
+                logger.info(f"Updated focused domain: {domain}")
+            else:
+                # Create new
+                with db.session.begin():
+                    new_domain = models.FocusedDomain(
+                        domain=domain,
+                        category=category,
+                        priority=priority,
+                        is_active=True,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now()
+                    )
+                    db.session.add(new_domain)
+                    db.session.commit()
+                
+                logger.info(f"Added new focused domain: {domain}")
+            
+            # Reload configuration
+            self._load_configuration()
+            
             return True
             
         except Exception as e:
-            logger.error(f"Error adding focused domain: {e}")
+            logger.error(f"Error adding focused domain '{domain}': {e}")
             return False
     
-    def add_search_term(self, term: str, category: str) -> bool:
+    def add_search_term(self, term: str, category: str = 'general') -> bool:
         """
-        Add a search term for monitoring.
+        Add a search term to the monitoring list.
         
         Args:
-            term: Search term
-            category: Category for the term
+            term: Search term to monitor
+            category: Category for this term
             
         Returns:
             True if successful, False otherwise
         """
         try:
             # Clean term
-            term = term.strip().lower()
+            term = term.strip()
             
-            # Check if category exists, create if not
-            if category not in self.search_terms:
-                self.search_terms[category] = []
+            # Check if term already exists
+            existing = db.session.query(models.SearchTerm).filter_by(term=term).first()
+            if existing:
+                # Update existing
+                with db.session.begin():
+                    existing.category = category
+                    existing.is_active = True
+                    existing.updated_at = datetime.now()
+                    db.session.commit()
                 
-            # Add term if not already present
-            if term not in self.search_terms[category]:
-                self.search_terms[category].append(term)
+                logger.info(f"Updated search term: {term}")
+            else:
+                # Create new
+                with db.session.begin():
+                    new_term = models.SearchTerm(
+                        term=term,
+                        category=category,
+                        is_active=True,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now()
+                    )
+                    db.session.add(new_term)
+                    db.session.commit()
                 
-            # Save updated configuration
-            # In a real implementation, this would be saved to a file or database
-            logger.info(f"Added search term '{term}' to monitoring (category: {category})")
+                logger.info(f"Added new search term: {term}")
+            
+            # Reload configuration
+            self._load_configuration()
+            
             return True
             
         except Exception as e:
-            logger.error(f"Error adding search term: {e}")
+            logger.error(f"Error adding search term '{term}': {e}")
             return False
     
     def get_domain_stats(self) -> Dict[str, Any]:
         """
-        Get statistics about monitored domains.
+        Get statistics about focused domains.
         
         Returns:
-            Dictionary with domain statistics
+            Dictionary containing domain statistics
         """
-        stats = {
-            "total_domains": 0,
-            "domains_by_category": {},
-            "recently_processed": []
-        }
-        
-        # Count domains
-        for category, domains in self.focused_domains.items():
-            stats["domains_by_category"][category] = len(domains)
-            stats["total_domains"] += len(domains)
-            
-        # Get recently processed domains from database
         try:
-            recent_sources = DataSource.query.filter(
-                DataSource.source_type.like("web_%"),
-                DataSource.last_ingestion.isnot(None)
-            ).order_by(DataSource.last_ingestion.desc()).limit(10).all()
+            # Get all domains
+            domains = db.session.query(models.FocusedDomain).all()
             
-            for source in recent_sources:
-                stats["recently_processed"].append({
-                    "name": source.name,
-                    "source_type": source.source_type,
-                    "last_ingestion": source.last_ingestion.isoformat() if source.last_ingestion else None
-                })
+            # Get active domains
+            active_domains = [d for d in domains if d.is_active]
+            
+            # Count domains by category
+            domains_by_category = {}
+            for domain in active_domains:
+                category = domain.category or 'uncategorized'
+                domains_by_category[category] = domains_by_category.get(category, 0) + 1
+            
+            # Get recently processed domains
+            recent_domains = db.session.query(models.FocusedDomain) \
+                .filter_by(is_active=True) \
+                .order_by(models.FocusedDomain.last_check.desc()) \
+                .limit(10) \
+                .all()
+                
+            recent = [
+                {
+                    'name': domain.domain,
+                    'category': domain.category,
+                    'last_ingestion': domain.last_check.isoformat() if domain.last_check else None
+                }
+                for domain in recent_domains if domain.last_check
+            ]
+            
+            return {
+                'total_domains': len(active_domains),
+                'domains_by_category': domains_by_category,
+                'recently_processed': recent
+            }
+            
         except Exception as e:
-            logger.error(f"Error getting recently processed domains: {e}")
-            
-        return stats
+            logger.error(f"Error getting domain stats: {e}")
+            return {
+                'total_domains': 0,
+                'domains_by_category': {},
+                'recently_processed': []
+            }
     
     def get_search_term_stats(self) -> Dict[str, Any]:
         """
-        Get statistics about monitored search terms.
+        Get statistics about search terms.
         
         Returns:
-            Dictionary with search term statistics
+            Dictionary containing search term statistics
         """
-        stats = {
-            "total_terms": 0,
-            "terms_by_category": {},
-            "recently_processed": []
-        }
-        
-        # Count terms
-        for category, terms in self.search_terms.items():
-            stats["terms_by_category"][category] = len(terms)
-            stats["total_terms"] += len(terms)
-            
-        # Get recently processed search terms from database
         try:
-            recent_sources = DataSource.query.filter(
-                DataSource.source_type == "web_search",
-                DataSource.last_ingestion.isnot(None)
-            ).order_by(DataSource.last_ingestion.desc()).limit(10).all()
+            # Get all terms
+            terms = db.session.query(models.SearchTerm).all()
             
-            for source in recent_sources:
-                # Extract search term from name or config
-                search_term = ""
-                if source.name.startswith("Search Monitor:"):
-                    search_term = source.name.replace("Search Monitor:", "").strip()
-                else:
-                    try:
-                        config = json.loads(source.config) if source.config else {}
-                        search_term = config.get("search_term", "")
-                    except:
-                        pass
-                        
-                stats["recently_processed"].append({
-                    "term": search_term,
-                    "last_ingestion": source.last_ingestion.isoformat() if source.last_ingestion else None
-                })
+            # Get active terms
+            active_terms = [t for t in terms if t.is_active]
+            
+            # Count terms by category
+            terms_by_category = {}
+            for term in active_terms:
+                category = term.category or 'uncategorized'
+                terms_by_category[category] = terms_by_category.get(category, 0) + 1
+            
+            # Get recently processed terms
+            recent_terms = db.session.query(models.SearchTerm) \
+                .filter_by(is_active=True) \
+                .order_by(models.SearchTerm.last_check.desc()) \
+                .limit(10) \
+                .all()
+                
+            recent = [
+                {
+                    'term': term.term,
+                    'category': term.category,
+                    'last_ingestion': term.last_check.isoformat() if term.last_check else None
+                }
+                for term in recent_terms if term.last_check
+            ]
+            
+            return {
+                'total_terms': len(active_terms),
+                'terms_by_category': terms_by_category,
+                'recently_processed': recent
+            }
+            
         except Exception as e:
-            logger.error(f"Error getting recently processed search terms: {e}")
+            logger.error(f"Error getting search term stats: {e}")
+            return {
+                'total_terms': 0,
+                'terms_by_category': {},
+                'recently_processed': []
+            }
+    
+    def submit_to_detection_pipeline(self, content_data: Dict[str, Any]) -> bool:
+        """
+        Submit content to the detection pipeline.
+        
+        Args:
+            content_data: Dictionary containing content data
             
-        return stats
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Format for detection
+            detection_data = DataScaler.format_for_detection(content_data)
+            
+            # Check if we have enough content
+            if not detection_data.get('content'):
+                logger.warning("Not enough content to submit for detection")
+                return False
+            
+            # Create ContentItem
+            with db.session.begin():
+                content_item = models.ContentItem(
+                    title=detection_data.get('title', ''),
+                    content=detection_data.get('content', ''),
+                    source=detection_data.get('source', 'web'),
+                    url=detection_data.get('url', ''),
+                    published_date=detection_data.get('published_date'),
+                    meta_data=detection_data.get('meta_data', '{}'),
+                    content_type=detection_data.get('content_type', 'web'),
+                    is_processed=False,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
+                )
+                
+                db.session.add(content_item)
+                db.session.commit()
+                
+                logger.info(f"Submitted content item ID {content_item.id} to detection pipeline")
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error submitting content to detection pipeline: {e}")
+            return False
 
 
-# Create a singleton instance
+# Create singleton instance
 web_scraping_service = WebScrapingService()
