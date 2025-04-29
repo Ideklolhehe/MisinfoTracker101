@@ -1,0 +1,149 @@
+import os
+import json
+import logging
+import uuid
+import threading
+import time
+from collections import defaultdict
+from typing import List, Dict, Callable, Any
+from datetime import datetime, timezone
+
+from decouple import config
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import numpy as np
+import faiss
+from sklearn.cluster import DBSCAN, Birch, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
+from sklearn.neighbors import NearestNeighbors
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+import networkx as nx
+import plotly.graph_objects as go
+from plotly.offline import plot
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.feature_extraction.text import CountVectorizer
+from scipy.stats import pearsonr
+from transformers import pipeline
+
+# Load .env for local development fallback
+load_dotenv()
+
+# Configure logging
+TITLE = "Narrative Complexity Analyzer"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(TITLE)
+
+# Configuration
+FLASK_PORT = config("FLASK_PORT", default=5000, cast=int)
+FLASK_DEBUG = config("FLASK_DEBUG", default=False, cast=bool)
+EMBEDDING_DIM = config("EMBEDDING_DIM", default=128, cast=int)
+DBSCAN_EPS = config("DBSCAN_EPS", default=0.5, cast=float)
+DBSCAN_MIN_SAMPLES = config("DBSCAN_MIN_SAMPLES", default=5, cast=int)
+BIRCH_THRESHOLD = config("BIRCH_THRESHOLD", default=0.5, cast=float)
+BIRCH_BRANCHING_FACTOR = config("BIRCH_BRANCHING_FACTOR", default=50, cast=int)
+AGG_N_CLUSTERS = config("AGG_N_CLUSTERS", default=3, cast=int)
+CORS_ORIGINS = config("CORS_ORIGINS", default="*", cast=lambda v: [o.strip() for o in v.split(",")])
+
+# Thread lock for concurrency safety
+data_lock = threading.Lock()
+
+# In-memory data stores
+narratives: Dict[str, Dict[str, Any]] = {}
+embeddings_list: List[np.ndarray] = []
+current_clusters: Dict[str, int] = {}
+complexity_scores: Dict[str, List[Dict[str, Any]]] = {}  # narrative_id -> list of {timestamp, score}
+misinfo_events: List[Dict[str, Any]] = []  # list of {source_id, narrative_id, timestamp}
+
+# Prometheus metrics
+ingest_counter = Counter('narratives_ingested_total', 'Total narratives ingested')
+cluster_counter = Counter('cluster_updates_total', 'Total clustering operations')
+silhouette_gauge = Gauge('clustering_silhouette_score', 'Latest silhouette score')
+misinfo_counter = Counter('misinfo_events_total', 'Total misinformation events reported')
+
+# Flask app\ app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+
+# Clustering registry
+CLUSTERING_REGISTRY: Dict[str, Callable[[np.ndarray], np.ndarray]] = {}
+
+def register_clustering_algorithm(name: str):
+    def decorator(func):
+        CLUSTERING_REGISTRY[name] = func
+        return func
+    return decorator
+
+@register_clustering_algorithm("DBSCAN")
+def dbscan_clustering(X: np.ndarray) -> np.ndarray:
+    return DBSCAN(eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES).fit_predict(X)
+
+@register_clustering_algorithm("BIRCH")
+def birch_clustering(X: np.ndarray) -> np.ndarray:
+    return Birch(threshold=BIRCH_THRESHOLD, branching_factor=BIRCH_BRANCHING_FACTOR).fit_predict(X)
+
+@register_clustering_algorithm("Agglomerative")
+def agg_clustering(X: np.ndarray) -> np.ndarray:
+    return AgglomerativeClustering(n_clusters=AGG_N_CLUSTERS).fit_predict(X)
+
+# Utility functions
+def generate_narrative_id() -> str:
+    return f"narrative-{uuid.uuid4()}"
+
+
+def calculate_cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    a, b = np.array(a).flatten(), np.array(b).flatten()
+    na, nb = np.linalg.norm(a), np.linalg.norm(b)
+    if na == 0 or nb == 0:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+# ------------------------------------
+# Source Reliability Analysis
+# ------------------------------------
+
+@app.route('/api/report-misinfo', methods=['POST'])
+def report_misinfo():
+    """Report a misinformation event tied to a source and narrative."""
+    data = request.get_json(force=True)
+    source_id = data.get('source_id')
+    narrative_id = data.get('narrative_id')
+    if not source_id or not narrative_id:
+        return jsonify(error='Missing source_id or narrative_id'), 400
+    timestamp = data.get('timestamp')
+    try:
+        ts = datetime.fromisoformat(timestamp) if timestamp else datetime.now(timezone.utc)
+    except Exception:
+        ts = datetime.now(timezone.utc)
+    event = {'source_id': source_id, 'narrative_id': narrative_id, 'timestamp': ts}
+    with data_lock:
+        misinfo_events.append(event)
+    misinfo_counter.inc()
+    return jsonify(status='recorded'), 201
+
+@app.route('/api/source-reliability', methods=['GET'])
+def source_reliability():
+    """Return top misinformation sources tracked this month."""
+    now = datetime.now(timezone.utc)
+    start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    counts = defaultdict(int)
+    with data_lock:
+        for ev in misinfo_events:
+            if ev['timestamp'] >= start_month:
+                counts[ev['source_id']] += 1
+    top_sources = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    return jsonify(month=str(start_month.date()), top_sources=[{'source_id': s, 'count': c} for s, c in top_sources]), 200
+
+# ------------------------------------
+# Existing endpoints (narratives, clusters, graph,
+# comparative-analysis, etc.)
+# ------------------------------------
+
+# ... (omitted for brevity)
+
+@app.route('/metrics')
+def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+if __name__ == '__main__':
+    logger.info('Starting Narrative Complexity Analyzer with Source Reliability Analysis')
+    app.run(port=FLASK_PORT, debug=FLASK_DEBUG)

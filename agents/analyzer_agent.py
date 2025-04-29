@@ -181,7 +181,11 @@ class AnalyzerAgent:
             }
             
             # Process with streaming clustering algorithms
-            from utils.stream_processor import process_narrative_with_denstream, process_narrative_with_clustream
+            from utils.stream_processor import (
+                process_narrative_with_denstream, 
+                process_narrative_with_clustream,
+                process_narrative_with_secleds
+            )
             
             # Use DenStream for spatial clustering (based on content similarity)
             denstream_result = process_narrative_with_denstream(narrative_id)
@@ -201,6 +205,19 @@ class AnalyzerAgent:
                     "timestamp": clustream_result.get("timestamp")
                 }
                 logger.info(f"Narrative {narrative_id} processed with CluStream: cluster={clustream_result.get('cluster_id')}")
+                
+            # Use SECLEDS for sequence-based clustering with concept drift adaptation
+            secleds_result = process_narrative_with_secleds(narrative_id)
+            if secleds_result.get("status") == "success":
+                metadata["secleds"] = {
+                    "cluster_id": secleds_result.get("cluster_id"),
+                    "confidence": secleds_result.get("confidence", 0.0),
+                    "is_noise": secleds_result.get("is_noise", False),
+                    "timestamp": secleds_result.get("timestamp")
+                }
+                logger.info(f"Narrative {narrative_id} processed with SECLEDS: " +
+                           f"cluster={secleds_result.get('cluster_id')}, " +
+                           f"confidence={secleds_result.get('confidence', 0.0):.2f}")
             
             # Build a graph representation for this narrative outside any transaction
             graph = self._build_narrative_graph(narrative_id)
