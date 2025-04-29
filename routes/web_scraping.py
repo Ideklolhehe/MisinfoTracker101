@@ -1,292 +1,433 @@
 """
-Routes for web scraping functionality in the CIVILIAN system.
+Web scraping routes for the CIVILIAN system.
+These routes handle web scraping, data collection, and monitoring.
 """
 
-import logging
 import json
-from flask import Blueprint, request, jsonify, render_template
-from flask_login import login_required
+import logging
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session
+from flask_login import login_required, current_user
 from urllib.parse import urlparse
-import threading
+from datetime import datetime
 
+from app import db
+import models
 from services.web_scraping_service import web_scraping_service
 from data_sources.web_source_manager import web_source_manager
-from utils.web_scraper import WebScraper
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
 # Create blueprint
-web_scraping_bp = Blueprint("web_scraping", __name__, url_prefix="/web-scraping")
+web_scraping_bp = Blueprint('web_scraping', __name__)
 
-# Initialize web scraper for route handlers
-web_scraper = WebScraper()
-
-
-@web_scraping_bp.route("/")
+# Dashboard route
+@web_scraping_bp.route('/web-scraping')
 @login_required
-def index():
-    """Web scraping dashboard page."""
-    return render_template("web_scraping/dashboard.html")
+def dashboard():
+    """Web scraping dashboard."""
+    # Get statistics
+    domain_stats = web_scraping_service.get_domain_stats()
+    search_term_stats = web_scraping_service.get_search_term_stats()
+    
+    # Get recent web sources
+    sources = db.session.query(models.WebSource).order_by(
+        models.WebSource.updated_at.desc()
+    ).limit(10).all()
+    
+    recent_sources = [
+        {
+            'id': source.id,
+            'name': source.name,
+            'url': source.url,
+            'source_type': source.source_type,
+            'is_active': source.is_active,
+            'last_ingestion': source.last_ingestion.isoformat() if source.last_ingestion else None
+        }
+        for source in sources
+    ]
+    
+    # Get recent content items
+    items = db.session.query(models.ContentItem).order_by(
+        models.ContentItem.created_at.desc()
+    ).limit(10).all()
+    
+    recent_items = [
+        {
+            'id': item.id,
+            'title': item.title,
+            'source': item.source,
+            'url': item.url,
+            'content_type': item.content_type,
+            'created_at': item.created_at.isoformat() if item.created_at else None
+        }
+        for item in items
+    ]
+    
+    return render_template('web_scraping/dashboard.html',
+                          domain_stats=domain_stats,
+                          search_term_stats=search_term_stats,
+                          recent_sources=recent_sources,
+                          recent_items=recent_items)
 
-
-@web_scraping_bp.route("/scan", methods=["GET", "POST"])
+# URL Scanning route
+@web_scraping_bp.route('/web-scraping/scan', methods=['GET', 'POST'])
 @login_required
-def scan_url():
-    """Scan a URL and analyze its content."""
-    if request.method == "POST":
-        data = request.get_json() or {}
-        url = data.get("url", "")
-        depth = int(data.get("depth", 1))
+def scan():
+    """Scan URLs for content."""
+    if request.method == 'POST':
+        url = request.form.get('url')
+        depth = int(request.form.get('depth', 1))
         
         if not url:
-            return jsonify({"error": "URL is required"}), 400
-            
-        # Validate URL format
-        if not url.startswith(("http://", "https://")):
-            url = f"https://{url}"
-            
+            flash('URL is required', 'error')
+            return redirect(url_for('web_scraping.scan'))
+        
+        # Validate URL
         try:
-            # Run scan in background thread
-            scan_id = web_source_manager.add_url_job(url, "single" if depth <= 1 else "crawl", 
-                                                 {"max_pages": depth, "source_name": f"Manual Scan: {url}"})
-            
-            # Return immediate response with job ID
-            return jsonify({
-                "scan_id": scan_id,
-                "url": url,
-                "depth": depth,
-                "status": "processing"
-            })
-        except Exception as e:
-            logger.error(f"Error scanning URL: {e}")
-            return jsonify({"error": str(e)}), 500
-    else:
-        # GET request - render scan form
-        return render_template("web_scraping/scan.html")
+            parsed = urlparse(url)
+            if not parsed.scheme or not parsed.netloc:
+                flash('Invalid URL format', 'error')
+                return redirect(url_for('web_scraping.scan'))
+        except Exception:
+            flash('Invalid URL format', 'error')
+            return redirect(url_for('web_scraping.scan'))
+        
+        # Scan URL
+        job_id = web_scraping_service.scan_url(url, depth)
+        
+        # Store job ID in session for status checking
+        session['scan_job_id'] = job_id
+        
+        # Redirect to results page
+        return redirect(url_for('web_scraping.scan_results'))
+    
+    return render_template('web_scraping/scan.html')
 
-
-@web_scraping_bp.route("/scan/<scan_id>")
+# Scan results route
+@web_scraping_bp.route('/web-scraping/scan/results')
 @login_required
-def scan_status(scan_id):
-    """Get the status of a scan job."""
+def scan_results():
+    """View scan results."""
+    job_id = session.get('scan_job_id')
+    
+    if not job_id:
+        flash('No scan job found', 'error')
+        return redirect(url_for('web_scraping.scan'))
+    
+    # Get job status
+    job_status = web_source_manager.get_job_status(job_id)
+    
+    # Format results for display
+    results = []
+    if job_status.get('status') == 'completed' and 'results' in job_status:
+        for result in job_status.get('results', []):
+            item = {
+                'title': result.get('title', 'No Title'),
+                'url': result.get('url', ''),
+                'content': result.get('content', '')[:500] + '...' if result.get('content') and len(result.get('content')) > 500 else result.get('content', ''),
+                'source': result.get('source', 'Unknown'),
+                'keywords': ', '.join(result.get('keywords', [])),
+                'published_date': result.get('published_date')
+            }
+            results.append(item)
+    
+    # Check if we need to wait for more results
+    done = job_status.get('status') in ['completed', 'error', 'not_found']
+    
+    return render_template('web_scraping/scan_results.html',
+                          job_id=job_id,
+                          job_status=job_status,
+                          results=results,
+                          done=done)
+
+# Submit to detection route
+@web_scraping_bp.route('/web-scraping/scan/submit', methods=['POST'])
+@login_required
+def submit_to_detection():
+    """Submit content to the detection pipeline."""
+    job_id = request.form.get('job_id')
+    result_idx = request.form.get('result_idx')
+    
+    if not job_id or result_idx is None:
+        flash('Missing job ID or result index', 'error')
+        return jsonify({'success': False, 'error': 'Missing job ID or result index'})
+    
     try:
-        status = web_source_manager.get_job_status(scan_id)
-        return jsonify(status)
+        result_idx = int(result_idx)
+        
+        # Get job status
+        job_status = web_source_manager.get_job_status(job_id)
+        
+        # Check if job exists and is completed
+        if job_status.get('status') != 'completed' or 'results' not in job_status:
+            flash('Job not completed or no results found', 'error')
+            return jsonify({'success': False, 'error': 'Job not completed or no results found'})
+        
+        # Check if result index is valid
+        if result_idx < 0 or result_idx >= len(job_status.get('results', [])):
+            flash('Invalid result index', 'error')
+            return jsonify({'success': False, 'error': 'Invalid result index'})
+        
+        # Get the content
+        content_data = job_status.get('results', [])[result_idx]
+        
+        # Submit to detection pipeline
+        success = web_scraping_service.submit_to_detection_pipeline(content_data)
+        
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to submit content to detection pipeline'})
+        
     except Exception as e:
-        logger.error(f"Error getting scan status: {e}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error submitting content to detection: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
+# Create source route
+@web_scraping_bp.route('/web-scraping/scan/create-source', methods=['POST'])
+@login_required
+def create_source():
+    """Create a source from scan results."""
+    job_id = request.form.get('job_id')
+    name = request.form.get('name')
+    
+    if not job_id:
+        flash('Missing job ID', 'error')
+        return jsonify({'success': False, 'error': 'Missing job ID'})
+    
+    # Create source
+    source_id = web_source_manager.create_source_from_job(job_id, name)
+    
+    if source_id:
+        return jsonify({'success': True, 'source_id': source_id})
+    else:
+        return jsonify({'success': False, 'error': 'Failed to create source'})
 
-@web_scraping_bp.route("/search", methods=["GET", "POST"])
+# Search route
+@web_scraping_bp.route('/web-scraping/search', methods=['GET', 'POST'])
 @login_required
 def search():
-    """Search for content and monitor results."""
-    if request.method == "POST":
-        data = request.get_json() or {}
-        search_term = data.get("search_term", "")
-        limit = int(data.get("limit", 10))
+    """Search for content."""
+    if request.method == 'POST':
+        search_term = request.form.get('search_term')
+        limit = int(request.form.get('limit', 10))
+        add_to_monitoring = request.form.get('add_to_monitoring') == 'on'
         
         if not search_term:
-            return jsonify({"error": "Search term is required"}), 400
-            
-        try:
-            # Run search and monitoring in background thread
-            def run_search():
-                web_scraping_service.search_and_monitor(search_term, limit)
-                
-            thread = threading.Thread(target=run_search)
-            thread.daemon = True
-            thread.start()
-            
-            # Return immediate response
-            return jsonify({
-                "search_term": search_term,
-                "limit": limit,
-                "status": "processing"
-            })
-        except Exception as e:
-            logger.error(f"Error searching: {e}")
-            return jsonify({"error": str(e)}), 500
-    else:
-        # GET request - render search form
-        return render_template("web_scraping/search.html")
+            flash('Search term is required', 'error')
+            return redirect(url_for('web_scraping.search'))
+        
+        # Perform search
+        job_id = web_scraping_service.search_and_monitor(search_term, limit) if add_to_monitoring else web_source_manager.add_url_job(
+            "https://www.bing.com/search",
+            job_type='search',
+            config={
+                'search_term': search_term,
+                'search_engine': 'bing',
+                'limit': limit
+            }
+        )
+        
+        # Store job ID in session for status checking
+        session['search_job_id'] = job_id
+        
+        # Redirect to results page
+        return redirect(url_for('web_scraping.search_results'))
+    
+    return render_template('web_scraping/search.html')
 
+# Search results route
+@web_scraping_bp.route('/web-scraping/search/results')
+@login_required
+def search_results():
+    """View search results."""
+    job_id = session.get('search_job_id')
+    
+    if not job_id:
+        flash('No search job found', 'error')
+        return redirect(url_for('web_scraping.search'))
+    
+    # Get job status
+    job_status = web_source_manager.get_job_status(job_id)
+    
+    # Format results for display
+    results = []
+    if job_status.get('status') == 'completed' and 'results' in job_status:
+        for result in job_status.get('results', []):
+            item = {
+                'title': result.get('title', 'No Title'),
+                'url': result.get('url', ''),
+                'content': result.get('content', '')[:500] + '...' if result.get('content') and len(result.get('content')) > 500 else result.get('content', ''),
+                'source': result.get('source', 'Unknown'),
+                'keywords': ', '.join(result.get('keywords', [])),
+                'published_date': result.get('published_date')
+            }
+            results.append(item)
+    
+    # Check if we need to wait for more results
+    done = job_status.get('status') in ['completed', 'error', 'not_found']
+    
+    return render_template('web_scraping/search_results.html',
+                          job_id=job_id,
+                          job_status=job_status,
+                          results=results,
+                          done=done)
 
-@web_scraping_bp.route("/monitoring", methods=["GET", "POST"])
+# Monitoring route
+@web_scraping_bp.route('/web-scraping/monitoring', methods=['GET', 'POST'])
 @login_required
 def monitoring():
-    """Manage web monitoring configuration."""
-    if request.method == "POST":
-        data = request.get_json() or {}
-        action = data.get("action", "")
+    """Monitor domains and search terms."""
+    if request.method == 'POST':
+        action = request.form.get('action')
         
-        if action == "add_domain":
-            domain = data.get("domain", "")
-            category = data.get("category", "other")
-            priority = int(data.get("priority", 2))
+        if action == 'add_domain':
+            domain = request.form.get('domain')
+            category = request.form.get('category', 'general')
+            priority = int(request.form.get('priority', 2))
             
             if not domain:
-                return jsonify({"error": "Domain is required"}), 400
-                
-            success = web_scraping_service.add_focused_domain(domain, category, priority)
-            return jsonify({"success": success})
+                flash('Domain is required', 'error')
+                return redirect(url_for('web_scraping.monitoring'))
             
-        elif action == "add_search_term":
-            term = data.get("term", "")
-            category = data.get("category", "other")
+            success = web_scraping_service.add_focused_domain(domain, category, priority)
+            
+            if success:
+                flash(f'Domain {domain} added to monitoring', 'success')
+            else:
+                flash(f'Failed to add domain {domain}', 'error')
+                
+        elif action == 'add_term':
+            term = request.form.get('term')
+            category = request.form.get('category', 'general')
             
             if not term:
-                return jsonify({"error": "Search term is required"}), 400
-                
+                flash('Search term is required', 'error')
+                return redirect(url_for('web_scraping.monitoring'))
+            
             success = web_scraping_service.add_search_term(term, category)
-            return jsonify({"success": success})
             
-        elif action == "start_monitoring":
-            web_scraping_service.start_scheduled_scraping()
-            return jsonify({"success": True, "status": "started"})
-            
-        elif action == "stop_monitoring":
-            web_scraping_service.stop_scheduled_scraping()
-            return jsonify({"success": True, "status": "stopped"})
-            
-        else:
-            return jsonify({"error": "Unknown action"}), 400
-    else:
-        # GET request - render monitoring configuration
-        domain_stats = web_scraping_service.get_domain_stats()
-        search_term_stats = web_scraping_service.get_search_term_stats()
+            if success:
+                flash(f'Search term "{term}" added to monitoring', 'success')
+            else:
+                flash(f'Failed to add search term "{term}"', 'error')
         
-        return render_template("web_scraping/monitoring.html", 
-                              domain_stats=domain_stats,
-                              search_term_stats=search_term_stats)
+        return redirect(url_for('web_scraping.monitoring'))
+    
+    # Get domains
+    domains = db.session.query(models.FocusedDomain).order_by(
+        models.FocusedDomain.priority,
+        models.FocusedDomain.domain
+    ).all()
+    
+    # Get search terms
+    terms = db.session.query(models.SearchTerm).order_by(
+        models.SearchTerm.category,
+        models.SearchTerm.term
+    ).all()
+    
+    return render_template('web_scraping/monitoring.html',
+                          domains=domains,
+                          terms=terms)
 
-
-@web_scraping_bp.route("/register-source", methods=["GET", "POST"])
+# Sources route
+@web_scraping_bp.route('/web-scraping/sources', methods=['GET', 'POST'])
 @login_required
-def register_source():
-    """Register a new web source for monitoring."""
-    if request.method == "POST":
-        data = request.get_json() or {}
+def sources():
+    """Manage web sources."""
+    if request.method == 'POST':
+        action = request.form.get('action')
         
-        # Validate required fields
-        for field in ["name", "url", "source_type"]:
-            if field not in data:
-                return jsonify({"error": f"Missing required field: {field}"}), 400
-        
-        # Format source data for registration
-        source_data = {
-            "name": data["name"],
-            "url": data["url"],
-            "source_type": data["source_type"],
-            "is_active": data.get("is_active", True)
-        }
-        
-        # Add config if provided
-        if "config" in data:
-            source_data["config"] = data["config"]
-        else:
-            # Create default config based on source type
-            config = {"url": data["url"]}
+        if action == 'add_source':
+            name = request.form.get('name')
+            url = request.form.get('url')
+            source_type = request.form.get('source_type')
             
-            if data["source_type"] == "search":
-                config["search_term"] = data.get("search_term", "")
-                config["search_engine"] = data.get("search_engine", "bing")
-                config["limit"] = data.get("limit", 10)
+            if not name or not url or not source_type:
+                flash('Name, URL, and source type are required', 'error')
+                return redirect(url_for('web_scraping.sources'))
+            
+            # Create config based on source type
+            config = {'url': url}
+            
+            if source_type == 'web_crawl':
+                config['max_pages'] = int(request.form.get('max_pages', 5))
+                config['same_domain_only'] = request.form.get('same_domain_only') == 'on'
                 
-            source_data["config"] = config
-        
-        try:
-            # Register the source
-            source_id = web_source_manager.register_source(source_data)
+            elif source_type == 'web_search':
+                config['search_term'] = request.form.get('search_term', '')
+                config['search_engine'] = request.form.get('search_engine', 'bing')
+                config['limit'] = int(request.form.get('limit', 10))
+            
+            # Register source
+            source_id = web_source_manager.register_source({
+                'name': name,
+                'url': url,
+                'source_type': source_type,
+                'is_active': True,
+                'config': config
+            })
             
             if source_id:
-                return jsonify({"success": True, "source_id": source_id})
+                flash(f'Source "{name}" added successfully', 'success')
             else:
-                return jsonify({"error": "Failed to register source"}), 500
-        except Exception as e:
-            logger.error(f"Error registering source: {e}")
-            return jsonify({"error": str(e)}), 500
-    else:
-        # GET request - render source registration form
-        return render_template("web_scraping/register_source.html")
-
-
-@web_scraping_bp.route("/sources")
-@login_required
-def list_sources():
-    """List all web sources."""
-    try:
-        sources = []
-        db_sources = web_source_manager.get_active_sources()
-        
-        for source in db_sources:
-            sources.append({
-                "id": source.id,
-                "name": source.name,
-                "source_type": source.source_type,
-                "is_active": source.is_active,
-                "last_ingestion": source.last_ingestion.isoformat() if source.last_ingestion else None
-            })
+                flash(f'Failed to add source "{name}"', 'error')
+                
+        elif action == 'toggle_status':
+            source_id = request.form.get('source_id')
+            is_active = request.form.get('is_active') == 'true'
             
-        return jsonify({"sources": sources})
-    except Exception as e:
-        logger.error(f"Error listing sources: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@web_scraping_bp.route("/sources/<int:source_id>", methods=["GET", "PUT"])
-@login_required
-def manage_source(source_id):
-    """Manage a specific web source."""
-    source = web_source_manager.get_source_by_id(source_id)
-    
-    if not source:
-        return jsonify({"error": "Source not found"}), 404
-    
-    if request.method == "PUT":
-        data = request.get_json() or {}
-        
-        # Update active status if provided
-        if "is_active" in data:
-            success = web_source_manager.update_source_status(source_id, data["is_active"])
-            if not success:
-                return jsonify({"error": "Failed to update source status"}), 500
-        
-        return jsonify({"success": True})
-    else:
-        # GET request - return source details
-        try:
-            config = json.loads(source.config) if source.config else {}
-            meta_data = json.loads(source.meta_data) if source.meta_data else {}
+            if not source_id:
+                flash('Source ID is required', 'error')
+                return redirect(url_for('web_scraping.sources'))
             
-            return jsonify({
-                "id": source.id,
-                "name": source.name,
-                "source_type": source.source_type,
-                "is_active": source.is_active,
-                "last_ingestion": source.last_ingestion.isoformat() if source.last_ingestion else None,
-                "config": config,
-                "meta_data": meta_data
-            })
-        except Exception as e:
-            logger.error(f"Error getting source details: {e}")
-            return jsonify({"error": str(e)}), 500
-
-
-@web_scraping_bp.route("/status")
-@login_required
-def service_status():
-    """Get the status of the web scraping service."""
-    try:
-        domain_stats = web_scraping_service.get_domain_stats()
-        search_term_stats = web_scraping_service.get_search_term_stats()
+            success = web_source_manager.update_source_status(int(source_id), is_active)
+            
+            if success:
+                status = 'activated' if is_active else 'deactivated'
+                flash(f'Source {source_id} {status} successfully', 'success')
+            else:
+                flash(f'Failed to update source {source_id}', 'error')
+                
+        elif action == 'run_source':
+            source_id = request.form.get('source_id')
+            
+            if not source_id:
+                flash('Source ID is required', 'error')
+                return redirect(url_for('web_scraping.sources'))
+            
+            success = web_source_manager.run_source(int(source_id))
+            
+            if success:
+                flash(f'Source {source_id} executed successfully', 'success')
+            else:
+                flash(f'Failed to execute source {source_id}', 'error')
         
-        return jsonify({
-            "domain_stats": domain_stats,
-            "search_term_stats": search_term_stats,
-            "is_monitoring_active": web_scraping_service.is_running
-        })
-    except Exception as e:
-        logger.error(f"Error getting service status: {e}")
-        return jsonify({"error": str(e)}), 500
+        return redirect(url_for('web_scraping.sources'))
+    
+    # Get all sources
+    sources = db.session.query(models.WebSource).order_by(
+        models.WebSource.source_type,
+        models.WebSource.name
+    ).all()
+    
+    return render_template('web_scraping/sources.html', sources=sources)
+
+# Schedule start route
+@web_scraping_bp.route('/web-scraping/schedule/start', methods=['POST'])
+@login_required
+def start_schedule():
+    """Start scheduled web scraping."""
+    web_scraping_service.start_scheduled_scraping()
+    flash('Scheduled web scraping started', 'success')
+    return redirect(url_for('web_scraping.dashboard'))
+
+# Schedule stop route
+@web_scraping_bp.route('/web-scraping/schedule/stop', methods=['POST'])
+@login_required
+def stop_schedule():
+    """Stop scheduled web scraping."""
+    web_scraping_service.stop_scheduled_scraping()
+    flash('Scheduled web scraping stopped', 'success')
+    return redirect(url_for('web_scraping.dashboard'))

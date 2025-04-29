@@ -1,97 +1,250 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}Web Scraping - CIVILIAN{% endblock %}
+{% block title %}Web Scraping Dashboard{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mt-4 mb-4">Web Data Collection</h1>
-    
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Real-time Web Data Collection Dashboard</h5>
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-4">Web Scraping Dashboard</h1>
+            <p class="text-muted">Monitor and manage web scraping data collection for the CIVILIAN system.</p>
+        </div>
+    </div>
+
+    <!-- Actions row -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-search fa-3x mb-3 text-primary"></i>
+                    <h5 class="card-title">Scan URL</h5>
+                    <p class="card-text">Scan a specific URL for content</p>
+                    <a href="{{ url_for('web_scraping.scan') }}" class="btn btn-primary">Scan URL</a>
                 </div>
-                <div class="card-body">
-                    <p>
-                        The CIVILIAN system uses advanced web scraping capabilities to monitor, analyze, and collect data 
-                        from internet sources in real-time. This dashboard provides tools to manage and control web scraping operations.
-                    </p>
-                    
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> All data collection is performed with appropriate rate limiting and 
-                        follows responsible web scraping practices.
-                    </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-globe fa-3x mb-3 text-info"></i>
+                    <h5 class="card-title">Search & Monitor</h5>
+                    <p class="card-text">Search for content and set up monitoring</p>
+                    <a href="{{ url_for('web_scraping.search') }}" class="btn btn-info">Search</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-binoculars fa-3x mb-3 text-success"></i>
+                    <h5 class="card-title">Monitoring</h5>
+                    <p class="card-text">Manage domains and search terms to monitor</p>
+                    <a href="{{ url_for('web_scraping.monitoring') }}" class="btn btn-success">Monitoring</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-database fa-3x mb-3 text-warning"></i>
+                    <h5 class="card-title">Sources</h5>
+                    <p class="card-text">Manage web scraping data sources</p>
+                    <a href="{{ url_for('web_scraping.sources') }}" class="btn btn-warning">Sources</a>
                 </div>
             </div>
         </div>
     </div>
-    
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card mb-4">
+
+    <!-- Statistics row -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">URL Scanner</h5>
+                    <h5 class="card-title mb-0">Domain Monitoring</h5>
                 </div>
                 <div class="card-body">
-                    <p>Scan a specific URL to analyze its content and detect narratives.</p>
-                    <a href="{{ url_for('web_scraping.scan_url') }}" class="btn btn-primary">Scan URL</a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Search Monitor</h5>
-                </div>
-                <div class="card-body">
-                    <p>Search for content and set up monitoring for the results.</p>
-                    <a href="{{ url_for('web_scraping.search') }}" class="btn btn-primary">Search & Monitor</a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Source Management</h5>
-                </div>
-                <div class="card-body">
-                    <p>Configure web data sources for continuous monitoring.</p>
-                    <a href="{{ url_for('web_scraping.monitoring') }}" class="btn btn-primary">Manage Sources</a>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Monitoring Status</h5>
-                </div>
-                <div class="card-body" id="monitoring-status">
-                    <div class="d-flex justify-content-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h3 class="text-center mb-3">{{ domain_stats.total_domains }}</h3>
+                            <p class="text-center text-muted">Monitored Domains</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Categories</h6>
+                            <ul class="list-group list-group-flush">
+                                {% for category, count in domain_stats.domains_by_category.items() %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ category }}
+                                    <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                                </li>
+                                {% else %}
+                                <li class="list-group-item">No domain categories defined</li>
+                                {% endfor %}
+                            </ul>
                         </div>
                     </div>
                 </div>
+                <div class="card-footer">
+                    <h6>Recently Processed</h6>
+                    <ul class="list-group list-group-flush">
+                        {% for domain in domain_stats.recently_processed %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ domain.name }}
+                            <small class="text-muted">{{ domain.last_ingestion|default('Never') }}</small>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item">No recent domain processing</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Search Term Monitoring</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h3 class="text-center mb-3">{{ search_term_stats.total_terms }}</h3>
+                            <p class="text-center text-muted">Monitored Search Terms</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Categories</h6>
+                            <ul class="list-group list-group-flush">
+                                {% for category, count in search_term_stats.terms_by_category.items() %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ category }}
+                                    <span class="badge bg-info rounded-pill">{{ count }}</span>
+                                </li>
+                                {% else %}
+                                <li class="list-group-item">No search term categories defined</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <h6>Recently Processed</h6>
+                    <ul class="list-group list-group-flush">
+                        {% for term in search_term_stats.recently_processed %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ term.term }}
+                            <small class="text-muted">{{ term.last_ingestion|default('Never') }}</small>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item">No recent search term processing</li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
-    
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card mb-4">
+
+    <!-- Recent data row -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Recent Activity</h5>
+                    <h5 class="card-title mb-0">Recent Sources</h5>
                 </div>
-                <div class="card-body" id="recent-activity">
-                    <div class="d-flex justify-content-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Last Run</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in recent_sources %}
+                                <tr>
+                                    <td>{{ source.name }}</td>
+                                    <td>{{ source.source_type }}</td>
+                                    <td>
+                                        {% if source.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ source.last_ingestion|default('Never') }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No sources found</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('web_scraping.sources') }}" class="btn btn-sm btn-outline-primary">View All Sources</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Content Items</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Source</th>
+                                    <th>Type</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in recent_items %}
+                                <tr>
+                                    <td>{{ item.title|default('No Title')|truncate(30) }}</td>
+                                    <td>{{ item.source }}</td>
+                                    <td>{{ item.content_type }}</td>
+                                    <td>{{ item.created_at|default('Unknown') }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No content items found</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <!-- Could link to a content items page if we create one -->
+                    <span class="text-muted">Showing 10 most recent content items</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scheduled Scraping Control -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Scheduled Scraping</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <p class="mb-0">Control scheduled web scraping to automatically monitor domains and search terms.</p>
+                        <div>
+                            <form method="post" action="{{ url_for('web_scraping.start_schedule') }}" class="d-inline">
+                                <button type="submit" class="btn btn-success">Start Scheduled Scraping</button>
+                            </form>
+                            <form method="post" action="{{ url_for('web_scraping.stop_schedule') }}" class="d-inline">
+                                <button type="submit" class="btn btn-danger">Stop Scheduled Scraping</button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -99,188 +252,4 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Fetch monitoring status
-        fetch('/web-scraping/status')
-            .then(response => response.json())
-            .then(data => {
-                updateMonitoringStatus(data);
-                updateRecentActivity(data);
-            })
-            .catch(error => {
-                console.error('Error fetching status:', error);
-                document.getElementById('monitoring-status').innerHTML = 
-                    '<div class="alert alert-danger">Error loading monitoring status</div>';
-            });
-            
-        // Fetch recent sources
-        fetch('/web-scraping/sources')
-            .then(response => response.json())
-            .then(data => {
-                // Update sources display
-            })
-            .catch(error => {
-                console.error('Error fetching sources:', error);
-            });
-    });
-    
-    function updateMonitoringStatus(data) {
-        const statusEl = document.getElementById('monitoring-status');
-        
-        let statusHtml = `
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h5>Monitoring Status</h5>
-                            <div class="mt-3">
-                                <span class="badge ${data.is_monitoring_active ? 'bg-success' : 'bg-warning'} fs-6">
-                                    ${data.is_monitoring_active ? 'Active' : 'Inactive'}
-                                </span>
-                            </div>
-                            <div class="mt-3">
-                                <button class="btn btn-sm ${data.is_monitoring_active ? 'btn-danger' : 'btn-success'}" 
-                                        onclick="toggleMonitoring(${data.is_monitoring_active})">
-                                    ${data.is_monitoring_active ? 'Stop Monitoring' : 'Start Monitoring'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h5>Domains</h5>
-                            <div class="fs-4 mt-2">${data.domain_stats.total_domains}</div>
-                            <div class="text-muted small">Monitored domains</div>
-                            <div class="mt-2">
-                                <a href="{{ url_for('web_scraping.monitoring') }}" class="btn btn-sm btn-outline-primary">
-                                    Manage Domains
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h5>Search Terms</h5>
-                            <div class="fs-4 mt-2">${data.search_term_stats.total_terms}</div>
-                            <div class="text-muted small">Active search terms</div>
-                            <div class="mt-2">
-                                <a href="{{ url_for('web_scraping.search') }}" class="btn btn-sm btn-outline-primary">
-                                    Manage Search Terms
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        statusEl.innerHTML = statusHtml;
-    }
-    
-    function updateRecentActivity(data) {
-        const activityEl = document.getElementById('recent-activity');
-        
-        // Get recently processed domains
-        const recentDomains = data.domain_stats.recently_processed || [];
-        const recentTerms = data.search_term_stats.recently_processed || [];
-        
-        let activityHtml = `
-            <div class="row">
-                <div class="col-md-6">
-                    <h6>Recently Processed Domains</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Type</th>
-                                    <th>Last Processed</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${recentDomains.map(domain => `
-                                    <tr>
-                                        <td>${domain.name}</td>
-                                        <td>${domain.source_type || 'N/A'}</td>
-                                        <td>${formatDate(domain.last_ingestion)}</td>
-                                    </tr>
-                                `).join('')}
-                                ${recentDomains.length === 0 ? '<tr><td colspan="3" class="text-center">No recent activity</td></tr>' : ''}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <div class="col-md-6">
-                    <h6>Recently Processed Search Terms</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Term</th>
-                                    <th>Last Processed</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${recentTerms.map(term => `
-                                    <tr>
-                                        <td>${term.term || 'N/A'}</td>
-                                        <td>${formatDate(term.last_ingestion)}</td>
-                                    </tr>
-                                `).join('')}
-                                ${recentTerms.length === 0 ? '<tr><td colspan="2" class="text-center">No recent activity</td></tr>' : ''}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        activityEl.innerHTML = activityHtml;
-    }
-    
-    function formatDate(dateStr) {
-        if (!dateStr) return 'N/A';
-        
-        const date = new Date(dateStr);
-        return date.toLocaleString();
-    }
-    
-    function toggleMonitoring(isActive) {
-        const action = isActive ? 'stop_monitoring' : 'start_monitoring';
-        
-        fetch('/web-scraping/monitoring', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: action
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Reload the page to update status
-                window.location.reload();
-            } else {
-                alert('Failed to change monitoring status');
-            }
-        })
-        .catch(error => {
-            console.error('Error toggling monitoring:', error);
-            alert('Error changing monitoring status');
-        });
-    }
-</script>
 {% endblock %}
