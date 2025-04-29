@@ -2,9 +2,10 @@ from datetime import datetime
 from app import db
 from flask_login import UserMixin
 from flask_dance.consumer.storage.sqla import OAuthConsumerMixin
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, Text, JSON
 import json
 import enum
+import uuid
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -397,6 +398,17 @@ class FocusedDomain(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_check = db.Column(db.DateTime)
+    meta_data = db.Column(db.Text)  # JSON with additional metadata
+    created_by = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    
+    # Relationships
+    creator = db.relationship('User', foreign_keys=[created_by])
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 
 class SearchTerm(db.Model):
@@ -408,3 +420,57 @@ class SearchTerm(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_check = db.Column(db.DateTime)
+    meta_data = db.Column(db.Text)  # JSON with additional metadata
+    created_by = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    
+    # Relationships
+    creator = db.relationship('User', foreign_keys=[created_by])
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+# Note: WebSource is intentionally removed from here, as it's defined earlier in the file at line ~386
+
+
+class WebSourceJobStatus(enum.Enum):
+    """Enum for web source job status."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class WebSourceJob(db.Model):
+    """Model for tracking web source ingestion jobs."""
+    id = db.Column(db.Integer, primary_key=True)
+    source_id = db.Column(db.Integer, db.ForeignKey('web_source.id'), nullable=False)
+    job_type = db.Column(db.String(50))  # scan, crawl, search, monitor
+    status = db.Column(db.String(20), default=WebSourceJobStatus.PENDING.value)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
+    job_id = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True)
+    results = db.Column(db.Text)  # JSON with job results
+    error_message = db.Column(db.Text)
+    meta_data = db.Column(db.Text)  # JSON with additional job metadata
+    created_by = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    
+    # Relationships
+    creator = db.relationship('User', foreign_keys=[created_by])
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def set_results(self, data):
+        self.results = json.dumps(data)
+    
+    def get_results(self):
+        return json.loads(self.results) if self.results else {}

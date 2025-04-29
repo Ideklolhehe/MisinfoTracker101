@@ -93,6 +93,9 @@ with app.app_context():
     from routes.counter_narrative import counter_narrative_bp
     from routes.comparative import comparative_bp
     
+    # Import web scraping blueprint
+    from routes.web_scraping import web_scraping_bp
+    
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(api_bp, url_prefix='/api')
@@ -118,6 +121,9 @@ with app.app_context():
     # Register counter-narrative and comparative analysis blueprints
     app.register_blueprint(counter_narrative_bp)  # Routes include '/counter-narrative'
     app.register_blueprint(comparative_bp)  # Routes include '/comparative'
+    
+    # Register web scraping blueprint
+    app.register_blueprint(web_scraping_bp)  # Routes include '/web-scraping'
     
     # Initialize external API clients
     from services.api_credential_manager import APICredentialManager
