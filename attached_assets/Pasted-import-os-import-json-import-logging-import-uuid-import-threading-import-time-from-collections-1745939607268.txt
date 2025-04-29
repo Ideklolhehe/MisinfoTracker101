@@ -1,0 +1,167 @@
+import os
+import json
+import logging
+import uuid
+import threading
+import time
+from collections import defaultdict
+from datetime import datetime, timezone
+from typing import List, Dict, Callable, Any
+
+import requests
+import numpy as np
+import faiss
+import networkx as nx
+import plotly.graph_objects as go
+from decouple import config
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from sklearn.cluster import DBSCAN, Birch, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from transformers import pipeline
+
+# Load .env for local development fallback
+load_dotenv()
+
+# Configure logging
+TITLE = "Narrative Complexity Analyzer"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(TITLE)
+
+# Configuration
+FLASK_PORT = config("FLASK_PORT", default=5000, cast=int)
+FLASK_DEBUG = config("FLASK_DEBUG", default=False, cast=bool)
+EMBEDDING_DIM = config("EMBEDDING_DIM", default=128, cast=int)
+DBSCAN_EPS = config("DBSCAN_EPS", default=0.5, cast=float)
+DBSCAN_MIN_SAMPLES = config("DBSCAN_MIN_SAMPLES", default=5, cast=int)
+BIRCH_THRESHOLD = config("BIRCH_THRESHOLD", default=0.5, cast=float)
+BIRCH_BRANCHING_FACTOR = config("BIRCH_BRANCHING_FACTOR", default=50, cast=int)
+AGG_N_CLUSTERS = config("AGG_N_CLUSTERS", default=3, cast=int)
+CORS_ORIGINS = config("CORS_ORIGINS", default="*", cast=lambda v: [o.strip() for o in v.split(",")])
+FACTCHECK_API_KEY = config("FACTCHECK_API_KEY", default="")  # Google Fact Check Tools API key
+
+# Thread lock for concurrency safety
+data_lock = threading.Lock()
+
+# In-memory data stores
+narratives: Dict[str, Dict[str, Any]] = {}
+embeddings_list: List[np.ndarray] = []
+current_clusters: Dict[str, int] = {}
+misinfo_events: List[Dict[str, Any]] = []
+platforms: List[Dict[str, Any]] = []  # {name, api_url}
+
+# Prometheus metrics
+ingest_counter = Counter('narratives_ingested_total', 'Total narratives ingested')
+cluster_counter = Counter('cluster_updates_total', 'Total clustering operations')
+silhouette_gauge = Gauge('clustering_silhouette_score', 'Latest silhouette score')
+misinfo_counter = Counter('misinfo_events_total', 'Total misinformation events reported')
+new_cluster_counter = Counter('new_clusters_detected_total', 'Total new narrative clusters detected')
+factcheck_counter = Counter('automated_factchecks_total', 'Total automated fact-checking responses')
+
+# Flask app
+app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+
+# Clustering registry
+CLUSTERING_REGISTRY: Dict[str, Callable[[np.ndarray], np.ndarray]] = {}
+
+def register_clustering_algorithm(name: str):
+    def decorator(func):
+        CLUSTERING_REGISTRY[name] = func
+        return func
+    return decorator
+
+@register_clustering_algorithm("DBSCAN")
+def dbscan_clustering(X: np.ndarray) -> np.ndarray:
+    return DBSCAN(eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES).fit_predict(X)
+
+@register_clustering_algorithm("BIRCH")
+def birch_clustering(X: np.ndarray) -> np.ndarray:
+    return Birch(threshold=BIRCH_THRESHOLD, branching_factor=BIRCH_BRANCHING_FACTOR).fit_predict(X)
+
+@register_clustering_algorithm("Agglomerative")
+def agg_clustering(X: np.ndarray) -> np.ndarray:
+    return AgglomerativeClustering(n_clusters=AGG_N_CLUSTERS).fit_predict(X)
+
+# Automated fact-checking pipeline
+factcheck_pipeline = pipeline('text2text-generation', model='google/factcheck-tools') if FACTCHECK_API_KEY else None
+
+# Utility functions
+def generate_narrative_id() -> str:
+    return f"narrative-{uuid.uuid4()}"
+
+
+def calculate_cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    a, b = np.array(a).flatten(), np.array(b).flatten()
+    na, nb = np.linalg.norm(a), np.linalg.norm(b)
+    return 0.0 if na==0 or nb==0 else float(np.dot(a,b)/(na*nb))
+
+# Fact check using Google Fact Check Tools API
+def fact_check_claim(text: str) -> Dict[str, Any]:
+    if not FACTCHECK_API_KEY:
+        return {'error': 'API key missing'}
+    url = 'https://factchecktools.googleapis.com/v1alpha1/claims:search'
+    params = {'query': text, 'key': FACTCHECK_API_KEY}
+    resp = requests.get(url, params=params)
+    factcheck_counter.inc()
+    if resp.status_code != 200:
+        return {'error': 'FactCheck API error'}
+    data = resp.json()
+    return {'claims': data.get('claims', [])}
+
+# Real-time cluster detection engine
+def cluster_monitor():
+    seen_clusters = set()
+    while True:
+        with data_lock:
+            clusts = set(current_clusters.values())
+        new = clusts - seen_clusters
+        for cid in new:
+            new_cluster_counter.inc()
+            # Automated fact-checking for narratives in this cluster
+            with data_lock:
+                members = [nid for nid,c in current_clusters.items() if c==cid]
+            for nid in members:
+                claim = narratives[nid]['text']
+                result = fact_check_claim(claim)
+                logger.info(f"Fact-check result for {nid}: {result}")
+        seen_clusters = clusts
+        time.sleep(5)
+
+# Monitoring emerging social platforms
+def platform_monitor():
+    while True:
+        for p in platforms:
+            try:
+                resp = requests.get(p['api_url'], timeout=10)
+                logger.info(f"Fetched from {p['name']}: {resp.status_code}")
+            except Exception as e:
+                logger.error(f"Error polling {p['name']}: {e}")
+        time.sleep(60)
+
+# API endpoints for platforms
+@app.route('/api/register-platform', methods=['POST'])
+def register_platform():
+    data = request.get_json(force=True)
+    name = data.get('name'); url = data.get('api_url')
+    if not name or not url:
+        return jsonify({'error':'Missing name or api_url'}), 400
+    with data_lock:
+        platforms.append({'name':name,'api_url':url})
+    return jsonify(status='registered'), 201
+
+# Existing endpoints (narratives, clusters, source-reliability, etc.) omitted for brevity
+
+@app.route('/metrics')
+def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+if __name__ == '__main__':
+    # Start background monitors\    t1 = threading.Thread(target=cluster_monitor, daemon=True)
+    t1.start()
+    t2 = threading.Thread(target=platform_monitor, daemon=True)
+    t2.start()
+    logger.info('Starting Narrative Complexity Analyzer with Detection Engine and Fact-Checking')
+    app.run(port=FLASK_PORT, debug=FLASK_DEBUG)
