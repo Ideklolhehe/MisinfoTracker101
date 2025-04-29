@@ -184,3 +184,25 @@ def with_app_context_async(func: Callable[..., T]) -> Callable[..., threading.Th
         return thread
         
     return wrapper
+
+
+def get_app_context():
+    """
+    Context manager for Flask application context.
+    
+    Usage:
+        with get_app_context():
+            # Code that requires application context
+            
+    Returns:
+        Flask application context
+    """
+    app = get_current_app()
+    if app is None:
+        logger.error("No application context available")
+        raise RuntimeError(
+            "No application context available. "
+            "Make sure set_current_app() was called."
+        )
+    
+    return app.app_context()
