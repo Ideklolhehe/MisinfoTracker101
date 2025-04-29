@@ -1,0 +1,198 @@
+import os
+import json
+import logging
+import uuid
+import threading
+import time
+from collections import defaultdict
+from typing import List, Dict, Callable, Any
+
+from decouple import config
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import numpy as np
+import faiss
+from sklearn.cluster import DBSCAN, Birch, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
+from sklearn.neighbors import NearestNeighbors
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+import networkx as nx
+import plotly.graph_objects as go
+from plotly.offline import plot
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.feature_extraction.text import CountVectorizer
+from scipy.stats import pearsonr
+
+# Load .env for local development fallback
+load_dotenv()
+
+# Configure logging
+title = "Narrative Complexity Analyzer"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(title)
+
+# Configuration
+FLASK_PORT = config("FLASK_PORT", default=5000, cast=int)
+FLASK_DEBUG = config("FLASK_DEBUG", default=False, cast=bool)
+EMBEDDING_DIM = config("EMBEDDING_DIM", default=128, cast=int)
+DBSCAN_EPS = config("DBSCAN_EPS", default=0.5, cast=float)
+DBSCAN_MIN_SAMPLES = config("DBSCAN_MIN_SAMPLES", default=5, cast=int)
+BIRCH_THRESHOLD = config("BIRCH_THRESHOLD", default=0.5, cast=float)
+BIRCH_BRANCHING_FACTOR = config("BIRCH_BRANCHING_FACTOR", default=50, cast=int)
+AGG_N_CLUSTERS = config("AGG_N_CLUSTERS", default=3, cast=int)
+CORS_ORIGINS = config("CORS_ORIGINS", default="*", cast=lambda v: [o.strip() for o in v.split(",")])
+
+# Thread lock for concurrency safety
+data_lock = threading.Lock()
+
+# In-memory stores
+narratives: Dict[str, Dict[str, Any]] = {}
+embeddings_list: List[np.ndarray] = []
+current_clusters: Dict[str, int] = {}
+complexity_scores: Dict[str, List[Dict[str, Any]]] = {}  # narrative_id -> list of {timestamp, score}
+
+# Prometheus metrics
+ingest_counter = Counter('narratives_ingested_total', 'Total narratives ingested')
+cluster_counter = Counter('cluster_updates_total', 'Total clustering operations')
+silhouette_gauge = Gauge('clustering_silhouette_score', 'Latest silhouette score')
+
+# Flask app
+app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+
+# Clustering registry
+CLUSTERING_REGISTRY: Dict[str, Callable[[np.ndarray], np.ndarray]] = {}
+
+def register_clustering_algorithm(name: str):
+    def decorator(func):
+        CLUSTERING_REGISTRY[name] = func
+        return func
+    return decorator
+
+@register_clustering_algorithm("DBSCAN")
+def dbscan_clustering(X: np.ndarray) -> np.ndarray:
+    return DBSCAN(eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES).fit_predict(X)
+
+@register_clustering_algorithm("BIRCH")
+def birch_clustering(X: np.ndarray) -> np.ndarray:
+    return Birch(threshold=BIRCH_THRESHOLD, branching_factor=BIRCH_BRANCHING_FACTOR).fit_predict(X)
+
+@register_clustering_algorithm("Agglomerative")
+def agg_clustering(X: np.ndarray) -> np.ndarray:
+    return AgglomerativeClustering(n_clusters=AGG_N_CLUSTERS).fit_predict(X)
+
+# Utility functions
+def generate_narrative_id() -> str:
+    return f"narrative-{uuid.uuid4()}"
+
+
+def calculate_cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    a, b = np.array(a).flatten(), np.array(b).flatten()
+    na, nb = np.linalg.norm(a), np.linalg.norm(b)
+    if na == 0 or nb == 0:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+# ------------------------------------
+# Comparative Analysis Functions
+# ------------------------------------
+
+def side_by_side_comparison(narrative_ids: List[str], dimensions: List[str]) -> str:
+    # Build dummy dimension scores from complexity_scores store
+    import pandas as pd
+    data = {dim: [] for dim in dimensions}
+    data['narrative'] = narrative_ids
+    for nid in narrative_ids:
+        latest = complexity_scores.get(nid, [])[-1] if complexity_scores.get(nid) else {}
+        for dim in dimensions:
+            data[dim].append(latest.get(dim, 0))
+    df = pd.DataFrame(data)
+    # Plot bar chart
+    fig = go.Figure()
+    for dim in dimensions:
+        fig.add_trace(go.Bar(name=dim, x=df['narrative'], y=df[dim]))
+    fig.update_layout(barmode='group', title='Side-by-Side Dimension Comparison')
+    return plot(fig, output_type='div')
+
+@app.route('/api/comparative-analysis', methods=['POST'])
+def comparative_analysis():
+    data = request.get_json(force=True)
+    ids = data.get('narrative_ids', [])
+    dims = data.get('dimensions', [])
+    html = side_by_side_comparison(ids, dims)
+    return jsonify(chart_html=html), 200
+
+
+def relative_growth_rate(narrative_id: str) -> str:
+    import pandas as pd
+    records = complexity_scores.get(narrative_id, [])
+    df = pd.DataFrame(records)
+    df.sort_values('timestamp', inplace=True)
+    df['growth'] = df['score'].pct_change().fillna(0)
+    fig = go.Figure(data=go.Scatter(x=df['timestamp'], y=df['growth'], mode='lines+markers'))
+    fig.update_layout(title=f'Relative Growth Rate for {narrative_id}', xaxis_title='Time', yaxis_title='Growth Rate')
+    return plot(fig, output_type='div')
+
+@app.route('/api/growth-rate', methods=['POST'])
+def growth_rate_endpoint():
+    nid = request.get_json(force=True).get('narrative_id')
+    html = relative_growth_rate(nid)
+    return jsonify(chart_html=html), 200
+
+
+def identify_correlation(nid1: str, nid2: str) -> Dict[str, Any]:
+    rec1 = sorted(complexity_scores.get(nid1, []), key=lambda r: r['timestamp'])
+    rec2 = sorted(complexity_scores.get(nid2, []), key=lambda r: r['timestamp'])
+    # Align by timestamp
+    times = sorted(set(r['timestamp'] for r in rec1) & set(r['timestamp'] for r in rec2))
+    vals1 = [next(r['score'] for r in rec1 if r['timestamp']==t) for t in times]
+    vals2 = [next(r['score'] for r in rec2 if r['timestamp']==t) for t in times]
+    corr, p = pearsonr(vals1, vals2) if len(times)>1 else (0, 1)
+    return {'correlation': corr, 'p_value': p, 'timestamps': times}
+
+@app.route('/api/correlation', methods=['POST'])
+def correlation_endpoint():
+    data = request.get_json(force=True)
+    r = identify_correlation(data.get('narrative1'), data.get('narrative2'))
+    return jsonify(r), 200
+
+
+def shared_theme_detection(texts: List[str], n_topics: int=5) -> List[List[str]]:
+    vectorizer = CountVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(texts)
+    lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+    lda.fit(X)
+    themes = []
+    terms = vectorizer.get_feature_names_out()
+    for comp in lda.components_:
+        top = [terms[i] for i in comp.argsort()[-5:][::-1]]
+        themes.append(top)
+    return themes
+
+@app.route('/api/shared-themes', methods=['POST'])
+def shared_themes_endpoint():
+    texts = request.get_json(force=True).get('texts', [])
+    themes = shared_theme_detection(texts)
+    return jsonify(themes=themes), 200
+
+
+def coordinated_source_analysis(edges: List[List[str]]) -> Dict[str, float]:
+    G = nx.DiGraph()
+    G.add_edges_from(edges)
+    centrality = nx.betweenness_centrality(G)
+    # Return top and bottom
+    sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
+    return {'top5': sorted_nodes[:5], 'bottom5': sorted_nodes[-5:]}
+
+@app.route('/api/coordinate-sources', methods=['POST'])
+def coordinate_sources_endpoint():
+    edges = request.get_json(force=True).get('edges', [])
+    r = coordinated_source_analysis(edges)
+    return jsonify(r), 200
+
+# Existing endpoints (narratives, clusters, graph, metrics) omitted for brevity
+
+if __name__ == '__main__':
+    logger.info('Starting Narrative Complexity Analyzer with Comparative Analysis')
+    app.run(port=FLASK_PORT, debug=FLASK_DEBUG)
