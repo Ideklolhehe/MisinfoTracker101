@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results - Web Scraping{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('web_scraping.dashboard') }}">Web Scraping</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('web_scraping.search') }}">Search</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Results</li>
+                </ol>
+            </nav>
+            <h1 class="mb-4">Search Results</h1>
+            <p class="text-muted">Results from web search. You can submit content to the detection pipeline for analysis.</p>
+        </div>
+    </div>
+
+    <!-- Job Status Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Search Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6>Job ID: <span class="text-muted">{{ job_id }}</span></h6>
+                            <p>
+                                Status: 
+                                {% if job_status.status == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                                {% elif job_status.status == 'running' %}
+                                <span class="badge bg-primary">Running</span>
+                                {% elif job_status.status == 'pending' %}
+                                <span class="badge bg-info">Pending</span>
+                                {% elif job_status.status == 'error' %}
+                                <span class="badge bg-danger">Error</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Unknown</span>
+                                {% endif %}
+                            </p>
+                            {% if job_status.config and job_status.config.search_term %}
+                            <p>Search Term: <strong>{{ job_status.config.search_term }}</strong></p>
+                            {% endif %}
+                            {% if job_status.error %}
+                            <div class="alert alert-danger">
+                                <h6>Error:</h6>
+                                <p>{{ job_status.error }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Timing Information</h6>
+                            <ul class="list-unstyled">
+                                <li>Started: {{ job_status.started_at|default('Not started') }}</li>
+                                <li>Completed: {{ job_status.completed_at|default('Not completed') }}</li>
+                            </ul>
+                            
+                            {% if job_status.status == 'completed' and results|length > 0 %}
+                            <div class="alert alert-success">
+                                Found {{ results|length }} search result(s)
+                            </div>
+                            {% elif job_status.status == 'completed' and results|length == 0 %}
+                            <div class="alert alert-warning">
+                                No search results found for this query
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('web_scraping.search') }}" class="btn btn-outline-primary">New Search</a>
+                        
+                        <!-- Create Source button if job completed successfully -->
+                        {% if job_status.status == 'completed' and results|length > 0 %}
+                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createSourceModal">
+                            Create Persistent Source
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading animation when job is not done -->
+    {% if not done %}
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Searching and processing content, please wait...</p>
+            <p class="text-muted small">This page will automatically refresh in 5 seconds</p>
+            
+            <script>
+                // Auto refresh the page every 5 seconds until done
+                setTimeout(function() {
+                    window.location.reload();
+                }, 5000);
+            </script>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Results -->
+    {% if results|length > 0 %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Search Results</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="accordion" id="searchAccordion">
+                        {% for item in results %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" 
+                                        aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" 
+                                        aria-controls="collapse{{ loop.index }}">
+                                    <div>
+                                        <span class="fw-bold">{{ item.title|default('Untitled Content') }}</span>
+                                        <br>
+                                        <small class="text-muted">{{ item.url|truncate(60) }}</small>
+                                    </div>
+                                </button>
+                            </h2>
+                            <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" 
+                                 aria-labelledby="heading{{ loop.index }}" data-bs-parent="#searchAccordion">
+                                <div class="accordion-body">
+                                    <div class="mb-3">
+                                        <h6>Content Summary</h6>
+                                        <p>{{ item.content|truncate(500) }}</p>
+                                        
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-sm btn-primary show-full-content-btn"
+                                                    data-bs-toggle="modal" data-bs-target="#fullContentModal"
+                                                    data-title="{{ item.title|default('Untitled Content') }}"
+                                                    data-content="{{ item.content }}">
+                                                View Full Content
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <h6>Source Information</h6>
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item"><strong>Source:</strong> {{ item.source|default('Unknown') }}</li>
+                                                <li class="list-group-item"><strong>Published:</strong> {{ item.published_date|default('Unknown') }}</li>
+                                                <li class="list-group-item"><strong>URL:</strong> <a href="{{ item.url }}" target="_blank">Visit Source</a></li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6>Keywords</h6>
+                                            <div>
+                                                {% for keyword in item.keywords.split(', ') %}
+                                                <span class="badge bg-secondary mb-1">{{ keyword }}</span>
+                                                {% else %}
+                                                <p class="text-muted">No keywords extracted</p>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-end">
+                                        <form method="post" action="{{ url_for('web_scraping.submit_to_detection') }}" class="submit-to-detection-form">
+                                            <input type="hidden" name="job_id" value="{{ job_id }}">
+                                            <input type="hidden" name="result_idx" value="{{ loop.index0 }}">
+                                            <button type="submit" class="btn btn-warning">
+                                                <i class="fas fa-exclamation-triangle me-1"></i> Submit for Detection Analysis
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Full Content Modal -->
+<div class="modal fade" id="fullContentModal" tabindex="-1" aria-labelledby="fullContentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="fullContentModalLabel">Content</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="fullContentContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Source Modal -->
+<div class="modal fade" id="createSourceModal" tabindex="-1" aria-labelledby="createSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createSourceModalLabel">Create Search Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Create a persistent source to regularly monitor this search term.</p>
+                
+                <form id="createSourceForm">
+                    <div class="mb-3">
+                        <label for="sourceName" class="form-label">Source Name</label>
+                        <input type="text" class="form-control" id="sourceName" name="name" required
+                              value="Search: {{ job_status.config.search_term|default('') }}">
+                    </div>
+                    <input type="hidden" name="job_id" value="{{ job_id }}">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveSourceBtn">Create Source</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Handle full content viewing
+    document.querySelectorAll('.show-full-content-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const title = this.getAttribute('data-title');
+            const content = this.getAttribute('data-content');
+            
+            document.getElementById('fullContentModalLabel').textContent = title;
+            document.getElementById('fullContentContainer').innerHTML = '<p>' + content.replace(/\n/g, '</p><p>') + '</p>';
+        });
+    });
+    
+    // Handle detection submission
+    document.querySelectorAll('.submit-to-detection-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
+            
+            const formData = new FormData(this);
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    submitBtn.className = 'btn btn-success';
+                    submitBtn.innerHTML = '<i class="fas fa-check me-1"></i> Submitted Successfully';
+                } else {
+                    submitBtn.className = 'btn btn-danger';
+                    submitBtn.innerHTML = '<i class="fas fa-times me-1"></i> Submission Failed';
+                    console.error('Error:', data.error);
+                    alert('Error submitting content: ' + data.error);
+                }
+            })
+            .catch(error => {
+                submitBtn.className = 'btn btn-danger';
+                submitBtn.innerHTML = '<i class="fas fa-times me-1"></i> Submission Failed';
+                console.error('Error:', error);
+                alert('Error submitting content: ' + error);
+            });
+        });
+    });
+    
+    // Handle source creation
+    document.getElementById('saveSourceBtn').addEventListener('click', function() {
+        const form = document.getElementById('createSourceForm');
+        const formData = new FormData(form);
+        
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+        
+        fetch('{{ url_for("web_scraping.create_source") }}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Source created successfully!');
+                window.location.href = '{{ url_for("web_scraping.sources") }}';
+            } else {
+                this.disabled = false;
+                this.textContent = 'Create Source';
+                alert('Error creating source: ' + data.error);
+            }
+        })
+        .catch(error => {
+            this.disabled = false;
+            this.textContent = 'Create Source';
+            alert('Error creating source: ' + error);
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}
