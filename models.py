@@ -338,3 +338,73 @@ class SystemCredential(db.Model):
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class ContentItem(db.Model):
+    """Model for storing content items collected from various sources."""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.Text)
+    content = db.Column(db.Text, nullable=False)
+    source = db.Column(db.String(100))  # Source name or type
+    url = db.Column(db.String(1024))
+    published_date = db.Column(db.DateTime)
+    content_type = db.Column(db.String(50))  # web, social, news, etc.
+    is_processed = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    meta_data = db.Column(db.Text)  # JSON with additional metadata
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class WebSource(db.Model):
+    """Model for web scraping data sources."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    url = db.Column(db.String(1024), nullable=False)
+    source_type = db.Column(db.String(50), nullable=False)  # web_page, web_crawl, web_search
+    is_active = db.Column(db.Boolean, default=True)
+    config = db.Column(db.Text)  # JSON configuration for the source
+    meta_data = db.Column(db.Text)  # JSON with additional source metadata
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_ingestion = db.Column(db.DateTime)
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def set_config(self, data):
+        self.config = json.dumps(data)
+    
+    def get_config(self):
+        return json.loads(self.config) if self.config else {}
+
+
+class FocusedDomain(db.Model):
+    """Model for domains to focus on for monitoring."""
+    id = db.Column(db.Integer, primary_key=True)
+    domain = db.Column(db.String(255), unique=True, nullable=False)
+    category = db.Column(db.String(50))  # news, social, government, etc.
+    priority = db.Column(db.Integer, default=2)  # 1=high, 2=medium, 3=low
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_check = db.Column(db.DateTime)
+
+
+class SearchTerm(db.Model):
+    """Model for search terms to monitor for content."""
+    id = db.Column(db.Integer, primary_key=True)
+    term = db.Column(db.String(255), unique=True, nullable=False)
+    category = db.Column(db.String(50))  # misinformation, health, politics, etc.
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_check = db.Column(db.DateTime)
