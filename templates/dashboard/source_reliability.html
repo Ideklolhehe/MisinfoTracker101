@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Source Reliability Analysis - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="mb-3">Source Reliability Analysis</h1>
+            <p class="lead">Track and analyze sources spreading misinformation across the information ecosystem.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('dashboard.report_misinfo') }}" class="btn btn-primary">
+                <i class="fas fa-flag me-2"></i>Report Misinformation
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Monthly Summary</h5>
+                </div>
+                <div class="card-body">
+                    <h3 class="display-4 text-center">{{ total_events }}</h3>
+                    <p class="text-center mb-0">Misinformation events since {{ month_start.strftime('%b %d, %Y') }}</p>
+                    <hr>
+                    <p class="text-center fst-italic">
+                        Real-time monitoring of source reliability
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Top Misinformation Sources</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Type</th>
+                                    <th>Events</th>
+                                    <th>Reliability Score</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if top_sources %}
+                                    {% for source in top_sources %}
+                                        {% set meta = source.get_meta_data() or {} %}
+                                        {% set reliability = meta.get('reliability_score', 50) %}
+                                        {% set event_count = source_counts.get(source.id, 0) %}
+                                        <tr>
+                                            <td>{{ source.name }}</td>
+                                            <td><span class="badge bg-secondary">{{ source.source_type }}</span></td>
+                                            <td>{{ event_count }}</td>
+                                            <td>
+                                                <div class="progress" style="height: 20px;">
+                                                    {% if reliability < 30 %}
+                                                        <div class="progress-bar bg-danger" role="progressbar" style="width: {{ reliability }}%;" aria-valuenow="{{ reliability }}" aria-valuemin="0" aria-valuemax="100">{{ reliability }}%</div>
+                                                    {% elif reliability < 70 %}
+                                                        <div class="progress-bar bg-warning" role="progressbar" style="width: {{ reliability }}%;" aria-valuenow="{{ reliability }}" aria-valuemin="0" aria-valuemax="100">{{ reliability }}%</div>
+                                                    {% else %}
+                                                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ reliability }}%;" aria-valuenow="{{ reliability }}" aria-valuemin="0" aria-valuemax="100">{{ reliability }}%</div>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a href="{{ url_for('dashboard.source_reliability_detail', source_id=source.id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-chart-line me-1"></i>Details
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center py-3">
+                                            No misinformation events recorded for this month.
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Source Reliability Reporting</h5>
+                </div>
+                <div class="card-body">
+                    <p>Report and track misinformation across sources to help maintain the integrity of the information ecosystem.</p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="card border-primary h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-flag fa-3x text-primary mb-3"></i>
+                                    <h5>Report Misinformation</h5>
+                                    <p class="card-text">Log new misinformation events tied to specific sources and narratives.</p>
+                                    <a href="{{ url_for('dashboard.report_misinfo') }}" class="btn btn-primary">Report Event</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-info h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
+                                    <h5>View Source Trends</h5>
+                                    <p class="card-text">Analyze misinformation trends across sources and time periods.</p>
+                                    <a href="#" class="btn btn-info">View Trends</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-success h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
+                                    <h5>Source Assessment</h5>
+                                    <p class="card-text">View comprehensive reliability assessments for information sources.</p>
+                                    <a href="{{ url_for('dashboard.source_reliability') }}" class="btn btn-success">View Sources</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Source Analysis Methodology</h5>
+                </div>
+                <div class="card-body">
+                    <p>The CIVILIAN system analyzes source reliability using the following methodology:</p>
+                    <ol>
+                        <li><strong>Event Monitoring:</strong> Tracks misinformation events associated with each source</li>
+                        <li><strong>Reliability Scoring:</strong> Calculates reliability scores based on misinformation frequency</li>
+                        <li><strong>Trend Analysis:</strong> Identifies patterns in misinformation spread across sources</li>
+                        <li><strong>Narrative Association:</strong> Maps relationships between sources and specific narratives</li>
+                        <li><strong>Automated Alerts:</strong> Flags sources when reliability drops below critical thresholds</li>
+                    </ol>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Source reliability is a dynamic metric that changes based on real-time monitoring and analysis. The system continuously updates reliability scores as new information becomes available.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

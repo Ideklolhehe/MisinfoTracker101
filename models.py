@@ -2,7 +2,7 @@ from datetime import datetime
 from app import db
 from flask_login import UserMixin
 from flask_dance.consumer.storage.sqla import OAuthConsumerMixin
-from sqlalchemy import UniqueConstraint, Text, JSON
+from sqlalchemy import UniqueConstraint, Text, JSON, Float
 import json
 import enum
 import uuid
