@@ -1,0 +1,173 @@
+import os
+import json
+import logging
+import uuid
+import threading
+import time
+from collections import defaultdict
+from typing import List, Dict, Callable
+
+from decouple import config
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import numpy as np
+import faiss
+from sklearn.cluster import DBSCAN, Birch, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+import networkx as nx
+from transformers import pipeline
+
+# Load .env for local development fallback
+load_dotenv()
+
+# Configure logging
+title = "Narrative Complexity Analyzer"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(title)
+
+# Configuration
+FLASK_PORT = config("FLASK_PORT", default=5000, cast=int)
+FLASK_DEBUG = config("FLASK_DEBUG", default=False, cast=bool)
+EMBEDDING_DIM = config("EMBEDDING_DIM", default=128, cast=int)
+DBSCAN_EPS = config("DBSCAN_EPS", default=0.5, cast=float)
+DBSCAN_MIN_SAMPLES = config("DBSCAN_MIN_SAMPLES", default=5, cast=int)
+BIRCH_THRESHOLD = config("BIRCH_THRESHOLD", default=0.5, cast=float)
+BIRCH_BRANCHING_FACTOR = config("BIRCH_BRANCHING_FACTOR", default=50, cast=int)
+AGG_N_CLUSTERS = config("AGG_N_CLUSTERS", default=3, cast=int)
+CORS_ORIGINS = config("CORS_ORIGINS", default="*", cast=lambda v: [o.strip() for o in v.split(",")])
+
+# Thread lock for concurrency safety
+data_lock = threading.Lock()
+
+# In-memory stores
+narratives: Dict[str, Dict] = {}
+embeddings_list: List[np.ndarray] = []
+current_clusters: Dict[str, int] = {}
+complexity_scores: Dict[str, float] = {}
+counter_strategies_store: Dict[str, List[str]] = {}
+effectiveness_metrics: Dict[str, Dict] = {}
+
+# Prometheus metrics
+ingest_counter = Counter('narratives_ingested_total', 'Total narratives ingested')
+cluster_counter = Counter('cluster_updates_total', 'Total clustering operations')
+silhouette_gauge = Gauge('clustering_silhouette_score', 'Latest silhouette score')
+
+# Flask app
+app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+
+# Clustering registry
+CLUSTERING_REGISTRY: Dict[str, Callable[[np.ndarray], np.ndarray]] = {}
+
+def register_clustering_algorithm(name: str):
+    def decorator(func):
+        CLUSTERING_REGISTRY[name] = func
+        return func
+    return decorator
+
+@register_clustering_algorithm("DBSCAN")
+def dbscan_clustering(X: np.ndarray) -> np.ndarray:
+    return DBSCAN(eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES).fit_predict(X)
+
+@register_clustering_algorithm("BIRCH")
+def birch_clustering(X: np.ndarray) -> np.ndarray:
+    return Birch(threshold=BIRCH_THRESHOLD, branching_factor=BIRCH_BRANCHING_FACTOR).fit_predict(X)
+
+@register_clustering_algorithm("Agglomerative")
+def agg_clustering(X: np.ndarray) -> np.ndarray:
+    return AgglomerativeClustering(n_clusters=AGG_N_CLUSTERS).fit_predict(X)
+
+# Utility functions
+def generate_narrative_id() -> str:
+    return f"narrative-{uuid.uuid4()}"
+
+
+def calculate_cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    a, b = np.array(a).flatten(), np.array(b).flatten()
+    na, nb = np.linalg.norm(a), np.linalg.norm(b)
+    if na == 0 or nb == 0:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+# Counter-narrative dimension strategies
+def get_dimension_strategies(dimension: str) -> List[str]:
+    mapping = {
+        "emotional": [
+            "Evoke empathy with personal stories",
+            "Highlight hopeful outcomes",
+            "Use metaphorical language"
+        ],
+        "cognitive": [
+            "Present clear factual corrections",
+            "Use data visualizations",
+            "Cite authoritative sources"
+        ],
+        "inoculation": [
+            "Pre-empt myths with weakened refutations",
+            "Explain manipulation techniques",
+            "Offer refutation templates"
+        ],
+    }
+    return mapping.get(dimension, ["General factual rebuttal", "Edge-case inoculation"])
+
+# Prioritization
+@app.route('/api/prioritize', methods=['POST'])
+def prioritize_clusters():
+    data = request.get_json(force=True)
+    scores = data.get('complexity_scores', {})
+    threshold = data.get('threshold', 0.5)
+    high_risk = [cid for cid, score in scores.items() if score >= threshold]
+    return jsonify(prioritized=high_risk), 200
+
+# Counter-strategy recommendation endpoint
+@app.route('/api/counter-strategies', methods=['POST'])
+def counter_strategies():
+    data = request.get_json(force=True)
+    dimension = data.get('dimension')
+    strategies = get_dimension_strategies(dimension)
+    counter_strategies_store[dimension] = strategies
+    return jsonify(dimension=dimension, strategies=strategies), 200
+
+# AI-generated counter-narrative using Hugging Face
+generator = pipeline('text2text-generation', model='facebook/bart-large-mnli')
+
+@app.route('/api/generate-counter', methods=['POST'])
+def generate_counter():
+    data = request.get_json(force=True)
+    text = data.get('narrative')
+    prompt = f"Generate a counter-narrative to refute: {text}"  
+    result = generator(prompt, max_length=200, num_return_sequences=1)
+    counter_text = result[0]['generated_text']
+    return jsonify(counter_narrative=counter_text), 200
+
+# Effectiveness tracking
+@app.route('/api/track-effectiveness', methods=['POST'])
+def track_effectiveness():
+    data = request.get_json(force=True)
+    cid = data.get('counter_id')
+    metrics = data.get('metrics', {})
+    effectiveness_metrics[cid] = metrics
+    return jsonify(status='recorded'), 200
+
+# Source targeting optimization
+@app.route('/api/optimize-sources', methods=['POST'])
+def optimize_sources():
+    data = request.get_json(force=True)
+    edges = data.get('edges', [])  # list of [src, dst]
+    G = nx.DiGraph()
+    G.add_edges_from(edges)
+    centrality = nx.betweenness_centrality(G)
+    # Top 5 sources by centrality
+    top = sorted(centrality, key=centrality.get, reverse=True)[:5]
+    return jsonify(top_sources=top), 200
+
+# Existing metrics and health endpoints
+@app.route('/metrics')
+def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+if __name__ == '__main__':
+    logger.info('Starting Narrative Complexity Analyzer with Counter-Narrative Integration')
+    app.run(port=FLASK_PORT, debug=FLASK_DEBUG)

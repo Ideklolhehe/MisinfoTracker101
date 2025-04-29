@@ -67,11 +67,34 @@ class DetectedNarrative(db.Model):
     vector_id = db.Column(db.String(100))  # Reference to vector in FAISS
     meta_data = db.Column(db.Text)  # JSON with narrative-specific metadata
     
+    # Relationships
+    counter_messages = db.relationship('CounterMessage', backref='narrative', lazy='dynamic')
+    
     def set_meta_data(self, data):
         self.meta_data = json.dumps(data)
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def to_dict(self):
+        """Return a dictionary representation of the narrative."""
+        meta_data = self.get_meta_data()
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'confidence_score': self.confidence_score,
+            'first_detected': self.first_detected.isoformat() if self.first_detected else None,
+            'last_updated': self.last_updated.isoformat() if self.last_updated else None,
+            'status': self.status,
+            'language': self.language,
+            'complexity_score': meta_data.get('complexity_score'),
+            'propagation_score': meta_data.get('propagation_score'),
+            'threat_score': meta_data.get('threat_score'),
+            'source_count': meta_data.get('source_count'),
+            'stream_cluster': meta_data.get('stream_cluster'),
+            'temporal_cluster': meta_data.get('temporal_cluster')
+        }
 
 class NarrativeInstance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -127,14 +150,16 @@ class CounterMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     narrative_id = db.Column(db.Integer, db.ForeignKey('detected_narrative.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    strategy = db.Column(db.Text)  # Detailed description of the counter-message approach
+    dimension = db.Column(db.String(50))  # emotional, cognitive, inoculation
+    strategy = db.Column(db.String(50))  # Specific strategy used for counter-narrative
     status = db.Column(db.String(50), default='draft')  # draft, approved, deployed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = db.Column(db.String, db.ForeignKey('users.id'))
     approved_by = db.Column(db.String, db.ForeignKey('users.id'))
     meta_data = db.Column(db.Text)  # JSON with effectiveness metrics, audience data, etc.
     
-    narrative = db.relationship('DetectedNarrative')
+    # Relationships defined without circular references
     creator = db.relationship('User', foreign_keys=[created_by])
     approver = db.relationship('User', foreign_keys=[approved_by])
     
@@ -143,6 +168,28 @@ class CounterMessage(db.Model):
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def to_dict(self):
+        """Return a dictionary representation of the counter-message."""
+        meta_data = self.get_meta_data()
+        effectiveness = meta_data.get('effectiveness', {})
+        
+        return {
+            'id': self.id,
+            'narrative_id': self.narrative_id,
+            'content': self.content,
+            'dimension': self.dimension,
+            'strategy': self.strategy,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_updated': self.last_updated.isoformat() if self.last_updated else None,
+            'created_by': self.created_by,
+            'approved_by': self.approved_by,
+            'exposure': effectiveness.get('exposure', 0),
+            'engagement': effectiveness.get('engagement', 0),
+            'sentiment_shift': effectiveness.get('sentiment_shift', 0),
+            'reach': effectiveness.get('reach', 0)
+        }
 
 class SystemLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
