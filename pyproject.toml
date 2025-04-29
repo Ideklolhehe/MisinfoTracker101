@@ -96,6 +96,8 @@ dependencies = [
     "python-decouple>=3.8",
     "python-dotenv>=1.1.0",
     "prometheus-client>=0.21.1",
+    "convertdate>=2.4.0",
+    "prophet>=1.1.6",
 ]
 
 [tool.uv.sources]

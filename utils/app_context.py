@@ -1,66 +1,186 @@
 """
-Application context helpers for CIVILIAN background threads.
-
-These utilities help ensure Flask application context is properly propagated
-to background threads that need database access.
+Application context utilities for the CIVILIAN system.
+Provides decorators and context managers for Flask application context.
 """
 
+import logging
 import functools
 import threading
-from flask import current_app, has_app_context
-from app import app
+from typing import Callable, Any, Optional, TypeVar, cast
 
-_app_context_local = threading.local()
+from flask import Flask, current_app, has_app_context, has_request_context
 
-def has_thread_app_context():
-    """Check if the current thread has an application context."""
-    return hasattr(_app_context_local, 'context') and _app_context_local.context is not None
+# Configure module logger
+logger = logging.getLogger(__name__)
 
-def get_thread_app_context():
-    """Get the application context for the current thread."""
-    if has_thread_app_context():
-        return _app_context_local.context
-    return None
+# Current application reference
+_app_instance: Optional[Flask] = None
 
-def create_thread_app_context():
-    """Create a new application context for the current thread."""
-    if not has_thread_app_context():
-        _app_context_local.context = app.app_context()
-        _app_context_local.context.push()
-    return _app_context_local.context
+# Type variables for function signatures
+F = TypeVar('F', bound=Callable[..., Any])
+T = TypeVar('T')
 
-def destroy_thread_app_context():
-    """Destroy the application context for the current thread."""
-    if has_thread_app_context():
-        _app_context_local.context.pop()
-        _app_context_local.context = None
 
-def ensure_app_context(func):
-    """Decorator to ensure a function has an application context.
+def ensure_app_context(func_or_app=None):
+    """
+    Decorator to ensure a function runs within an application context.
+    Can be used with or without an app parameter.
     
-    This decorator checks if there's already an app context and creates one
-    if needed. It's designed to work with both regular functions and methods.
+    Args:
+        func_or_app: Function to decorate or Flask app instance
+        
+    Returns:
+        Decorated function or decorator function
+    """
+    # If used as @ensure_app_context(app)
+    if isinstance(func_or_app, Flask):
+        app = func_or_app
+        
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                if has_app_context():
+                    return func(*args, **kwargs)
+                with app.app_context():
+                    return func(*args, **kwargs)
+            return wrapper
+        return decorator
+    
+    # If used as @ensure_app_context
+    if callable(func_or_app):
+        func = func_or_app
+        
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if has_app_context():
+                return func(*args, **kwargs)
+            
+            app = get_current_app()
+            if app is None:
+                logger.error(f"No application context available for {func.__name__}")
+                raise RuntimeError(
+                    f"No application context available for {func.__name__}. "
+                    "Make sure set_current_app() was called."
+                )
+                
+            with app.app_context():
+                return func(*args, **kwargs)
+                
+        return wrapper
+    
+    # If used without arguments @ensure_app_context()
+    return lambda func: ensure_app_context(func)
+
+
+def set_current_app(app: Flask) -> None:
+    """
+    Set the current application instance.
+    
+    Args:
+        app: Flask application instance
+    """
+    global _app_instance
+    _app_instance = app
+    logger.info(f"Set current application instance: {app.name}")
+
+
+def get_current_app() -> Optional[Flask]:
+    """
+    Get the current application instance.
+    
+    Returns:
+        Flask application instance or None
+    """
+    if has_app_context():
+        return current_app
+    return _app_instance
+
+
+def with_app_context(func: F) -> F:
+    """
+    Decorator to ensure a function runs within an application context.
+    
+    Args:
+        func: Function to decorate
+        
+    Returns:
+        Decorated function
     """
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # Check if already in app context
-        need_context = not has_app_context() and not has_thread_app_context()
-        
-        if need_context:
-            # Create new app context
-            ctx = create_thread_app_context()
-            try:
-                # Run function in context
-                return func(*args, **kwargs)
-            finally:
-                # Clean up
-                destroy_thread_app_context()
-        else:
-            # Already has context, just run function
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if has_app_context():
+            # Already in app context
             return func(*args, **kwargs)
-    
-    return wrapper
+            
+        app = get_current_app()
+        if app is None:
+            logger.error(f"No application context available for {func.__name__}")
+            raise RuntimeError(
+                f"No application context available for {func.__name__}. "
+                "Make sure set_current_app() was called."
+            )
+            
+        with app.app_context():
+            return func(*args, **kwargs)
+            
+    return cast(F, wrapper)
 
-def with_app_context(func):
-    """Legacy decorator name for backward compatibility."""
-    return ensure_app_context(func)
+
+class AppContextThread(threading.Thread):
+    """
+    Thread that runs with Flask application context.
+    """
+    
+    def __init__(self, *args: Any, app: Optional[Flask] = None, **kwargs: Any):
+        """
+        Initialize the thread.
+        
+        Args:
+            *args: Thread arguments
+            app: Flask application instance
+            **kwargs: Thread keyword arguments
+        """
+        super().__init__(*args, **kwargs)
+        self.app = app or get_current_app()
+        if self.app is None:
+            raise ValueError(
+                "No Flask application instance available. "
+                "Make sure set_current_app() was called or provide app parameter."
+            )
+            
+    def run(self) -> None:
+        """Run the thread with application context."""
+        with self.app.app_context():
+            super().run()
+
+
+def with_app_context_async(func: Callable[..., T]) -> Callable[..., threading.Thread]:
+    """
+    Run a function asynchronously in its own thread with application context.
+    
+    Args:
+        func: Function to run
+        
+    Returns:
+        Function that returns a thread
+    """
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> threading.Thread:
+        app = get_current_app()
+        if app is None:
+            logger.error(f"No application context available for {func.__name__}")
+            raise RuntimeError(
+                f"No application context available for {func.__name__}. "
+                "Make sure set_current_app() was called."
+            )
+            
+        def run_with_context() -> None:
+            with app.app_context():
+                func(*args, **kwargs)
+                
+        thread = threading.Thread(target=run_with_context)
+        thread.daemon = True
+        thread.start()
+        return thread
+        
+    return wrapper
