@@ -1,0 +1,621 @@
+{% extends 'base.html' %}
+
+{% block title %}Web Monitoring - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-4 mb-4">Web Monitoring</h1>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Monitoring Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        Configure and manage web monitoring sources for the CIVILIAN system. 
+                        This includes focused domains, search terms, and data sources.
+                    </p>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-4 text-center">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5>Monitoring Status</h5>
+                                    <div class="mt-3" id="monitoring-status-badge">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3" id="monitoring-toggle-button">
+                                        <!-- Button will be added here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 text-center">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5>Add New Source</h5>
+                                    <p class="text-muted small">Register a new web source for monitoring</p>
+                                    <div class="mt-3">
+                                        <a href="{{ url_for('web_scraping.register_source') }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-plus"></i> Add Source
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 text-center">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5>Add Search Term</h5>
+                                    <p class="text-muted small">Add a new search term for monitoring</p>
+                                    <div class="mt-3">
+                                        <a href="{{ url_for('web_scraping.search') }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-search"></i> Add Term
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Focused Domains</h5>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#add-domain-modal">
+                        <i class="fas fa-plus"></i> Add Domain
+                    </button>
+                </div>
+                <div class="card-body" id="focused-domains">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Search Terms</h5>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#add-term-modal">
+                        <i class="fas fa-plus"></i> Add Term
+                    </button>
+                </div>
+                <div class="card-body" id="search-terms">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Active Web Sources</h5>
+                </div>
+                <div class="card-body" id="web-sources">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Domain Modal -->
+<div class="modal fade" id="add-domain-modal" tabindex="-1" aria-labelledby="add-domain-modal-label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="add-domain-modal-label">Add Focused Domain</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-domain-form">
+                    <div class="mb-3">
+                        <label for="domain" class="form-label">Domain</label>
+                        <input type="text" class="form-control" id="domain" name="domain" 
+                               placeholder="example.com" required>
+                        <div class="form-text">Enter domain name without 'http://' or 'https://'</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="domain-category" class="form-label">Category</label>
+                        <select class="form-select" id="domain-category" name="category">
+                            <option value="news" selected>News</option>
+                            <option value="fact_checking">Fact Checking</option>
+                            <option value="think_tanks">Think Tanks</option>
+                            <option value="government">Government</option>
+                            <option value="social_media">Social Media</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="priority" class="form-label">Priority</label>
+                        <select class="form-select" id="priority" name="priority">
+                            <option value="1">High (1)</option>
+                            <option value="2" selected>Medium (2)</option>
+                            <option value="3">Low (3)</option>
+                        </select>
+                        <div class="form-text">Higher priority domains are monitored more frequently</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submit-domain">Add Domain</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Term Modal -->
+<div class="modal fade" id="add-term-modal" tabindex="-1" aria-labelledby="add-term-modal-label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="add-term-modal-label">Add Search Term</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-term-form">
+                    <div class="mb-3">
+                        <label for="term" class="form-label">Search Term</label>
+                        <input type="text" class="form-control" id="term" name="term" 
+                               placeholder="Enter search term" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="term-category" class="form-label">Category</label>
+                        <select class="form-select" id="term-category" name="category">
+                            <option value="misinformation" selected>Misinformation</option>
+                            <option value="emerging_narratives">Emerging Narratives</option>
+                            <option value="security_threats">Security Threats</option>
+                            <option value="political">Political</option>
+                            <option value="health">Health</option>
+                            <option value="science">Science</option>
+                            <option value="technology">Technology</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submit-term">Add Term</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Fetch monitoring status
+        fetch('/web-scraping/status')
+            .then(response => response.json())
+            .then(data => {
+                updateMonitoringStatus(data);
+                updateFocusedDomains(data.domain_stats);
+                updateSearchTerms(data.search_term_stats);
+            })
+            .catch(error => {
+                console.error('Error fetching status:', error);
+            });
+            
+        // Fetch web sources
+        fetch('/web-scraping/sources')
+            .then(response => response.json())
+            .then(data => {
+                updateWebSources(data.sources || []);
+            })
+            .catch(error => {
+                console.error('Error fetching sources:', error);
+                document.getElementById('web-sources').innerHTML = 
+                    '<div class="alert alert-danger">Error loading web sources</div>';
+            });
+            
+        // Add domain form submit handler
+        document.getElementById('submit-domain').addEventListener('click', function() {
+            const domain = document.getElementById('domain').value;
+            const category = document.getElementById('domain-category').value;
+            const priority = parseInt(document.getElementById('priority').value);
+            
+            if (!domain) {
+                alert('Please enter a domain name');
+                return;
+            }
+            
+            fetch('/web-scraping/monitoring', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'add_domain',
+                    domain: domain,
+                    category: category,
+                    priority: priority
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Close modal and refresh data
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('add-domain-modal'));
+                    modal.hide();
+                    
+                    // Clear form
+                    document.getElementById('add-domain-form').reset();
+                    
+                    // Refresh domain list
+                    fetch('/web-scraping/status')
+                        .then(response => response.json())
+                        .then(data => {
+                            updateFocusedDomains(data.domain_stats);
+                        });
+                } else {
+                    alert('Failed to add domain: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error adding domain:', error);
+                alert('Error adding domain: ' + error.message);
+            });
+        });
+        
+        // Add term form submit handler
+        document.getElementById('submit-term').addEventListener('click', function() {
+            const term = document.getElementById('term').value;
+            const category = document.getElementById('term-category').value;
+            
+            if (!term) {
+                alert('Please enter a search term');
+                return;
+            }
+            
+            fetch('/web-scraping/monitoring', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'add_search_term',
+                    term: term,
+                    category: category
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Close modal and refresh data
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('add-term-modal'));
+                    modal.hide();
+                    
+                    // Clear form
+                    document.getElementById('add-term-form').reset();
+                    
+                    // Refresh term list
+                    fetch('/web-scraping/status')
+                        .then(response => response.json())
+                        .then(data => {
+                            updateSearchTerms(data.search_term_stats);
+                        });
+                } else {
+                    alert('Failed to add search term: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error adding search term:', error);
+                alert('Error adding search term: ' + error.message);
+            });
+        });
+    });
+    
+    function updateMonitoringStatus(data) {
+        const statusBadgeEl = document.getElementById('monitoring-status-badge');
+        const toggleButtonEl = document.getElementById('monitoring-toggle-button');
+        
+        // Update status badge
+        statusBadgeEl.innerHTML = `
+            <span class="badge ${data.is_monitoring_active ? 'bg-success' : 'bg-warning'} fs-6">
+                ${data.is_monitoring_active ? 'Active' : 'Inactive'}
+            </span>
+        `;
+        
+        // Update toggle button
+        toggleButtonEl.innerHTML = `
+            <button class="btn ${data.is_monitoring_active ? 'btn-danger' : 'btn-success'}" 
+                    onclick="toggleMonitoring(${data.is_monitoring_active})">
+                ${data.is_monitoring_active ? '<i class="fas fa-stop"></i> Stop Monitoring' : '<i class="fas fa-play"></i> Start Monitoring'}
+            </button>
+        `;
+    }
+    
+    function updateFocusedDomains(domainStats) {
+        const domainsEl = document.getElementById('focused-domains');
+        
+        // Get domains by category
+        const categories = domainStats.domains_by_category || {};
+        const totalDomains = domainStats.total_domains || 0;
+        
+        if (totalDomains === 0) {
+            domainsEl.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No focused domains configured.
+                    Add domains using the "Add Domain" button.
+                </div>
+            `;
+            return;
+        }
+        
+        let domainsHtml = `
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Domains</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        for (const [category, count] of Object.entries(categories)) {
+            domainsHtml += `
+                <tr>
+                    <td>${category.charAt(0).toUpperCase() + category.slice(1)}</td>
+                    <td>${count}</td>
+                </tr>
+            `;
+        }
+        
+        domainsHtml += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        domainsEl.innerHTML = domainsHtml;
+    }
+    
+    function updateSearchTerms(termStats) {
+        const termsEl = document.getElementById('search-terms');
+        
+        // Get terms by category
+        const categories = termStats.terms_by_category || {};
+        const totalTerms = termStats.total_terms || 0;
+        
+        if (totalTerms === 0) {
+            termsEl.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No search terms configured.
+                    Add search terms using the "Add Term" button.
+                </div>
+            `;
+            return;
+        }
+        
+        let termsHtml = `
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Terms</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        for (const [category, count] of Object.entries(categories)) {
+            termsHtml += `
+                <tr>
+                    <td>${category.charAt(0).toUpperCase() + category.slice(1)}</td>
+                    <td>${count}</td>
+                </tr>
+            `;
+        }
+        
+        termsHtml += `
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3">
+                <p class="text-muted">Recent activity:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Term</th>
+                                <th>Last Processed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        const recentTerms = termStats.recently_processed || [];
+        
+        for (const term of recentTerms) {
+            termsHtml += `
+                <tr>
+                    <td>${term.term || 'N/A'}</td>
+                    <td>${formatDate(term.last_ingestion)}</td>
+                </tr>
+            `;
+        }
+        
+        termsHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        
+        termsEl.innerHTML = termsHtml;
+    }
+    
+    function updateWebSources(sources) {
+        const sourcesEl = document.getElementById('web-sources');
+        
+        if (sources.length === 0) {
+            sourcesEl.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No web sources configured.
+                    Add sources using the "Add Source" button.
+                </div>
+            `;
+            return;
+        }
+        
+        // Group sources by type
+        const sourcesByType = {};
+        
+        for (const source of sources) {
+            const type = source.source_type || 'unknown';
+            
+            if (!sourcesByType[type]) {
+                sourcesByType[type] = [];
+            }
+            
+            sourcesByType[type].push(source);
+        }
+        
+        let sourcesHtml = `
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Last Ingestion</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        for (const source of sources) {
+            sourcesHtml += `
+                <tr>
+                    <td>${source.name}</td>
+                    <td>${source.source_type}</td>
+                    <td>${formatDate(source.last_ingestion)}</td>
+                    <td>
+                        <span class="badge ${source.is_active ? 'bg-success' : 'bg-secondary'}">
+                            ${source.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm ${source.is_active ? 'btn-outline-secondary' : 'btn-outline-success'}"
+                                onclick="toggleSourceStatus(${source.id}, ${!source.is_active})">
+                            ${source.is_active ? 'Disable' : 'Enable'}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        sourcesHtml += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        sourcesEl.innerHTML = sourcesHtml;
+    }
+    
+    function toggleMonitoring(isActive) {
+        const action = isActive ? 'stop_monitoring' : 'start_monitoring';
+        
+        fetch('/web-scraping/monitoring', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: action
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Refresh status
+                fetch('/web-scraping/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateMonitoringStatus(data);
+                    });
+            } else {
+                alert('Failed to change monitoring status: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling monitoring:', error);
+            alert('Error changing monitoring status: ' + error.message);
+        });
+    }
+    
+    function toggleSourceStatus(sourceId, isActive) {
+        fetch(`/web-scraping/sources/${sourceId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                is_active: isActive
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Refresh sources list
+                fetch('/web-scraping/sources')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateWebSources(data.sources || []);
+                    });
+            } else {
+                alert('Failed to update source status: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error updating source status:', error);
+            alert('Error updating source status: ' + error.message);
+        });
+    }
+    
+    function formatDate(dateStr) {
+        if (!dateStr) return 'N/A';
+        
+        const date = new Date(dateStr);
+        return date.toLocaleString();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+
+{% block title %}Register Web Source - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-4 mb-4">Register Web Source</h1>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">New Web Source</h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        Register a new web source for monitoring in the CIVILIAN system.
+                        This source will be periodically checked for new content and analyzed for misinformation narratives.
+                    </p>
+                    
+                    <form id="register-source-form">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Source Name</label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   placeholder="Enter source name" required>
+                            <div class="form-text">A descriptive name for this source</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="url" class="form-label">URL</label>
+                            <input type="url" class="form-control" id="url" name="url" 
+                                   placeholder="https://example.com" required>
+                            <div class="form-text">The URL to monitor (include https://)</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="source_type" class="form-label">Source Type</label>
+                            <select class="form-select" id="source_type" name="source_type">
+                                <option value="web_news" selected>News Website</option>
+                                <option value="web_monitor">Website Monitoring</option>
+                                <option value="web_search">Search Results</option>
+                                <option value="web_social">Social Media</option>
+                                <option value="web_academic">Academic Source</option>
+                                <option value="web_government">Government Source</option>
+                            </select>
+                            <div class="form-text">The type of web source to determine processing method</div>
+                        </div>
+                        
+                        <div class="mb-3" id="search-options" style="display: none;">
+                            <label for="search_term" class="form-label">Search Term</label>
+                            <input type="text" class="form-control" id="search_term" name="search_term" 
+                                   placeholder="Enter search term">
+                            <div class="form-text">Required for search-based sources</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                <label class="form-check-label" for="is_active">
+                                    Active (begin monitoring immediately)
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Register Source
+                        </button>
+                        
+                        <a href="{{ url_for('web_scraping.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row d-none" id="result-container">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Registration Result</h5>
+                </div>
+                <div class="card-body" id="result-content">
+                    <!-- Result will be displayed here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const registerForm = document.getElementById('register-source-form');
+        const resultContainer = document.getElementById('result-container');
+        const resultContent = document.getElementById('result-content');
+        const sourceTypeSelect = document.getElementById('source_type');
+        const searchOptions = document.getElementById('search-options');
+        
+        // Show/hide search options based on source type
+        sourceTypeSelect.addEventListener('change', function() {
+            if (this.value === 'web_search') {
+                searchOptions.style.display = 'block';
+                document.getElementById('search_term').required = true;
+            } else {
+                searchOptions.style.display = 'none';
+                document.getElementById('search_term').required = false;
+            }
+        });
+        
+        registerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get form data
+            const name = document.getElementById('name').value;
+            const url = document.getElementById('url').value;
+            const sourceType = document.getElementById('source_type').value;
+            const isActive = document.getElementById('is_active').checked;
+            
+            // Create request data
+            const requestData = {
+                name: name,
+                url: url,
+                source_type: sourceType,
+                is_active: isActive
+            };
+            
+            // Add search term if needed
+            if (sourceType === 'web_search') {
+                const searchTerm = document.getElementById('search_term').value;
+                if (!searchTerm) {
+                    alert('Search term is required for search-based sources');
+                    return;
+                }
+                requestData.search_term = searchTerm;
+                requestData.config = {
+                    search_term: searchTerm,
+                    search_engine: 'bing',
+                    limit: 10
+                };
+            }
+            
+            // Send registration request
+            fetch('/web-scraping/register-source', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Show result
+                resultContainer.classList.remove('d-none');
+                
+                if (data.success) {
+                    resultContent.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> Source registered successfully!
+                        </div>
+                        
+                        <p>
+                            The web source <strong>${name}</strong> has been registered for monitoring.
+                            It will be periodically checked for new content.
+                        </p>
+                        
+                        <div class="mt-4">
+                            <a href="{{ url_for('web_scraping.monitoring') }}" class="btn btn-primary">
+                                <i class="fas fa-cog"></i> Manage Sources
+                            </a>
+                            
+                            <button class="btn btn-outline-primary ms-2" onclick="window.location.reload()">
+                                <i class="fas fa-plus"></i> Add Another Source
+                            </button>
+                        </div>
+                    `;
+                    
+                    // Clear form
+                    registerForm.reset();
+                } else {
+                    resultContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle"></i> Registration failed: ${data.error || 'Unknown error'}
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button class="btn btn-primary" onclick="window.location.reload()">
+                                <i class="fas fa-sync"></i> Try Again
+                            </button>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error registering source:', error);
+                
+                resultContainer.classList.remove('d-none');
+                resultContent.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i> Error: ${error.message}
+                    </div>
+                    
+                    <div class="mt-3">
+                        <button class="btn btn-primary" onclick="window.location.reload()">
+                            <i class="fas fa-sync"></i> Try Again
+                        </button>
+                    </div>
+                `;
+            });
+        });
+    });
+</script>
+{% endblock %}
