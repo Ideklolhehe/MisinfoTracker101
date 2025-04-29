@@ -10,7 +10,7 @@
             <p class="lead">Track and analyze sources spreading misinformation across the information ecosystem.</p>
         </div>
         <div class="col-auto">
-            <a href="{{ url_for('dashboard.report_misinfo') }}" class="btn btn-primary">
+            <a href="{{ url_for('dashboard.report_misinfo') }}" class="btn btn-secondary">
                 <i class="fas fa-flag me-2"></i>Report Misinformation
             </a>
         </div>
@@ -71,7 +71,7 @@
                                                 </div>
                                             </td>
                                             <td>
-                                                <a href="{{ url_for('dashboard.source_reliability_detail', source_id=source.id) }}" class="btn btn-sm btn-outline-primary">
+                                                <a href="{{ url_for('dashboard.source_reliability_detail', source_id=source.id) }}" class="btn btn-sm btn-outline-secondary">
                                                     <i class="fas fa-chart-line me-1"></i>Details
                                                 </a>
                                             </td>
@@ -102,32 +102,32 @@
                     <p>Report and track misinformation across sources to help maintain the integrity of the information ecosystem.</p>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <div class="card border-primary h-100">
+                            <div class="card border-secondary h-100">
                                 <div class="card-body text-center">
-                                    <i class="fas fa-flag fa-3x text-primary mb-3"></i>
+                                    <i class="fas fa-flag fa-3x text-secondary mb-3"></i>
                                     <h5>Report Misinformation</h5>
                                     <p class="card-text">Log new misinformation events tied to specific sources and narratives.</p>
-                                    <a href="{{ url_for('dashboard.report_misinfo') }}" class="btn btn-primary">Report Event</a>
+                                    <a href="{{ url_for('dashboard.report_misinfo') }}" class="btn btn-secondary">Report Event</a>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card border-info h-100">
+                            <div class="card border-secondary h-100">
                                 <div class="card-body text-center">
                                     <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
                                     <h5>View Source Trends</h5>
                                     <p class="card-text">Analyze misinformation trends across sources and time periods.</p>
-                                    <a href="#" class="btn btn-info">View Trends</a>
+                                    <a href="#" class="btn btn-secondary">View Trends</a>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card border-success h-100">
+                            <div class="card border-secondary h-100">
                                 <div class="card-body text-center">
                                     <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
                                     <h5>Source Assessment</h5>
                                     <p class="card-text">View comprehensive reliability assessments for information sources.</p>
-                                    <a href="{{ url_for('dashboard.source_reliability') }}" class="btn btn-success">View Sources</a>
+                                    <a href="{{ url_for('dashboard.source_reliability') }}" class="btn btn-secondary">View Sources</a>
                                 </div>
                             </div>
                         </div>
