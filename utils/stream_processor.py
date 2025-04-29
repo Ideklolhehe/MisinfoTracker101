@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 from app import db
 from models import DetectedNarrative
-from services.narrative_network import NarrativeNetworkAnalyzer
+from services.narrative_network import NarrativeNetworkService as NarrativeNetworkAnalyzer
 
 logger = logging.getLogger(__name__)
 

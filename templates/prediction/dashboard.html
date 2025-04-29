@@ -1,72 +1,38 @@
-{% extends "base.html" %}
-
-{% block title %}Prediction Dashboard{% endblock %}
+{% extends 'base.html' %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Prediction Dashboard</li>
-                </ol>
-            </nav>
-            <h1 class="display-5">Prediction Dashboard</h1>
-            <p class="lead">
-                Comprehensive view of complexity trajectory predictions across narratives.
-            </p>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-12">
+    <h1>{{ title }}</h1>
+    
+    <div class="row mt-4">
+        <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0">Trending Narratives</h5>
+                <div class="card-header">
+                    <h5>Available Narratives for Prediction</h5>
                 </div>
                 <div class="card-body">
-                    {% if trending_narratives %}
+                    {% if narratives %}
                         <div class="table-responsive">
-                            <table class="table table-striped table-hover">
+                            <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th scope="col">ID</th>
-                                        <th scope="col">Narrative</th>
-                                        <th scope="col">Current Complexity</th>
-                                        <th scope="col">Projected (7 Days)</th>
-                                        <th scope="col">Trend</th>
-                                        <th scope="col">Actions</th>
+                                        <th>Title</th>
+                                        <th>First Detected</th>
+                                        <th>Confidence</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for narrative in trending_narratives %}
+                                    {% for narrative in narratives %}
                                         <tr>
-                                            <td>{{ narrative.narrative_id }}</td>
-                                            <td>
-                                                <a href="{{ url_for('dashboard.view_narrative', narrative_id=narrative.narrative_id) }}">
-                                                    {{ narrative.title|truncate(60) }}
-                                                </a>
-                                            </td>
-                                            <td>{{ "%.2f"|format(narrative.current_complexity|float) }}</td>
-                                            <td>{{ "%.2f"|format(narrative.predictions[-1]|float) }}</td>
-                                            <td>
-                                                {% if narrative.trend_direction == 'strong_increase' %}
-                                                    <span class="text-danger">Strong Increase ↑↑</span>
-                                                {% elif narrative.trend_direction == 'moderate_increase' %}
-                                                    <span class="text-warning">Moderate Increase ↑</span>
-                                                {% endif %}
-                                            </td>
+                                            <td>{{ narrative.title }}</td>
+                                            <td>{{ narrative.first_detected }}</td>
+                                            <td>{{ "%.2f"|format(narrative.confidence_score) }}</td>
                                             <td>
                                                 <div class="btn-group">
-                                                    <a href="{{ url_for('prediction.predict_narrative_complexity', narrative_id=narrative.narrative_id) }}" 
-                                                       class="btn btn-sm btn-outline-primary">
-                                                        <i class="bi bi-graph-up"></i> Predict
-                                                    </a>
-                                                    <a href="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.narrative_id) }}" 
-                                                       class="btn btn-sm btn-outline-success">
-                                                        <i class="bi bi-diagram-3"></i> What-If
-                                                    </a>
+                                                    <a href="{{ url_for('prediction.forecast', narrative_id=narrative.id) }}" class="btn btn-primary btn-sm">Forecast</a>
+                                                    <a href="{{ url_for('prediction.key_factors', narrative_id=narrative.id) }}" class="btn btn-info btn-sm">Key Factors</a>
+                                                    <a href="{{ url_for('prediction.what_if', narrative_id=narrative.id) }}" class="btn btn-warning btn-sm">What-If</a>
                                                 </div>
                                             </td>
                                         </tr>
@@ -75,303 +41,53 @@
                             </table>
                         </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle-fill"></i> No trending narratives detected.
-                        </div>
+                        <p class="text-muted">No narratives available for prediction.</p>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="row mb-4">
-        <div class="col-md-8">
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
             <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Complexity Distribution</h5>
+                <div class="card-header">
+                    <h5>Multi-Narrative Comparison</h5>
                 </div>
                 <div class="card-body">
-                    <div id="complexity-chart" style="height: 400px;"></div>
+                    <p>Compare multiple narratives to identify patterns and relationships.</p>
+                    <a href="{{ url_for('prediction.multiple_forecasts') }}" class="btn btn-secondary">Compare Narratives</a>
                 </div>
             </div>
         </div>
-
-        <div class="col-md-4">
+        
+        <div class="col-md-6">
             <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Trend Summary</h5>
+                <div class="card-header">
+                    <h5>Prediction Features</h5>
                 </div>
                 <div class="card-body">
-                    <div class="mb-4">
-                        <h6>Predicted Trend Distribution</h6>
-                        <div id="trend-chart" style="height: 250px;"></div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <h6>Summary Statistics</h6>
-                        <ul class="list-group list-group-flush">
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                Narratives Analyzed
-                                <span class="badge bg-primary rounded-pill">{{ predictions.narrative_count }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                Increasing Trends
-                                <span class="badge bg-danger rounded-pill" id="increasing-count">0</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                Stable Trends
-                                <span class="badge bg-info rounded-pill" id="stable-count">0</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                Decreasing Trends
-                                <span class="badge bg-success rounded-pill" id="decreasing-count">0</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">All Narrative Predictions</h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover" id="predictions-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col">ID</th>
-                                    <th scope="col">Title</th>
-                                    <th scope="col">Current</th>
-                                    <th scope="col">Projected</th>
-                                    <th scope="col">Change</th>
-                                    <th scope="col">Trend</th>
-                                    <th scope="col">Certainty</th>
-                                    <th scope="col">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for narrative in predictions.predictions %}
-                                    <tr>
-                                        <td>{{ narrative.narrative_id }}</td>
-                                        <td>
-                                            <a href="{{ url_for('dashboard.view_narrative', narrative_id=narrative.narrative_id) }}">
-                                                {{ narrative.title|truncate(50) }}
-                                            </a>
-                                        </td>
-                                        <td>{{ "%.2f"|format(narrative.current_complexity|float) }}</td>
-                                        <td>{{ "%.2f"|format(narrative.predictions[-1]|float) }}</td>
-                                        <td>
-                                            {% set change = narrative.predictions[-1]|float - narrative.current_complexity|float %}
-                                            {% if change > 0 %}
-                                                <span class="text-danger">+{{ "%.2f"|format(change) }}</span>
-                                            {% elif change < 0 %}
-                                                <span class="text-success">{{ "%.2f"|format(change) }}</span>
-                                            {% else %}
-                                                <span class="text-muted">0.00</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if narrative.trend_direction == 'strong_increase' %}
-                                                <span class="text-danger">Strong Increase ↑↑</span>
-                                            {% elif narrative.trend_direction == 'moderate_increase' %}
-                                                <span class="text-warning">Moderate Increase ↑</span>
-                                            {% elif narrative.trend_direction == 'stable' %}
-                                                <span class="text-info">Stable →</span>
-                                            {% elif narrative.trend_direction == 'moderate_decrease' %}
-                                                <span class="text-success">Moderate Decrease ↓</span>
-                                            {% elif narrative.trend_direction == 'strong_decrease' %}
-                                                <span class="text-success">Strong Decrease ↓↓</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if narrative.certainty_score > 0.8 %}
-                                                <span class="badge bg-success">High</span>
-                                            {% elif narrative.certainty_score > 0.5 %}
-                                                <span class="badge bg-warning">Medium</span>
-                                            {% else %}
-                                                <span class="badge bg-danger">Low</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="btn-group">
-                                                <a href="{{ url_for('prediction.predict_narrative_complexity', narrative_id=narrative.narrative_id) }}" 
-                                                   class="btn btn-sm btn-outline-primary">
-                                                    <i class="bi bi-graph-up"></i> Predict
-                                                </a>
-                                                <a href="{{ url_for('prediction.what_if_analysis', narrative_id=narrative.narrative_id) }}" 
-                                                   class="btn btn-sm btn-outline-success">
-                                                    <i class="bi bi-diagram-3"></i> What-If
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Trajectory Forecasting
+                            <span class="badge bg-primary rounded-pill">Active</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Threshold Projections
+                            <span class="badge bg-primary rounded-pill">Active</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Key Factor Analysis
+                            <span class="badge bg-primary rounded-pill">Active</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            What-If Scenarios
+                            <span class="badge bg-primary rounded-pill">Active</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script>
-// Process prediction data for charts
-const predictions = {{ predictions.predictions|tojson }};
-
-// Count trend directions
-let trendCounts = {
-    'strong_increase': 0,
-    'moderate_increase': 0,
-    'stable': 0,
-    'moderate_decrease': 0,
-    'strong_decrease': 0
-};
-
-// Prepare data for complexity chart
-let currentValues = [];
-let projectedValues = [];
-let labels = [];
-
-predictions.forEach(pred => {
-    // Count by trend direction
-    if (pred.trend_direction in trendCounts) {
-        trendCounts[pred.trend_direction]++;
-    }
-    
-    // Prepare data for complexity chart
-    currentValues.push(pred.current_complexity);
-    projectedValues.push(pred.predictions[pred.predictions.length - 1]);
-    labels.push(pred.title.substring(0, 30) + (pred.title.length > 30 ? '...' : ''));
-});
-
-// Update trend count badges
-document.getElementById('increasing-count').textContent = 
-    (trendCounts.strong_increase + trendCounts.moderate_increase);
-document.getElementById('stable-count').textContent = trendCounts.stable;
-document.getElementById('decreasing-count').textContent = 
-    (trendCounts.strong_decrease + trendCounts.moderate_decrease);
-
-// Create complexity chart
-const complexityData = [
-    {
-        x: labels,
-        y: currentValues,
-        type: 'bar',
-        name: 'Current Complexity',
-        marker: {
-            color: 'rgba(0, 123, 255, 0.7)'
-        }
-    },
-    {
-        x: labels,
-        y: projectedValues,
-        type: 'bar',
-        name: 'Projected Complexity',
-        marker: {
-            color: 'rgba(220, 53, 69, 0.7)'
-        }
-    }
-];
-
-const complexityLayout = {
-    title: 'Current vs. Projected Complexity (7 Days)',
-    barmode: 'group',
-    xaxis: {
-        title: 'Narratives',
-        tickangle: -45
-    },
-    yaxis: {
-        title: 'Complexity Score',
-        range: [0, 10]
-    },
-    margin: {
-        l: 50,
-        r: 50,
-        b: 120,
-        t: 50
-    },
-    legend: {
-        x: 0.01,
-        y: 0.99,
-        bgcolor: 'rgba(255, 255, 255, 0.7)',
-        bordercolor: 'rgba(0, 0, 0, 0.1)',
-        borderwidth: 1
-    },
-    shapes: [{
-        type: 'rect',
-        x0: -1,
-        y0: 0,
-        x1: labels.length,
-        y1: 3,
-        fillcolor: 'rgba(0, 255, 0, 0.1)',
-        layer: 'below',
-        line: {
-            width: 0
-        }
-    }, {
-        type: 'rect',
-        x0: -1,
-        y0: 3,
-        x1: labels.length,
-        y1: 7,
-        fillcolor: 'rgba(255, 255, 0, 0.1)',
-        layer: 'below',
-        line: {
-            width: 0
-        }
-    }, {
-        type: 'rect',
-        x0: -1,
-        y0: 7,
-        x1: labels.length,
-        y1: 10,
-        fillcolor: 'rgba(255, 0, 0, 0.1)',
-        layer: 'below',
-        line: {
-            width: 0
-        }
-    }]
-};
-
-Plotly.newPlot('complexity-chart', complexityData, complexityLayout, {responsive: true});
-
-// Create trend pie chart
-const trendData = [
-    {
-        values: [
-            trendCounts.strong_increase + trendCounts.moderate_increase,
-            trendCounts.stable,
-            trendCounts.moderate_decrease + trendCounts.strong_decrease
-        ],
-        labels: ['Increasing', 'Stable', 'Decreasing'],
-        type: 'pie',
-        marker: {
-            colors: ['rgba(220, 53, 69, 0.8)', 'rgba(23, 162, 184, 0.8)', 'rgba(40, 167, 69, 0.8)']
-        },
-        textinfo: 'label+percent',
-        insidetextorientation: 'radial'
-    }
-];
-
-const trendLayout = {
-    margin: {
-        l: 0,
-        r: 0,
-        b: 0,
-        t: 0
-    },
-    showlegend: false
-};
-
-Plotly.newPlot('trend-chart', trendData, trendLayout, {responsive: true});
-</script>
 {% endblock %}
