@@ -1,249 +1,279 @@
-import spacy
-import nltk
-from nltk.tokenize import word_tokenize, sent_tokenize
-import re
-import logging
-from typing import List, Dict, Any, Tuple, Optional
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
+"""
+Text processing utilities for the CIVILIAN system.
+Provides tools for text cleaning, analysis, and extraction.
+"""
 
-# Download required NLTK resources
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
+import logging
+import re
+import string
+from typing import Dict, List, Optional, Set, Tuple, Any
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
 class TextProcessor:
-    """Handles NLP processing for misinformation detection."""
+    """Utility class for processing and analyzing text content."""
     
-    def __init__(self, languages: List[str] = ['en']):
-        """Initialize the text processor with specified languages."""
-        self.languages = languages
-        self.nlp_models = {}
-        
-        # Load spaCy models for each language
-        for lang in languages:
-            try:
-                if lang == 'en':
-                    try:
-                        self.nlp_models[lang] = spacy.load('en_core_web_sm')
-                    except OSError:
-                        # Fallback to blank model if language model not available
-                        logger.warning(f"No spaCy model available for language {lang}, using blank model")
-                        self.nlp_models[lang] = spacy.blank("en")
-                elif lang == 'es':
-                    try:
-                        self.nlp_models[lang] = spacy.load('es_core_news_sm')
-                    except OSError:
-                        # Fallback to blank model if language model not available
-                        logger.warning(f"No spaCy model available for language {lang}, using blank model")
-                        self.nlp_models[lang] = spacy.blank("es")
-                else:
-                    logger.warning(f"Unsupported language: {lang}")
-            except Exception as e:
-                logger.warning(f"Failed to load spaCy model for {lang}: {str(e)}. Using NLTK fallbacks where possible.")
-        
-        # Initialize TF-IDF vectorizer
-        self.tfidf = TfidfVectorizer(
-            max_features=10000,
-            stop_words='english',
-            ngram_range=(1, 3)
-        )
-        
-        logger.info(f"TextProcessor initialized with languages: {languages}")
+    def __init__(self):
+        """Initialize the text processor."""
+        # Define common stopwords for cleaning
+        self.stopwords = {
+            'the', 'and', 'is', 'in', 'it', 'to', 'that', 'of', 'for', 'on', 'with', 
+            'as', 'this', 'by', 'an', 'are', 'at', 'be', 'but', 'or', 'from', 'not', 
+            'what', 'all', 'were', 'when', 'we', 'there', 'can', 'no', 'has', 'just',
+            'into', 'your', 'some', 'them', 'more', 'will', 'which', 'their', 'about',
+            'now', 'out', 'up', 'also', 'been', 'if', 'so', 'was', 'like', 'they',
+            'would', 'then', 'other', 'who', 'because', 'many', 'one', 'you', 'should'
+        }
     
-    def detect_language(self, text: str) -> str:
-        """Detect the language of the given text."""
-        # Simple language detection based on available models
-        # In a production system, use a proper language detection library
+    def clean_text(self, text: str, remove_stopwords: bool = False) -> str:
+        """
+        Clean text by removing punctuation, extra whitespace, and optionally stopwords.
         
-        # Default to English if detection fails
-        if not text or len(text.strip()) == 0:
-            return 'en'
+        Args:
+            text: Text to clean
+            remove_stopwords: Whether to remove stopwords
             
-        # Try to detect language with spaCy models
-        max_score = 0
-        detected_lang = 'en'
-        
-        for lang, model in self.nlp_models.items():
-            doc = model(text[:100])  # Use only first 100 chars for efficiency
-            score = sum(1 for token in doc if not token.is_punct and not token.is_space)
-            if score > max_score:
-                max_score = score
-                detected_lang = lang
-                
-        return detected_lang
-    
-    def preprocess(self, text: str, lang: Optional[str] = None) -> str:
-        """Preprocess text for analysis."""
+        Returns:
+            Cleaned text
+        """
         if not text:
             return ""
-            
-        # Detect language if not provided
-        if lang is None:
-            lang = self.detect_language(text)
         
-        # Basic cleaning
+        # Convert to lowercase
         text = text.lower()
-        text = re.sub(r'http\S+', '', text)  # Remove URLs
-        text = re.sub(r'@\w+', '', text)     # Remove mentions
-        text = re.sub(r'#\w+', '', text)     # Remove hashtags
-        text = re.sub(r'\s+', ' ', text)     # Normalize whitespace
         
-        # Language-specific processing if spaCy model is available
-        if lang in self.nlp_models:
-            doc = self.nlp_models[lang](text)
-            # Keep only content words, remove stopwords and punctuation
-            tokens = [token.lemma_ for token in doc 
-                     if not token.is_stop and not token.is_punct and token.text.strip()]
-            return " ".join(tokens)
-        else:
-            # Fallback to basic NLTK processing
-            tokens = word_tokenize(text)
-            stopwords = set(nltk.corpus.stopwords.words('english'))  # Default to English
-            tokens = [token for token in tokens if token.isalnum() and token not in stopwords]
-            return " ".join(tokens)
+        # Remove URLs
+        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+        
+        # Remove HTML tags
+        text = re.sub(r'<.*?>', '', text)
+        
+        # Remove punctuation
+        text = text.translate(str.maketrans('', '', string.punctuation))
+        
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Remove stopwords if requested
+        if remove_stopwords:
+            words = text.split()
+            words = [word for word in words if word not in self.stopwords]
+            text = ' '.join(words)
+        
+        return text
     
-    def extract_entities(self, text: str, lang: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Extract named entities from text."""
+    def extract_keywords(self, text: str, top_n: int = 10) -> List[Tuple[str, int]]:
+        """
+        Extract keywords from text based on frequency.
+        
+        Args:
+            text: Text to extract keywords from
+            top_n: Number of top keywords to return
+            
+        Returns:
+            List of (keyword, frequency) tuples
+        """
         if not text:
             return []
-            
-        # Detect language if not provided
-        if lang is None:
-            lang = self.detect_language(text)
-            
-        if lang not in self.nlp_models:
-            logger.warning(f"No spaCy model available for language {lang}")
-            return []
-            
-        doc = self.nlp_models[lang](text)
-        entities = []
         
-        for ent in doc.ents:
-            entities.append({
-                'text': ent.text,
-                'label': ent.label_,
-                'start': ent.start_char,
-                'end': ent.end_char
-            })
-            
-        return entities
+        # Clean the text and remove stopwords
+        cleaned_text = self.clean_text(text, remove_stopwords=True)
+        
+        # Tokenize and count word frequencies
+        words = cleaned_text.split()
+        word_count = {}
+        
+        for word in words:
+            if len(word) > 2:  # Skip very short words
+                word_count[word] = word_count.get(word, 0) + 1
+        
+        # Sort by frequency and return top N
+        sorted_words = sorted(word_count.items(), key=lambda x: x[1], reverse=True)
+        return sorted_words[:top_n]
     
-    def extract_key_phrases(self, text: str, n: int = 5) -> List[str]:
-        """Extract key phrases from text using TF-IDF."""
-        preprocessed = self.preprocess(text)
-        if not preprocessed:
-            return []
+    def extract_sentences(self, text: str) -> List[str]:
+        """
+        Extract sentences from text.
+        
+        Args:
+            text: Text to extract sentences from
             
-        # Fit and transform the text
-        tfidf_matrix = self.tfidf.fit_transform([preprocessed])
-        feature_names = self.tfidf.get_feature_names_out()
-        
-        # Get top N features with highest TF-IDF scores
-        scores = zip(feature_names, tfidf_matrix.toarray()[0])
-        sorted_scores = sorted(scores, key=lambda x: x[1], reverse=True)
-        
-        return [phrase for phrase, score in sorted_scores[:n]]
-    
-    def calculate_similarity(self, text1: str, text2: str) -> float:
-        """Calculate semantic similarity between two texts."""
-        from sklearn.metrics.pairwise import cosine_similarity
-        
-        # Preprocess texts
-        prep_text1 = self.preprocess(text1)
-        prep_text2 = self.preprocess(text2)
-        
-        if not prep_text1 or not prep_text2:
-            return 0.0
-            
-        # Vectorize texts
-        vectors = self.tfidf.fit_transform([prep_text1, prep_text2])
-        
-        # Calculate cosine similarity
-        similarity = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
-        
-        return float(similarity)
-    
-    def analyze_sentiment(self, text: str, lang: Optional[str] = None) -> Dict[str, float]:
-        """Analyze sentiment of text."""
-        if not text:
-            return {'positive': 0.0, 'neutral': 1.0, 'negative': 0.0}
-            
-        # Detect language if not provided
-        if lang is None:
-            lang = self.detect_language(text)
-            
-        if lang not in self.nlp_models:
-            logger.warning(f"No spaCy model available for language {lang}")
-            return {'positive': 0.0, 'neutral': 1.0, 'negative': 0.0}
-            
-        # Simple rule-based sentiment analysis
-        # In a production system, use a dedicated sentiment analysis model
-        doc = self.nlp_models[lang](text)
-        
-        positive_words = 0
-        negative_words = 0
-        total_words = 0
-        
-        # Very simple lexicon-based approach
-        positive_lexicon = {'good', 'great', 'excellent', 'positive', 'amazing', 'wonderful', 'happy', 'love', 'like'}
-        negative_lexicon = {'bad', 'terrible', 'awful', 'negative', 'horrible', 'sad', 'hate', 'dislike'}
-        
-        for token in doc:
-            if token.is_alpha and not token.is_stop:
-                total_words += 1
-                if token.lemma_.lower() in positive_lexicon:
-                    positive_words += 1
-                elif token.lemma_.lower() in negative_lexicon:
-                    negative_words += 1
-        
-        if total_words == 0:
-            return {'positive': 0.0, 'neutral': 1.0, 'negative': 0.0}
-            
-        positive_score = positive_words / total_words
-        negative_score = negative_words / total_words
-        neutral_score = 1.0 - (positive_score + negative_score)
-        
-        return {
-            'positive': positive_score,
-            'neutral': neutral_score,
-            'negative': negative_score
-        }
-        
-    def extract_claim_candidates(self, text: str, lang: Optional[str] = None) -> List[str]:
-        """Extract potential claims from text."""
+        Returns:
+            List of sentences
+        """
         if not text:
             return []
+        
+        # Simple sentence splitting using regex
+        sentences = re.split(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s', text)
+        
+        # Clean up sentences
+        sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
+        
+        return sentences
+    
+    def extract_domain(self, url: str) -> Optional[str]:
+        """
+        Extract domain from URL.
+        
+        Args:
+            url: URL to extract domain from
             
-        # Detect language if not provided
-        if lang is None:
-            lang = self.detect_language(text)
+        Returns:
+            Domain or None if URL is invalid
+        """
+        try:
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc
+            
+            # Remove www. prefix if present
+            if domain.startswith('www.'):
+                domain = domain[4:]
+                
+            return domain
+            
+        except Exception as e:
+            logger.error(f"Error extracting domain from URL {url}: {str(e)}")
+            return None
+    
+    def summarize_text(self, text: str, max_sentences: int = 3) -> str:
+        """
+        Create a simple extractive summary of text.
         
-        # Split into sentences
-        sentences = sent_tokenize(text)
+        Args:
+            text: Text to summarize
+            max_sentences: Maximum number of sentences in the summary
+            
+        Returns:
+            Text summary
+        """
+        if not text:
+            return ""
         
-        # Identify claim candidates (sentences that make assertions)
-        claim_indicators = [
-            'is', 'are', 'was', 'were', 'will', 'shall',  # Verbs of being
-            'claim', 'state', 'report', 'show', 'reveal', 'confirm',  # Reporting verbs
-            'according to', 'research', 'study', 'evidence', 'proof',  # Evidence markers
-            'always', 'never', 'all', 'none', 'every', 'most',  # Generalizers
-            'must', 'should', 'have to', 'need to'  # Modal verbs
-        ]
+        # Extract sentences
+        sentences = self.extract_sentences(text)
         
-        claim_candidates = []
+        if not sentences:
+            return ""
+        
+        # If we have fewer sentences than max_sentences, return the whole text
+        if len(sentences) <= max_sentences:
+            return text
+        
+        # Score sentences based on word frequency
+        word_freq = {}
+        
+        # Count word frequencies across all text
+        for sentence in sentences:
+            for word in self.clean_text(sentence, remove_stopwords=True).split():
+                word_freq[word] = word_freq.get(word, 0) + 1
+        
+        # Score each sentence
+        sentence_scores = []
         
         for sentence in sentences:
-            # Simple heuristic: if the sentence contains claim indicators and is not a question
-            if not sentence.strip().endswith('?'):
-                if any(indicator in sentence.lower() for indicator in claim_indicators):
-                    claim_candidates.append(sentence.strip())
+            score = 0
+            words = self.clean_text(sentence, remove_stopwords=True).split()
+            
+            for word in words:
+                score += word_freq.get(word, 0)
+            
+            # Normalize by sentence length to avoid bias towards longer sentences
+            if words:
+                score = score / len(words)
+                
+            sentence_scores.append((sentence, score))
         
-        return claim_candidates
+        # Sort sentences by score and take top max_sentences
+        sorted_sentences = sorted(sentence_scores, key=lambda x: x[1], reverse=True)
+        top_sentences = [sentence for sentence, _ in sorted_sentences[:max_sentences]]
+        
+        # Reorder sentences to maintain original order
+        ordered_summary = []
+        
+        for sentence in sentences:
+            if sentence in top_sentences:
+                ordered_summary.append(sentence)
+                
+                # Break if we've found all our top sentences
+                if len(ordered_summary) == len(top_sentences):
+                    break
+        
+        return ' '.join(ordered_summary)
+    
+    def detect_language(self, text: str) -> str:
+        """
+        Detect language of text.
+        This is a simplified implementation that works for English only.
+        In a real implementation, you would use a library like langdetect.
+        
+        Args:
+            text: Text to detect language of
+            
+        Returns:
+            Language code ('en' for English, 'unknown' otherwise)
+        """
+        if not text:
+            return "unknown"
+        
+        # Simple heuristic - check for common English words
+        english_markers = {'the', 'and', 'is', 'in', 'it', 'to', 'that', 'of', 'for', 'on'}
+        
+        words = set(self.clean_text(text.lower()).split())
+        common_words = words.intersection(english_markers)
+        
+        # If more than 3 common English words are found, assume it's English
+        if len(common_words) > 3:
+            return "en"
+        
+        return "unknown"
+    
+    def extract_entities(self, text: str) -> Dict[str, List[str]]:
+        """
+        Extract named entities from text.
+        This is a simplified implementation that uses regular expressions.
+        In a real implementation, you would use a library like spaCy.
+        
+        Args:
+            text: Text to extract entities from
+            
+        Returns:
+            Dictionary of entity types to lists of entities
+        """
+        if not text:
+            return {
+                "persons": [],
+                "organizations": [],
+                "locations": [],
+                "dates": []
+            }
+        
+        # Simple regex patterns for entity extraction
+        # Note: These patterns are very basic and will miss many entities
+        # and may have false positives
+        
+        # Person pattern - capitalized names
+        person_pattern = r'(?:[A-Z][a-z]+ ){1,2}[A-Z][a-z]+'
+        
+        # Organization pattern - sequences of capitalized words
+        org_pattern = r'(?:[A-Z][a-z]+ ){2,}(?:Inc|LLC|Ltd|Corp|Corporation|Company|Group)'
+        
+        # Location pattern - capitalized place names
+        location_pattern = r'(?:in|at|from|to) ([A-Z][a-z]+(?: [A-Z][a-z]+)?)'
+        
+        # Date pattern - dates in various formats
+        date_pattern = r'\b(?:\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{2,4}|\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2})\b'
+        
+        # Extract entities
+        persons = set(re.findall(person_pattern, text))
+        organizations = set(re.findall(org_pattern, text))
+        locations = set([match[0] for match in re.findall(location_pattern, text)])
+        dates = set(re.findall(date_pattern, text))
+        
+        return {
+            "persons": list(persons),
+            "organizations": list(organizations), 
+            "locations": list(locations),
+            "dates": list(dates)
+        }

@@ -1,367 +1,420 @@
-"""
-Web scraping utility for the CIVILIAN system.
-This utility provides functions for scraping and extracting content from web pages.
-"""
-
 import os
 import logging
-import time
-import json
-import hashlib
-import random
-import trafilatura
+import urllib.parse
 import requests
-from urllib.parse import urlparse, urljoin
+import json
+import re
+import time
+import concurrent.futures
+from typing import Dict, List, Optional, Any, Tuple, Set
 from bs4 import BeautifulSoup
+import feedparser
+import trafilatura
 from datetime import datetime
 
-# Configure logger
 logger = logging.getLogger(__name__)
 
 class WebScraper:
-    """A utility class for scraping web content with rate limiting and caching."""
+    """Utility class for scraping web content."""
     
-    def __init__(self, cache_dir='./storage/web_cache', user_agents=None):
-        """
-        Initialize the web scraper.
-        
-        Args:
-            cache_dir: Directory to store cached web pages
-            user_agents: List of user agents to rotate through
-        """
-        self.cache_dir = cache_dir
-        os.makedirs(cache_dir, exist_ok=True)
-        
-        # Default user agents to rotate
-        self.user_agents = user_agents or [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0'
-        ]
-        
-        # Rate limiting parameters
-        self.last_request_time = {}  # domain -> timestamp
-        self.min_request_interval = 2  # seconds between requests to same domain
-        
-        # Request timeout
-        self.timeout = 10  # seconds
-    
-    def _get_cache_path(self, url):
-        """Get the cache file path for a URL."""
-        url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()
-        return os.path.join(self.cache_dir, f"{url_hash}.html")
-    
-    def _is_cached(self, url, max_age=3600):
-        """Check if URL content is cached and not expired."""
-        cache_path = self._get_cache_path(url)
-        
-        if not os.path.exists(cache_path):
-            return False
-        
-        # Check if cache is expired
-        file_time = os.path.getmtime(cache_path)
-        current_time = time.time()
-        
-        return (current_time - file_time) < max_age
-    
-    def _cache_content(self, url, content):
-        """Cache the content for a URL."""
-        if not content:
-            return
-        
-        cache_path = self._get_cache_path(url)
-        
-        try:
-            with open(cache_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-        except Exception as e:
-            logger.error(f"Error caching content for {url}: {e}")
-    
-    def _get_cached_content(self, url):
-        """Get cached content for a URL."""
-        cache_path = self._get_cache_path(url)
-        
-        if not os.path.exists(cache_path):
-            return None
-        
-        try:
-            with open(cache_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            logger.error(f"Error reading cached content for {url}: {e}")
-            return None
-    
-    def _respect_rate_limit(self, domain):
-        """Ensure rate limits are respected for each domain."""
-        current_time = time.time()
-        
-        if domain in self.last_request_time:
-            elapsed = current_time - self.last_request_time[domain]
-            
-            if elapsed < self.min_request_interval:
-                sleep_time = self.min_request_interval - elapsed
-                logger.debug(f"Rate limiting: Sleeping {sleep_time:.2f}s for {domain}")
-                time.sleep(sleep_time)
-        
-        self.last_request_time[domain] = time.time()
-    
-    def fetch_url(self, url, force_refresh=False, verify_ssl=True):
-        """
-        Fetch HTML content from a URL with caching and rate limiting.
-        
-        Args:
-            url: The URL to fetch
-            force_refresh: Whether to ignore cache and fetch fresh content
-            verify_ssl: Whether to verify SSL certificates
-            
-        Returns:
-            HTML content as string or None if failed
-        """
-        # Parse URL to get domain for rate limiting
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
-        
-        # Check cache first unless force refresh
-        if not force_refresh and self._is_cached(url):
-            logger.debug(f"Using cached content for {url}")
-            return self._get_cached_content(url)
-        
-        # Respect rate limits
-        self._respect_rate_limit(domain)
-        
-        # Rotate user agents
-        headers = {
-            'User-Agent': random.choice(self.user_agents),
+    def __init__(self):
+        """Initialize the web scraper."""
+        self.headers = {
+            'User-Agent': 'CIVILIAN Web Scraper/1.0 (Research; Analysis)',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'DNT': '1',  # Do Not Track
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1'
         }
-        
-        try:
-            logger.debug(f"Fetching {url}")
-            response = requests.get(
-                url, 
-                headers=headers, 
-                timeout=self.timeout,
-                verify=verify_ssl
-            )
-            
-            # Check if request was successful
-            if response.status_code == 200:
-                content = response.text
-                self._cache_content(url, content)
-                return content
-            else:
-                logger.warning(f"Failed to fetch {url}, status code: {response.status_code}")
-                return None
-                
-        except requests.RequestException as e:
-            logger.error(f"Error fetching {url}: {e}")
-            return None
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+        self.request_delay = 1.0  # Delay between requests in seconds
+        self.last_request_time = 0
     
-    def extract_text_content(self, html_content):
+    def _rate_limit(self):
+        """Apply rate limiting to prevent overwhelming servers."""
+        current_time = time.time()
+        elapsed = current_time - self.last_request_time
+        
+        if elapsed < self.request_delay:
+            time.sleep(self.request_delay - elapsed)
+        
+        self.last_request_time = time.time()
+    
+    def scrape_url(self, url: str, extract_links: bool = False) -> Dict:
         """
-        Extract main text content from HTML using trafilatura.
+        Scrape content from a URL.
         
         Args:
-            html_content: HTML content as string
+            url: URL to scrape
+            extract_links: Whether to extract links from the page
             
         Returns:
-            Extracted text content
+            Dict containing the scraped content
         """
-        if not html_content:
-            return None
+        logger.info(f"Scraping URL: {url}")
+        self._rate_limit()
         
         try:
-            return trafilatura.extract(html_content)
-        except Exception as e:
-            logger.error(f"Error extracting text content: {e}")
-            return None
-    
-    def extract_links(self, html_content, base_url):
-        """
-        Extract links from HTML content.
-        
-        Args:
-            html_content: HTML content as string
-            base_url: Base URL for resolving relative links
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
             
-        Returns:
-            List of absolute URLs
-        """
-        if not html_content:
-            return []
-        
+            html_content = response.text
+            
+            # Extract content using trafilatura for better text extraction
+            content = trafilatura.extract(html_content)
+            
+            # Use BeautifulSoup for additional metadata and link extraction
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Get the title
+            title = soup.title.string if soup.title else ''
+            
+            # Extract links if requested
+            links = []
+            if extract_links:
+                links = self._extract_links(soup, url)
+            
+            # Get metadata
+            metadata = self._extract_metadata(soup)
+            
+            result = {
+                'url': url,
+                'title': title.strip() if title else '',
+                'content': content or '',
+                'html': html_content,
+                'headers': dict(response.headers),
+                'links': links,
+                'metadata': metadata,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            
+            return result
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error scraping URL {url}: {str(e)}")
+            raise
+    
+    def _extract_links(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract links from a BeautifulSoup object."""
         links = []
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href']
             
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                
-                # Skip anchors and javascript links
-                if href.startswith('#') or href.startswith('javascript:'):
-                    continue
-                
-                # Resolve relative URLs
-                abs_url = urljoin(base_url, href)
-                
-                # Normalize URL
-                parsed = urlparse(abs_url)
-                abs_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-                if parsed.query:
-                    abs_url += f"?{parsed.query}"
-                
-                links.append(abs_url)
-                
-            return list(set(links))  # Remove duplicates
+            # Skip empty links and non-HTTP links
+            if not href or href.startswith('#') or href.startswith('javascript:'):
+                continue
             
-        except Exception as e:
-            logger.error(f"Error extracting links from {base_url}: {e}")
-            return []
+            # Convert relative URLs to absolute
+            absolute_url = urllib.parse.urljoin(base_url, href)
+            
+            # Get link text
+            link_text = a_tag.get_text().strip()
+            
+            links.append({
+                'url': absolute_url,
+                'text': link_text if link_text else None,
+                'rel': a_tag.get('rel', None),
+                'title': a_tag.get('title', None)
+            })
+        
+        return links
     
-    def extract_metadata(self, html_content, url):
-        """
-        Extract metadata from HTML content.
+    def _extract_metadata(self, soup: BeautifulSoup) -> Dict:
+        """Extract metadata from a BeautifulSoup object."""
+        metadata = {}
         
-        Args:
-            html_content: HTML content as string
-            url: URL of the page
+        # Extract meta tags
+        for meta in soup.find_all('meta'):
+            name = meta.get('name') or meta.get('property')
+            content = meta.get('content')
             
-        Returns:
-            Dictionary containing metadata
-        """
-        if not html_content:
-            return {}
+            if name and content:
+                metadata[name] = content
         
-        metadata = {
-            'url': url,
-            'scraped_at': datetime.now().isoformat(),
-            'title': None,
-            'description': None,
-            'published_date': None,
-            'author': None,
-            'site_name': None,
-        }
+        # Extract schema.org structured data
+        for script in soup.find_all('script', {'type': 'application/ld+json'}):
+            try:
+                json_data = json.loads(script.string)
+                metadata['structured_data'] = metadata.get('structured_data', []) + [json_data]
+            except (json.JSONDecodeError, TypeError):
+                pass
         
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Get title
-            title_tag = soup.find('title')
-            if title_tag:
-                metadata['title'] = title_tag.text.strip()
-            
-            # Try to get meta tags
-            for meta in soup.find_all('meta'):
-                name = meta.get('name', '').lower()
-                property = meta.get('property', '').lower()
-                content = meta.get('content')
-                
-                if not content:
-                    continue
-                
-                # Description
-                if name == 'description' or property == 'og:description':
-                    metadata['description'] = content
-                
-                # Published date
-                elif name == 'date' or property == 'article:published_time':
-                    metadata['published_date'] = content
-                
-                # Author
-                elif name == 'author' or property == 'article:author':
-                    metadata['author'] = content
-                
-                # Site name
-                elif property == 'og:site_name':
-                    metadata['site_name'] = content
-            
-            return metadata
-            
-        except Exception as e:
-            logger.error(f"Error extracting metadata from {url}: {e}")
-            return metadata
+        return metadata
     
-    def crawl(self, start_url, max_pages=5, same_domain_only=True):
+    def crawl(self, start_url: str, max_pages: int = 5, same_domain_only: bool = True) -> Dict[str, Dict]:
         """
         Crawl a website starting from a URL.
         
         Args:
-            start_url: Starting URL for crawling
+            start_url: Starting URL for the crawl
             max_pages: Maximum number of pages to crawl
-            same_domain_only: Whether to only crawl pages from the same domain
+            same_domain_only: Whether to only crawl pages on the same domain
             
         Returns:
-            List of dictionaries containing page data
+            Dict of URL -> content mappings
         """
-        results = []
-        visited = set()
-        to_visit = [start_url]
-        start_domain = urlparse(start_url).netloc
+        logger.info(f"Starting crawl from {start_url}, max_pages={max_pages}")
         
-        logger.info(f"Starting crawl from {start_url}, max pages: {max_pages}")
+        # Parse the start URL to get the domain
+        parsed_url = urllib.parse.urlparse(start_url)
+        base_domain = parsed_url.netloc
+        
+        # Set up tracking variables
+        visited_urls = set()
+        to_visit = [start_url]
+        results = {}
         
         while to_visit and len(results) < max_pages:
-            url = to_visit.pop(0)
+            current_url = to_visit.pop(0)
             
-            if url in visited:
+            if current_url in visited_urls:
                 continue
+            
+            visited_urls.add(current_url)
+            
+            try:
+                # Scrape the current URL
+                content = self.scrape_url(current_url, extract_links=True)
+                results[current_url] = content
                 
-            visited.add(url)
-            
-            # Skip if different domain and same_domain_only is True
-            url_domain = urlparse(url).netloc
-            if same_domain_only and url_domain != start_domain:
-                continue
-            
-            # Fetch content
-            html_content = self.fetch_url(url)
-            if not html_content:
-                continue
-            
-            # Extract data
-            text_content = self.extract_text_content(html_content)
-            metadata = self.extract_metadata(html_content, url)
-            
-            if text_content:
-                page_data = {
-                    **metadata,
-                    'content': text_content
-                }
-                results.append(page_data)
+                # Add links to the to_visit list
+                for link in content.get('links', []):
+                    link_url = link.get('url')
+                    
+                    if not link_url:
+                        continue
+                    
+                    # Skip if we've already visited or queued this URL
+                    if link_url in visited_urls or link_url in to_visit:
+                        continue
+                    
+                    # Skip if not on the same domain and same_domain_only is True
+                    if same_domain_only:
+                        link_domain = urllib.parse.urlparse(link_url).netloc
+                        if link_domain != base_domain:
+                            continue
+                    
+                    # Add to the to_visit list
+                    to_visit.append(link_url)
                 
-                # Extract links for next pages
-                links = self.extract_links(html_content, url)
-                for link in links:
-                    if link not in visited and link not in to_visit:
-                        to_visit.append(link)
+            except Exception as e:
+                logger.error(f"Error crawling {current_url}: {str(e)}")
         
-        logger.info(f"Crawl completed, processed {len(results)} pages")
+        logger.info(f"Crawling completed: {len(results)} pages crawled")
         return results
     
-    def search_and_extract(self, query, engine="bing", limit=10):
+    def search(self, query: str, engine: str = 'bing', limit: int = 10) -> List[Dict]:
         """
-        Search the web and extract content from results.
+        Search the web for a query.
         
         Args:
-            query: Search query string
-            engine: Search engine to use ("bing" or "google")
+            query: Search query
+            engine: Search engine to use ('bing', 'google', 'duckduckgo')
             limit: Maximum number of results to return
             
         Returns:
-            List of dictionaries containing search results
+            List of search result dicts
         """
-        # This is a simplified implementation
-        # In a real-world app, you would use search engine APIs or libraries
+        logger.info(f"Searching for '{query}' using {engine}, limit={limit}")
         
-        logger.warning("Search functionality requires API integration with search engines")
+        if engine.lower() == 'bing':
+            return self._search_bing(query, limit)
+        elif engine.lower() == 'google':
+            return self._search_google(query, limit)
+        elif engine.lower() == 'duckduckgo':
+            return self._search_duckduckgo(query, limit)
+        else:
+            raise ValueError(f"Unsupported search engine: {engine}")
+    
+    def _search_bing(self, query: str, limit: int = 10) -> List[Dict]:
+        """Search using Bing."""
+        # This is a simplified implementation that scrapes the results page
+        # In a production environment, you would use the Bing API
         
-        # Placeholder for demonstration
-        results = []
+        url = f"https://www.bing.com/search?q={urllib.parse.quote(query)}"
         
-        # Return placeholder
-        return results
+        try:
+            self._rate_limit()
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            
+            # Extract search results
+            for result in soup.select('.b_algo')[:limit]:
+                title_elem = result.select_one('h2 a')
+                if not title_elem:
+                    continue
+                
+                title = title_elem.get_text().strip()
+                link = title_elem.get('href', '')
+                
+                # Get the snippet
+                snippet_elem = result.select_one('.b_caption p')
+                snippet = snippet_elem.get_text().strip() if snippet_elem else ''
+                
+                results.append({
+                    'title': title,
+                    'url': link,
+                    'snippet': snippet,
+                    'source': 'bing',
+                    'date': ''  # Bing doesn't consistently provide dates in the search results
+                })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error searching Bing for '{query}': {str(e)}")
+            return []
+    
+    def _search_google(self, query: str, limit: int = 10) -> List[Dict]:
+        """Search using Google."""
+        # This is a simplified implementation that scrapes the results page
+        # In a production environment, you would use the Google Search API
+        
+        url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+        
+        try:
+            self._rate_limit()
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            
+            # Extract search results
+            for result in soup.select('.g')[:limit]:
+                title_elem = result.select_one('h3')
+                if not title_elem:
+                    continue
+                
+                title = title_elem.get_text().strip()
+                
+                link_elem = result.select_one('a')
+                link = link_elem.get('href', '') if link_elem else ''
+                
+                # Clean up the link (Google prefixes links with /url?q=)
+                if link.startswith('/url?q='):
+                    link = link.split('/url?q=')[1].split('&')[0]
+                    link = urllib.parse.unquote(link)
+                
+                # Get the snippet
+                snippet_elem = result.select_one('.VwiC3b')
+                snippet = snippet_elem.get_text().strip() if snippet_elem else ''
+                
+                # Get date if available
+                date = ''
+                date_elem = result.select_one('.MUxGbd.wuQ4Ob.WZ8Tjf')
+                if date_elem:
+                    date_text = date_elem.get_text().strip()
+                    date_match = re.search(r'\d{1,2} [A-Za-z]{3} \d{4}', date_text)
+                    if date_match:
+                        date = date_match.group(0)
+                
+                results.append({
+                    'title': title,
+                    'url': link,
+                    'snippet': snippet,
+                    'source': 'google',
+                    'date': date
+                })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error searching Google for '{query}': {str(e)}")
+            return []
+    
+    def _search_duckduckgo(self, query: str, limit: int = 10) -> List[Dict]:
+        """Search using DuckDuckGo."""
+        # This is a simplified implementation using the HTML version
+        
+        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+        
+        try:
+            self._rate_limit()
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            
+            # Extract search results
+            for result in soup.select('.result')[:limit]:
+                title_elem = result.select_one('.result__title a')
+                if not title_elem:
+                    continue
+                
+                title = title_elem.get_text().strip()
+                link = title_elem.get('href', '')
+                
+                # DuckDuckGo uses redirects, extract the actual URL
+                if link.startswith('/'):
+                    parsed = urllib.parse.urlparse(link)
+                    query_params = urllib.parse.parse_qs(parsed.query)
+                    if 'uddg' in query_params:
+                        link = query_params['uddg'][0]
+                    
+                # Get the snippet
+                snippet_elem = result.select_one('.result__snippet')
+                snippet = snippet_elem.get_text().strip() if snippet_elem else ''
+                
+                results.append({
+                    'title': title,
+                    'url': link,
+                    'snippet': snippet,
+                    'source': 'duckduckgo',
+                    'date': ''  # DuckDuckGo doesn't consistently provide dates
+                })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error searching DuckDuckGo for '{query}': {str(e)}")
+            return []
+    
+    def parse_rss(self, feed_url: str) -> List[Dict]:
+        """
+        Parse an RSS feed.
+        
+        Args:
+            feed_url: URL of the RSS feed
+            
+        Returns:
+            List of feed entries as dictionaries
+        """
+        logger.info(f"Parsing RSS feed: {feed_url}")
+        
+        try:
+            self._rate_limit()
+            feed = feedparser.parse(feed_url)
+            
+            entries = []
+            for entry in feed.entries:
+                # Extract relevant fields
+                entry_dict = {
+                    'title': entry.get('title', ''),
+                    'link': entry.get('link', ''),
+                    'summary': entry.get('summary', ''),
+                    'published': entry.get('published', ''),
+                    'published_parsed': entry.get('published_parsed'),
+                    'author': entry.get('author', ''),
+                    'tags': [tag.get('term', '') for tag in entry.get('tags', [])]
+                }
+                
+                # If content is available, add it
+                if 'content' in entry:
+                    # Some feeds have multiple content elements, use the first one
+                    entry_dict['content'] = entry.content[0].value if entry.content else ''
+                
+                entries.append(entry_dict)
+            
+            return entries
+            
+        except Exception as e:
+            logger.error(f"Error parsing RSS feed {feed_url}: {str(e)}")
+            return []
