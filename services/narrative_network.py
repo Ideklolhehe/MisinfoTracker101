@@ -26,6 +26,31 @@ class NarrativeNetworkService:
         """Initialize the narrative network service."""
         self.min_similarity = 0.65  # Minimum similarity threshold for relationships
         
+        # Initialize clustering algorithms
+        self._init_denstream()
+        self._init_clustream()
+        self._init_secleds()
+    
+    def _init_denstream(self):
+        """Initialize the DenStream clustering algorithm."""
+        # Storage for DenStream clusters
+        self.denstream_clusters = {}
+        self.denstream_cluster_counter = 0
+        
+    def _init_clustream(self):
+        """Initialize the CluStream clustering algorithm."""
+        # Storage for CluStream clusters
+        self.clustream_clusters = {}
+        self.clustream_cluster_counter = 0
+        self.clustream_buffer = []
+        
+    def _init_secleds(self):
+        """Initialize the SECLEDS algorithm."""
+        # Storage for SECLEDS clusters
+        self.secleds_clusters = {}
+        self.secleds_cluster_counter = 0
+        self.secleds_buffer = []
+        
     def get_narrative_connections(self, narrative_id: int) -> Dict[str, Any]:
         """
         Get connections between a narrative and other narratives.
