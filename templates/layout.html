@@ -38,7 +38,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'dashboard.narratives' %}active{% endif %}" href="{{ url_for('dashboard.narratives') }}">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
                             <i data-feather="activity"></i> Narratives
                         </a>
                     </li>
@@ -55,7 +55,7 @@
                 </ul>
                 
                 <!-- Search form -->
-                <form class="d-flex" action="{{ url_for('dashboard.narratives') }}" method="get">
+                <form class="d-flex" action="{{ url_for('dashboard.index') }}" method="get">
                     <input class="form-control me-2" type="search" name="search" placeholder="Search narratives..." aria-label="Search">
                     <button class="btn btn-outline-light" type="submit">Search</button>
                 </form>
@@ -76,7 +76,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'dashboard.narratives' %}active{% endif %}" href="{{ url_for('dashboard.narratives') }}">
+                            <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
                                 <i data-feather="activity"></i>
                                 Narratives
                             </a>
