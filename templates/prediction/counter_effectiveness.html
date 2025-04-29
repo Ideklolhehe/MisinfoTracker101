@@ -1,0 +1,271 @@
+{% extends "layout.html" %}
+
+{% block title %}Counter-Narrative Effectiveness Prediction{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('prediction.dashboard') }}">Prediction</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Counter-Narrative Effectiveness</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <h1>Counter-Narrative Effectiveness Prediction</h1>
+            <p class="lead">Forecast the effectiveness of counter-narratives against "<strong>{{ counter.title }}</strong>"</p>
+        </div>
+        <div class="col-lg-3 text-end">
+            <a href="{{ url_for('counter_narrative.view', counter_id=counter.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Counter-Narrative
+            </a>
+        </div>
+    </div>
+
+    {% include "includes/alert.html" %}
+
+    {% if success %}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Effectiveness Forecast</h5>
+                </div>
+                <div class="card-body">
+                    <div id="effectiveness-chart" style="height: 400px;"></div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">Forecast generated: {{ forecast.generated_at }}</small>
+                        <div>
+                            <a href="{{ url_for('prediction.counter_effectiveness', counter_id=counter.id, refresh='true') }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-arrow-repeat"></i> Refresh
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Key Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3 shadow-sm border-info">
+                                <div class="card-body">
+                                    <h5 class="card-title">Current Effectiveness</h5>
+                                    <h2 class="display-5 text-info">{{ (forecast.current_effectiveness * 100)|round|int }}%</h2>
+                                    <p class="text-muted mb-0">Based on narrative suppression metrics</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3 shadow-sm border-success">
+                                <div class="card-body">
+                                    <h5 class="card-title">Projected Peak</h5>
+                                    <h2 class="display-5 text-success">{{ (forecast.peak_effectiveness * 100)|round|int }}%</h2>
+                                    <p class="text-muted mb-0">Expected in {{ forecast.days_to_peak }} days</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3 shadow-sm border-warning">
+                                <div class="card-body">
+                                    <h5 class="card-title">Sustainability</h5>
+                                    <h2 class="display-5 text-warning">{{ (forecast.sustainability_score * 100)|round|int }}%</h2>
+                                    <p class="text-muted mb-0">Long-term effectiveness score</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3 shadow-sm border-danger">
+                                <div class="card-body">
+                                    <h5 class="card-title">Coverage</h5>
+                                    <h2 class="display-5 text-danger">{{ (forecast.coverage_score * 100)|round|int }}%</h2>
+                                    <p class="text-muted mb-0">Percentage of narrative aspects addressed</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Counter-Narrative Details</h5>
+                </div>
+                <div class="card-body">
+                    <h5>{{ counter.title }}</h5>
+                    <p class="text-muted">
+                        <small>Created: {{ counter.created_at.strftime('%Y-%m-%d') }}</small><br>
+                        <small>Status: <span class="badge bg-{{ 'success' if counter.status == 'active' else 'secondary' }}">{{ counter.status }}</span></small>
+                    </p>
+                    <p>{{ counter.content|truncate(150) }}</p>
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('counter_narrative.view', counter_id=counter.id) }}" class="btn btn-sm btn-secondary">View Counter-Narrative</a>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Target Narrative</h5>
+                </div>
+                <div class="card-body">
+                    <h5>{{ narrative.title }}</h5>
+                    <p class="text-muted">
+                        <small>First Detected: {{ narrative.first_detected.strftime('%Y-%m-%d') }}</small><br>
+                        <small>Status: <span class="badge bg-{{ 'danger' if narrative.status == 'active' else 'secondary' }}">{{ narrative.status }}</span></small>
+                    </p>
+                    <div class="progress mb-3">
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: {{ (narrative.threat_score * 100)|int }}%" 
+                            aria-valuenow="{{ (narrative.threat_score * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                            Threat: {{ (narrative.threat_score * 100)|int }}%
+                        </div>
+                    </div>
+                    <div class="progress mb-3">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ (narrative.complexity_score * 100)|int }}%" 
+                            aria-valuenow="{{ (narrative.complexity_score * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                            Complexity: {{ (narrative.complexity_score * 100)|int }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('dashboard.view_narrative', narrative_id=narrative.id) }}" class="btn btn-sm btn-secondary">View Narrative</a>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Improvement Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for rec in forecast.recommendations %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ rec.description }}
+                            <span class="badge bg-primary rounded-pill">+{{ rec.potential_gain|round|int }}%</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('counter_narrative.edit', counter_id=counter.id) }}" class="btn btn-sm btn-primary">Edit Counter-Narrative</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-danger">
+        <h4 class="alert-heading">Error Generating Forecast</h4>
+        <p>{{ error }}</p>
+        <hr>
+        <p class="mb-0">Please try again or contact support if the issue persists.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+{% if success %}
+document.addEventListener('DOMContentLoaded', function() {
+    // Effectiveness forecast chart data
+    const dates = {{ forecast.dates|tojson }};
+    const effectiveness = {{ forecast.effectiveness_values|tojson }};
+    const upperBound = {{ forecast.upper_bound|tojson }};
+    const lowerBound = {{ forecast.lower_bound|tojson }};
+    
+    const effectiveTrace = {
+        x: dates,
+        y: effectiveness,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Projected Effectiveness',
+        line: {
+            color: '#4285F4',
+            width: 3
+        }
+    };
+    
+    const upperBoundTrace = {
+        x: dates,
+        y: upperBound,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Upper Bound',
+        line: {
+            color: '#8AB4F8',
+            width: 1,
+            dash: 'dot'
+        },
+        fillcolor: 'rgba(66, 133, 244, 0.1)',
+        fill: 'tonexty'
+    };
+    
+    const lowerBoundTrace = {
+        x: dates,
+        y: lowerBound,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Lower Bound',
+        line: {
+            color: '#8AB4F8',
+            width: 1,
+            dash: 'dot'
+        },
+        fillcolor: 'rgba(66, 133, 244, 0.1)',
+        fill: 'tonexty'
+    };
+    
+    const layout = {
+        title: 'Projected Counter-Narrative Effectiveness',
+        xaxis: {
+            title: 'Date',
+            showgrid: true,
+            zeroline: false
+        },
+        yaxis: {
+            title: 'Effectiveness Score',
+            showgrid: true,
+            zeroline: false,
+            tickformat: '.0%',
+            range: [0, 1]
+        },
+        showlegend: true,
+        legend: {
+            orientation: 'h',
+            y: -0.2
+        },
+        margin: {
+            l: 50,
+            r: 20,
+            t: 50,
+            b: 50
+        },
+        hovermode: 'closest',
+        plot_bgcolor: '#f8f9fa',
+        paper_bgcolor: '#ffffff'
+    };
+    
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
+    };
+    
+    Plotly.newPlot('effectiveness-chart', [lowerBoundTrace, effectiveTrace, upperBoundTrace], layout, config);
+});
+{% endif %}
+</script>
+{% endblock %}

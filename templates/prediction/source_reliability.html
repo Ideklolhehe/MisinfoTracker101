@@ -1,0 +1,477 @@
+{% extends "layout.html" %}
+
+{% block title %}Source Reliability Prediction{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('prediction.dashboard') }}">Prediction</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Source Reliability Prediction</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <h1>Source Reliability Prediction</h1>
+            <p class="lead">
+                {% if source_name %}
+                Forecast reliability for source: <strong>{{ source_name }}</strong>
+                {% else %}
+                Source reliability forecasting and risk assessment
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-lg-3 text-end">
+            <a href="{{ url_for('prediction.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% include "includes/alert.html" %}
+
+    {% if not source_id %}
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Select Information Source</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{{ url_for('prediction.source_reliability') }}">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="source_id" class="form-label">Information Source</label>
+                        <select name="source_id" id="source_id" class="form-select" required>
+                            <option value="">-- Select Source --</option>
+                            {% for src in sources %}
+                            <option value="{{ src.id }}">{{ src.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="days" class="form-label">History (days)</label>
+                        <select name="days" id="days" class="form-select">
+                            <option value="30">30 days</option>
+                            <option value="60">60 days</option>
+                            <option value="90" selected>90 days</option>
+                            <option value="180">180 days</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="horizon" class="form-label">Forecast Horizon</label>
+                        <select name="horizon" id="horizon" class="form-select">
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30" selected>30 days</option>
+                            <option value="60">60 days</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Generate Prediction</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Top Risk Sources</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Reliability Score</th>
+                                    <th>Risk Trend</th>
+                                    <th>Projected Risk Level</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in top_risk_sources %}
+                                <tr>
+                                    <td>{{ source.name }}</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;" data-bs-toggle="tooltip" title="{{ (source.reliability_score * 100)|round|int }}% Reliable">
+                                            <div class="progress-bar {{ 'bg-danger' if source.reliability_score < 0.4 else ('bg-warning' if source.reliability_score < 0.7 else 'bg-success') }}" 
+                                                 role="progressbar" style="width: {{ (source.reliability_score * 100)|int }}%" 
+                                                 aria-valuenow="{{ (source.reliability_score * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                                                {{ (source.reliability_score * 100)|round|int }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if source.trend > 0.05 %}
+                                        <span class="text-success"><i class="bi bi-arrow-up-right"></i> Improving</span>
+                                        {% elif source.trend < -0.05 %}
+                                        <span class="text-danger"><i class="bi bi-arrow-down-right"></i> Declining</span>
+                                        {% else %}
+                                        <span class="text-muted"><i class="bi bi-arrow-right"></i> Stable</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ 'bg-danger' if source.projected_risk == 'High' else ('bg-warning' if source.projected_risk == 'Medium' else 'bg-success') }} rounded-pill">{{ source.projected_risk }}</span>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('prediction.source_reliability', source_id=source.id) }}" class="btn btn-sm btn-outline-primary">
+                                            View Forecast
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Reliability Forecast</h5>
+                </div>
+                <div class="card-body">
+                    <div id="reliability-chart" style="height: 400px;"></div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">Forecast generated: {{ forecast.generated_at }}</small>
+                        <div>
+                            <a href="{{ url_for('prediction.source_reliability', source_id=source_id, refresh='true') }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-arrow-repeat"></i> Refresh
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Misinformation Events</h5>
+                </div>
+                <div class="card-body">
+                    <div id="events-chart" style="height: 300px;"></div>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Topic Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Topic reliability by category across the last {{ days }} days</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Topic Category</th>
+                                    <th>Reliability Score</th>
+                                    <th>Trend</th>
+                                    <th>Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for topic in forecast.topic_analysis %}
+                                <tr>
+                                    <td>{{ topic.category }}</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar {{ 'bg-danger' if topic.reliability < 0.4 else ('bg-warning' if topic.reliability < 0.7 else 'bg-success') }}" 
+                                                 role="progressbar" style="width: {{ (topic.reliability * 100)|int }}%" 
+                                                 aria-valuenow="{{ (topic.reliability * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                                                {{ (topic.reliability * 100)|round|int }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if topic.trend > 0.05 %}
+                                        <span class="text-success"><i class="bi bi-arrow-up-right"></i> Improving</span>
+                                        {% elif topic.trend < -0.05 %}
+                                        <span class="text-danger"><i class="bi bi-arrow-down-right"></i> Declining</span>
+                                        {% else %}
+                                        <span class="text-muted"><i class="bi bi-arrow-right"></i> Stable</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ 'bg-danger' if topic.risk == 'High' else ('bg-warning' if topic.risk == 'Medium' else 'bg-success') }} rounded-pill">{{ topic.risk }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Source Details</h5>
+                </div>
+                <div class="card-body">
+                    <h5>{{ source.name }}</h5>
+                    <p class="text-muted mb-3">
+                        <small>Type: {{ source.type }}</small><br>
+                        <small>Added: {{ source.created_at.strftime('%Y-%m-%d') }}</small>
+                    </p>
+                    
+                    <p>{{ source.description }}</p>
+                    
+                    {% if source.url %}
+                    <div class="mb-3">
+                        <strong>URL:</strong> <a href="{{ source.url }}" target="_blank">{{ source.url }}</a>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('data_sources.edit', source_id=source.id) }}" class="btn btn-sm btn-outline-secondary">Edit Source</a>
+                        <a href="{{ url_for('data_sources.view', source_id=source.id) }}" class="btn btn-sm btn-secondary">View Details</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Overall Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-info">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">Current Reliability</h6>
+                                    <h2 class="display-6 text-info mb-0">{{ (forecast.current_reliability * 100)|round|int }}%</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-primary">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">Projected</h6>
+                                    <h2 class="display-6 text-primary mb-0">{{ (forecast.projected_reliability * 100)|round|int }}%</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-danger">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">Risk Level</h6>
+                                    <h2 class="display-6 text-danger mb-0">{{ forecast.risk_level }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-warning">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">Volatility</h6>
+                                    <h2 class="display-6 text-warning mb-0">{{ (forecast.volatility * 100)|round|int }}%</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Key Insights</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for insight in forecast.insights %}
+                        <li class="list-group-item">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    {% if insight.type == 'warning' %}
+                                    <span class="badge rounded-pill bg-warning p-2"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                                    {% elif insight.type == 'danger' %}
+                                    <span class="badge rounded-pill bg-danger p-2"><i class="bi bi-exclamation-circle-fill"></i></span>
+                                    {% elif insight.type == 'info' %}
+                                    <span class="badge rounded-pill bg-info p-2"><i class="bi bi-info-circle-fill"></i></span>
+                                    {% elif insight.type == 'success' %}
+                                    <span class="badge rounded-pill bg-success p-2"><i class="bi bi-check-circle-fill"></i></span>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {{ insight.text }}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Monitoring Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for rec in forecast.recommendations %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ rec.description }}
+                            <span class="badge bg-primary rounded-pill">{{ rec.priority }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('data_sources.create_monitor', source_id=source.id) }}" class="btn btn-sm btn-primary">Add Monitoring Rule</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+{% if source_id %}
+document.addEventListener('DOMContentLoaded', function() {
+    // Reliability forecast chart data
+    const dates = {{ forecast.dates|tojson }};
+    const reliability = {{ forecast.reliability_values|tojson }};
+    const upperBound = {{ forecast.upper_bound|tojson }};
+    const lowerBound = {{ forecast.lower_bound|tojson }};
+    
+    const reliabilityTrace = {
+        x: dates,
+        y: reliability,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Reliability Score',
+        line: {
+            color: '#4285F4',
+            width: 3
+        }
+    };
+    
+    const upperBoundTrace = {
+        x: dates,
+        y: upperBound,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Upper Bound',
+        line: {
+            color: '#8AB4F8',
+            width: 1,
+            dash: 'dot'
+        },
+        fillcolor: 'rgba(66, 133, 244, 0.1)',
+        fill: 'tonexty'
+    };
+    
+    const lowerBoundTrace = {
+        x: dates,
+        y: lowerBound,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Lower Bound',
+        line: {
+            color: '#8AB4F8',
+            width: 1,
+            dash: 'dot'
+        },
+        fillcolor: 'rgba(66, 133, 244, 0.1)',
+        fill: 'tonexty'
+    };
+    
+    const layout = {
+        title: 'Source Reliability Forecast',
+        xaxis: {
+            title: 'Date',
+            showgrid: true,
+            zeroline: false
+        },
+        yaxis: {
+            title: 'Reliability Score',
+            showgrid: true,
+            zeroline: false,
+            tickformat: '.0%',
+            range: [0, 1]
+        },
+        showlegend: true,
+        legend: {
+            orientation: 'h',
+            y: -0.2
+        },
+        margin: {
+            l: 50,
+            r: 20,
+            t: 50,
+            b: 50
+        },
+        hovermode: 'closest',
+        plot_bgcolor: '#f8f9fa',
+        paper_bgcolor: '#ffffff'
+    };
+    
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
+    };
+    
+    Plotly.newPlot('reliability-chart', [lowerBoundTrace, reliabilityTrace, upperBoundTrace], layout, config);
+
+    // Events chart
+    const eventDates = {{ forecast.event_dates|tojson }};
+    const eventCounts = {{ forecast.event_counts|tojson }};
+    
+    const eventsTrace = {
+        x: eventDates,
+        y: eventCounts,
+        type: 'bar',
+        name: 'Misinformation Events',
+        marker: {
+            color: '#DB4437'
+        }
+    };
+    
+    const eventsLayout = {
+        title: 'Misinformation Events Over Time',
+        xaxis: {
+            title: 'Date',
+            showgrid: true,
+            zeroline: false
+        },
+        yaxis: {
+            title: 'Event Count',
+            showgrid: true,
+            zeroline: false
+        },
+        showlegend: false,
+        margin: {
+            l: 50,
+            r: 20,
+            t: 50,
+            b: 50
+        },
+        hovermode: 'closest',
+        plot_bgcolor: '#f8f9fa',
+        paper_bgcolor: '#ffffff'
+    };
+    
+    Plotly.newPlot('events-chart', [eventsTrace], eventsLayout, config);
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,524 @@
+{% extends "layout.html" %}
+
+{% block title %}Narrative Pattern Detection{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('prediction.dashboard') }}">Prediction</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Narrative Pattern Detection</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <h1>Narrative Pattern Detection</h1>
+            <p class="lead">Identify recurring patterns and rhythms in narrative propagation</p>
+        </div>
+        <div class="col-lg-3 text-end">
+            <a href="{{ url_for('prediction.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% include "includes/alert.html" %}
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Pattern Analysis Parameters</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{{ url_for('prediction.narrative_patterns') }}">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="timeframe" class="form-label">Analysis Timeframe</label>
+                        <select name="timeframe" id="timeframe" class="form-select">
+                            <option value="30" {% if timeframe == 30 %}selected{% endif %}>30 days</option>
+                            <option value="90" {% if timeframe == 90 %}selected{% endif %}>90 days</option>
+                            <option value="180" {% if timeframe == 180 %}selected{% endif %}>180 days</option>
+                            <option value="365" {% if timeframe == 365 %}selected{% endif %}>365 days</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="min_pattern_length" class="form-label">Min Pattern Length (days)</label>
+                        <input type="number" class="form-control" id="min_pattern_length" name="min_pattern_length" 
+                               value="{{ min_pattern_length }}" min="3" max="30">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="min_occurrences" class="form-label">Min Occurrences</label>
+                        <input type="number" class="form-control" id="min_occurrences" name="min_occurrences" 
+                               value="{{ min_occurrences }}" min="2" max="10">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="category" class="form-label">Narrative Category</label>
+                        <select name="category" id="category" class="form-select">
+                            <option value="all" {% if category == 'all' %}selected{% endif %}>All Categories</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}" {% if category == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="confidence_threshold" class="form-label">Confidence Threshold</label>
+                        <select name="confidence_threshold" id="confidence_threshold" class="form-select">
+                            <option value="0.5" {% if confidence_threshold == 0.5 %}selected{% endif %}>Low (0.5+)</option>
+                            <option value="0.7" {% if confidence_threshold == 0.7 %}selected{% endif %}>Medium (0.7+)</option>
+                            <option value="0.9" {% if confidence_threshold == 0.9 %}selected{% endif %}>High (0.9+)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="similarity_threshold" class="form-label">Pattern Similarity Threshold</label>
+                        <select name="similarity_threshold" id="similarity_threshold" class="form-select">
+                            <option value="0.5" {% if similarity_threshold == 0.5 %}selected{% endif %}>Loose (0.5+)</option>
+                            <option value="0.7" {% if similarity_threshold == 0.7 %}selected{% endif %}>Standard (0.7+)</option>
+                            <option value="0.9" {% if similarity_threshold == 0.9 %}selected{% endif %}>Strict (0.9+)</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Analyze Patterns</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Recurring Patterns</h5>
+                </div>
+                <div class="card-body">
+                    {% if patterns %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 5%">#</th>
+                                    <th style="width: 15%">Pattern Type</th>
+                                    <th style="width: 15%">Duration</th>
+                                    <th style="width: 15%">Occurrences</th>
+                                    <th style="width: 10%">Confidence</th>
+                                    <th style="width: 40%">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pattern in patterns %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>
+                                        <span class="badge {{ pattern.type_class }} rounded-pill">{{ pattern.type }}</span>
+                                    </td>
+                                    <td>{{ pattern.duration }} days</td>
+                                    <td>{{ pattern.occurrences }}</td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar {{ 'bg-success' if pattern.confidence >= 0.8 else ('bg-warning' if pattern.confidence >= 0.6 else 'bg-danger') }}" 
+                                                 role="progressbar" style="width: {{ (pattern.confidence * 100)|int }}%"
+                                                 aria-valuenow="{{ (pattern.confidence * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                                                {{ (pattern.confidence * 100)|round|int }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary me-1" 
+                                                onclick="showPatternDetail({{ pattern.id }})">
+                                            <i class="bi bi-graph-up"></i> View Detail
+                                        </button>
+                                        <a href="{{ url_for('prediction.pattern_forecast', pattern_id=pattern.id) }}" 
+                                           class="btn btn-sm btn-outline-success me-1">
+                                            <i class="bi bi-lightning"></i> Forecast Next
+                                        </a>
+                                        <a href="{{ url_for('alerts.create', pattern_id=pattern.id) }}" 
+                                           class="btn btn-sm btn-outline-warning">
+                                            <i class="bi bi-bell"></i> Create Alert
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i> No patterns found matching the current criteria. Try adjusting the parameters or expanding the analysis timeframe.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card shadow-sm" id="patternDetailCard" style="display: none;">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0" id="patternDetailTitle">Pattern Detail</h5>
+                    <button type="button" class="btn-close" onclick="hidePatternDetail()"></button>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <div id="patternDetailChart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Pattern Characteristics</h6>
+                            <table class="table table-sm">
+                                <tbody id="patternCharacteristics">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Associated Narratives</h6>
+                            <div id="associatedNarratives" class="list-group">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between">
+                        <span id="patternLastUpdated" class="text-muted"></span>
+                        <div>
+                            <button class="btn btn-sm btn-primary me-1" id="btnPatternForecast">
+                                <i class="bi bi-lightning"></i> Forecast
+                            </button>
+                            <button class="btn btn-sm btn-warning" id="btnPatternAlert">
+                                <i class="bi bi-bell"></i> Create Alert
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Summary Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-primary">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">Total Patterns</h6>
+                                    <h2 class="display-6 text-primary mb-0">{{ patterns|length }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-success">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">High Confidence</h6>
+                                    <h2 class="display-6 text-success mb-0">{{ high_confidence_count }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-info">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">Avg Length</h6>
+                                    <h2 class="display-6 text-info mb-0">{{ avg_pattern_length|round|int }} days</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card mb-3 shadow-sm border-warning">
+                                <div class="card-body p-2 text-center">
+                                    <h6 class="card-title mb-1">Avg Recurrence</h6>
+                                    <h2 class="display-6 text-warning mb-0">{{ avg_occurrences|round(1) }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Pattern Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div id="patternTypeChart" style="height: 250px;"></div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Key Insights</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for insight in insights %}
+                        <li class="list-group-item">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    {% if insight.type == 'warning' %}
+                                    <span class="badge rounded-pill bg-warning p-2"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                                    {% elif insight.type == 'danger' %}
+                                    <span class="badge rounded-pill bg-danger p-2"><i class="bi bi-exclamation-circle-fill"></i></span>
+                                    {% elif insight.type == 'info' %}
+                                    <span class="badge rounded-pill bg-info p-2"><i class="bi bi-info-circle-fill"></i></span>
+                                    {% elif insight.type == 'success' %}
+                                    <span class="badge rounded-pill bg-success p-2"><i class="bi bi-check-circle-fill"></i></span>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {{ insight.text }}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pattern Detail Modal -->
+<div class="modal fade" id="patternDetailModal" tabindex="-1" aria-labelledby="patternDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="patternDetailModalLabel">Pattern Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="patternDetailModalBody">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading pattern details...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="btnModalPatternForecast">Forecast</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Pattern type distribution chart
+    const patternTypes = {{ pattern_types|tojson }};
+    const patternCounts = {{ pattern_counts|tojson }};
+    const patternColors = {{ pattern_colors|tojson }};
+    
+    const typesData = [{
+        labels: patternTypes,
+        values: patternCounts,
+        type: 'pie',
+        textinfo: 'label+percent',
+        textposition: 'inside',
+        marker: {
+            colors: patternColors
+        },
+        hole: 0.4
+    }];
+    
+    const typesLayout = {
+        showlegend: false,
+        margin: {
+            l: 20,
+            r: 20,
+            t: 20,
+            b: 20
+        },
+        annotations: [{
+            font: {
+                size: 14
+            },
+            showarrow: false,
+            text: 'Types',
+            x: 0.5,
+            y: 0.5
+        }],
+        plot_bgcolor: '#f8f9fa',
+        paper_bgcolor: '#ffffff'
+    };
+    
+    const config = {
+        responsive: true,
+        displayModeBar: false
+    };
+    
+    Plotly.newPlot('patternTypeChart', typesData, typesLayout, config);
+});
+
+function showPatternDetail(patternId) {
+    // Show the pattern detail card
+    document.getElementById('patternDetailCard').style.display = 'block';
+    
+    // Fetch the pattern detail data
+    fetch(`/prediction/api/pattern/${patternId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayPatternDetail(data.pattern);
+            } else {
+                console.error('Error loading pattern detail:', data.error);
+                document.getElementById('patternDetailCard').style.display = 'none';
+                alert('Error loading pattern detail: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('patternDetailCard').style.display = 'none';
+            alert('Error loading pattern detail');
+        });
+    
+    // Scroll to the detail card
+    document.getElementById('patternDetailCard').scrollIntoView({behavior: 'smooth'});
+}
+
+function hidePatternDetail() {
+    document.getElementById('patternDetailCard').style.display = 'none';
+}
+
+function displayPatternDetail(pattern) {
+    // Update title
+    document.getElementById('patternDetailTitle').innerText = `${pattern.type} Pattern (ID: ${pattern.id})`;
+    
+    // Update forecast and alert buttons
+    document.getElementById('btnPatternForecast').onclick = () => {
+        window.location.href = `/prediction/pattern-forecast/${pattern.id}`;
+    };
+    document.getElementById('btnPatternAlert').onclick = () => {
+        window.location.href = `/alerts/create?pattern_id=${pattern.id}`;
+    };
+    
+    // Update characteristics table
+    const characteristicsHtml = `
+        <tr>
+            <th>Duration:</th>
+            <td>${pattern.duration} days</td>
+        </tr>
+        <tr>
+            <th>Occurrences:</th>
+            <td>${pattern.occurrences}</td>
+        </tr>
+        <tr>
+            <th>Confidence:</th>
+            <td>${(pattern.confidence * 100).toFixed(1)}%</td>
+        </tr>
+        <tr>
+            <th>First Detected:</th>
+            <td>${pattern.first_detected}</td>
+        </tr>
+        <tr>
+            <th>Last Observed:</th>
+            <td>${pattern.last_observed}</td>
+        </tr>
+        <tr>
+            <th>Average Interval:</th>
+            <td>${pattern.avg_interval} days</td>
+        </tr>
+    `;
+    document.getElementById('patternCharacteristics').innerHTML = characteristicsHtml;
+    
+    // Update associated narratives
+    let narrativesHtml = '';
+    pattern.narratives.forEach(narrative => {
+        narrativesHtml += `
+            <a href="/dashboard/narrative/${narrative.id}" class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${narrative.title}</h6>
+                    <small class="text-muted">ID: ${narrative.id}</small>
+                </div>
+                <p class="mb-1">First Detected: ${narrative.first_detected}</p>
+                <small class="text-muted">Confidence: ${(narrative.confidence * 100).toFixed(1)}%</small>
+            </a>
+        `;
+    });
+    document.getElementById('associatedNarratives').innerHTML = narrativesHtml;
+    
+    // Update last updated text
+    document.getElementById('patternLastUpdated').innerText = `Last updated: ${pattern.updated_at}`;
+    
+    // Create pattern detail chart
+    const patternValues = pattern.values;
+    const patternDates = pattern.dates;
+    const occurrences = pattern.occurrence_markers;
+    
+    const valueTrace = {
+        x: patternDates,
+        y: patternValues,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Pattern Values',
+        line: {
+            color: '#4285F4',
+            width: 2
+        }
+    };
+    
+    const markerTraces = occurrences.map((occurrence, index) => {
+        return {
+            x: [occurrence.date],
+            y: [occurrence.value],
+            type: 'scatter',
+            mode: 'markers',
+            name: `Occurrence ${index + 1}`,
+            marker: {
+                color: '#DB4437',
+                size: 10,
+                symbol: 'circle'
+            },
+            showlegend: false
+        };
+    });
+    
+    const chartLayout = {
+        title: 'Pattern Time Series',
+        xaxis: {
+            title: 'Date',
+            showgrid: true,
+            zeroline: false
+        },
+        yaxis: {
+            title: 'Value',
+            showgrid: true,
+            zeroline: false
+        },
+        showlegend: true,
+        margin: {
+            l: 50,
+            r: 20,
+            t: 50,
+            b: 50
+        },
+        annotations: occurrences.map((occurrence, index) => {
+            return {
+                x: occurrence.date,
+                y: occurrence.value,
+                text: `#${index + 1}`,
+                showarrow: true,
+                arrowhead: 3,
+                ax: 0,
+                ay: -30
+            };
+        }),
+        plot_bgcolor: '#f8f9fa',
+        paper_bgcolor: '#ffffff'
+    };
+    
+    const chartConfig = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
+    };
+    
+    Plotly.newPlot('patternDetailChart', [valueTrace, ...markerTraces], chartLayout, chartConfig);
+}
+</script>
+{% endblock %}

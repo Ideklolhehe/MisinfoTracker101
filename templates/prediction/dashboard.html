@@ -1,88 +1,273 @@
-{% extends 'base.html' %}
+{% extends "layout.html" %}
+
+{% block title %}Predictive Dashboard{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1>{{ title }}</h1>
-    
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Available Narratives for Prediction</h5>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Predictive Modeling</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <h1>Predictive Modeling Dashboard</h1>
+            <p class="lead">Forecast narrative trajectories, detect patterns, and plan counter-interventions</p>
+        </div>
+        <div class="col-lg-3 text-end">
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% include "includes/alert.html" %}
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-center">
+                    <div class="icon-box mb-3">
+                        <i class="bi bi-graph-up-arrow text-primary" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4>Narrative Forecasting</h4>
+                    <p class="mb-3">Predict future trajectory of narrative spread and impact</p>
+                    <a href="#narratives" class="btn btn-outline-primary">Generate Forecast</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-center">
+                    <div class="icon-box mb-3">
+                        <i class="bi bi-shield-check text-success" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4>Counter-Effectiveness</h4>
+                    <p class="mb-3">Predict effectiveness of counter-narrative interventions</p>
+                    <a href="{{ url_for('counter_narrative.index') }}" class="btn btn-outline-success">View Counter-Narratives</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-center">
+                    <div class="icon-box mb-3">
+                        <i class="bi bi-database-check text-warning" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4>Source Reliability</h4>
+                    <p class="mb-3">Forecast reliability of information sources over time</p>
+                    <a href="{{ url_for('prediction.source_reliability') }}" class="btn btn-outline-warning">Analyze Sources</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-center">
+                    <div class="icon-box mb-3">
+                        <i class="bi bi-repeat text-danger" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4>Pattern Detection</h4>
+                    <p class="mb-3">Identify recurring patterns in narrative propagation</p>
+                    <a href="{{ url_for('prediction.narrative_patterns') }}" class="btn btn-outline-danger">Detect Patterns</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0" id="narratives">Available Narratives for Forecasting</h5>
+                    <div>
+                        <a href="{{ url_for('prediction.multiple_forecasts') }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-graph-up"></i> Multiple Forecast
+                        </a>
+                        <a href="{{ url_for('prediction.trending') }}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-fire"></i> Trending Narratives
+                        </a>
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if narratives %}
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Title</th>
-                                        <th>First Detected</th>
-                                        <th>Confidence</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for narrative in narratives %}
-                                        <tr>
-                                            <td>{{ narrative.title }}</td>
-                                            <td>{{ narrative.first_detected }}</td>
-                                            <td>{{ "%.2f"|format(narrative.confidence_score) }}</td>
-                                            <td>
-                                                <div class="btn-group">
-                                                    <a href="{{ url_for('prediction.forecast', narrative_id=narrative.id) }}" class="btn btn-primary btn-sm">Forecast</a>
-                                                    <a href="{{ url_for('prediction.key_factors', narrative_id=narrative.id) }}" class="btn btn-info btn-sm">Key Factors</a>
-                                                    <a href="{{ url_for('prediction.what_if', narrative_id=narrative.id) }}" class="btn btn-warning btn-sm">What-If</a>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>First Detected</th>
+                                    <th>Status</th>
+                                    <th>Complexity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for narrative in narratives %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('dashboard.view_narrative', narrative_id=narrative.id) }}">
+                                            {{ narrative.title|truncate(60) }}
+                                        </a>
+                                    </td>
+                                    <td>{{ narrative.first_detected.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        <span class="badge {{ 'bg-danger' if narrative.status == 'active' else 'bg-secondary' }}">
+                                            {{ narrative.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% set complexity = narrative.get_meta_data().get('complexity_score', 0) if narrative.get_meta_data() else 0 %}
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar {{ 'bg-danger' if complexity > 0.7 else ('bg-warning' if complexity > 0.4 else 'bg-info') }}" 
+                                                 role="progressbar" style="width: {{ (complexity * 100)|int }}%" 
+                                                 aria-valuenow="{{ (complexity * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">{{ (complexity * 100)|round|int }}%</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <a href="{{ url_for('prediction.forecast', narrative_id=narrative.id) }}" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-graph-up"></i> Forecast
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle dropdown-toggle-split" 
+                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                                <span class="visually-hidden">Toggle Dropdown</span>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <a class="dropdown-item" href="{{ url_for('prediction.key_factors', narrative_id=narrative.id) }}">
+                                                        <i class="bi bi-diagram-3"></i> Key Factors
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="{{ url_for('prediction.what_if', narrative_id=narrative.id) }}">
+                                                        <i class="bi bi-clipboard-data"></i> What-If Analysis
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="{{ url_for('prediction.threshold', narrative_id=narrative.id) }}">
+                                                        <i class="bi bi-diamond-half"></i> Threshold Analysis
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="{{ url_for('prediction.anomalies', narrative_id=narrative.id) }}">
+                                                        <i class="bi bi-exclamation-triangle"></i> Anomaly Detection
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
-                        <p class="text-muted">No narratives available for prediction.</p>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i> No narratives found for prediction. You need to <a href="{{ url_for('dashboard.index') }}">create some narratives</a> first.
+                    </div>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
-    
-    <div class="row mt-4">
+
+    <div class="row mb-4">
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Multi-Narrative Comparison</h5>
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Advanced Prediction Tools</h5>
+                    <a href="{{ url_for('prediction.category_models') }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-cpu"></i> Category Models
+                    </a>
                 </div>
                 <div class="card-body">
-                    <p>Compare multiple narratives to identify patterns and relationships.</p>
-                    <a href="{{ url_for('prediction.multiple_forecasts') }}" class="btn btn-secondary">Compare Narratives</a>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-cpu-fill text-primary me-2"></i>
+                                <strong>Category-Based Models</strong>
+                                <p class="text-muted mb-0 small">Specialized prediction models for specific narrative categories</p>
+                            </div>
+                            <a href="{{ url_for('prediction.category_models') }}" class="btn btn-sm btn-outline-primary">Explore</a>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-repeat text-danger me-2"></i>
+                                <strong>Narrative Pattern Detection</strong>
+                                <p class="text-muted mb-0 small">Identify recurring patterns and rhythms in narrative propagation</p>
+                            </div>
+                            <a href="{{ url_for('prediction.narrative_patterns') }}" class="btn btn-sm btn-outline-danger">Analyze</a>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-lightning-fill text-warning me-2"></i>
+                                <strong>Batch Prediction Jobs</strong>
+                                <p class="text-muted mb-0 small">Run predictions in bulk for efficient processing</p>
+                            </div>
+                            <a href="{{ url_for('prediction.batch_jobs') }}" class="btn btn-sm btn-outline-warning">Manage</a>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-clipboard-check text-success me-2"></i>
+                                <strong>Scheduled Predictions</strong>
+                                <p class="text-muted mb-0 small">Configure automated predictions at regular intervals</p>
+                            </div>
+                            <a href="#" class="btn btn-sm btn-outline-success">Configure</a>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
-        
+
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Prediction Features</h5>
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Monitoring & Early Warning</h5>
+                    <a href="{{ url_for('alerts.index') }}" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-bell"></i> Alerts Dashboard
+                    </a>
                 </div>
                 <div class="card-body">
-                    <ul class="list-group">
+                    <ul class="list-group list-group-flush">
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Trajectory Forecasting
-                            <span class="badge bg-primary rounded-pill">Active</span>
+                            <div>
+                                <i class="bi bi-bell-fill text-danger me-2"></i>
+                                <strong>Prediction-Based Alerts</strong>
+                                <p class="text-muted mb-0 small">Setup alerts based on prediction thresholds and anomalies</p>
+                            </div>
+                            <a href="{{ url_for('alerts.create') }}" class="btn btn-sm btn-outline-danger">Create</a>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Threshold Projections
-                            <span class="badge bg-primary rounded-pill">Active</span>
+                            <div>
+                                <i class="bi bi-fire text-warning me-2"></i>
+                                <strong>Trending Narratives</strong>
+                                <p class="text-muted mb-0 small">Automatically detect rapidly growing narratives</p>
+                            </div>
+                            <a href="{{ url_for('prediction.trending') }}" class="btn btn-sm btn-outline-warning">View</a>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Key Factor Analysis
-                            <span class="badge bg-primary rounded-pill">Active</span>
+                            <div>
+                                <i class="bi bi-shield-fill text-success me-2"></i>
+                                <strong>Counter-Narrative Effectiveness</strong>
+                                <p class="text-muted mb-0 small">Predict and monitor effectiveness of counter-narrative campaigns</p>
+                            </div>
+                            <a href="{{ url_for('counter_narrative.index') }}" class="btn btn-sm btn-outline-success">Monitor</a>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            What-If Scenarios
-                            <span class="badge bg-primary rounded-pill">Active</span>
+                            <div>
+                                <i class="bi bi-database-fill-check text-primary me-2"></i>
+                                <strong>Source Reliability Monitoring</strong>
+                                <p class="text-muted mb-0 small">Track and predict reliability of information sources</p>
+                            </div>
+                            <a href="{{ url_for('prediction.source_reliability') }}" class="btn btn-sm btn-outline-primary">Track</a>
                         </li>
                     </ul>
                 </div>
