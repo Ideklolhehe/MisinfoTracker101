@@ -93,6 +93,9 @@ dependencies = [
     "statsmodels>=0.14.4",
     "plotly>=6.0.1",
     "river>=0.22.0",
+    "python-decouple>=3.8",
+    "python-dotenv>=1.1.0",
+    "prometheus-client>=0.21.1",
 ]
 
 [tool.uv.sources]
