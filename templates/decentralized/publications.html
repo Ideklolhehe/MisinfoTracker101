@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Publications - Decentralized Publishing - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('decentralized.index') }}">Decentralized Publishing</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Publications</li>
+                </ol>
+            </nav>
+            <h1>Decentralized Publications</h1>
+            <p class="lead">All content published to decentralized networks by the CIVILIAN system.</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Publications</h5>
+                </div>
+                <div class="card-body">
+                    {% if publications %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Type</th>
+                                    <th>Published</th>
+                                    <th>IPFS Hash</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pub in publications %}
+                                <tr>
+                                    <td>{{ pub.title }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if pub.content_type == 'narrative_analysis' %}bg-primary
+                                            {% elif pub.content_type == 'counter_narrative' %}bg-success
+                                            {% elif pub.content_type == 'evidence_record' %}bg-info
+                                            {% elif pub.content_type == 'source_reliability_analysis' %}bg-warning
+                                            {% else %}bg-secondary{% endif %}
+                                        ">
+                                            {{ pub.content_type|replace('_', ' ')|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ pub.publication_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <div class="text-truncate" style="max-width: 150px;">
+                                            <code>{{ pub.ipfs_hash }}</code>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if pub.status == 'published' %}bg-success
+                                            {% elif pub.status == 'revoked' %}bg-danger
+                                            {% elif pub.status == 'updated' %}bg-info
+                                            {% else %}bg-secondary{% endif %}
+                                        ">
+                                            {{ pub.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('decentralized.publication_detail', publication_id=pub.id) }}" 
+                                        class="btn btn-sm btn-outline-primary">View</a>
+                                        <a href="https://ipfs.io/ipfs/{{ pub.ipfs_hash }}" 
+                                        class="btn btn-sm btn-outline-secondary" target="_blank">IPFS</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <p class="mb-0">No publications have been created yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('decentralized.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Decentralized Publishing
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

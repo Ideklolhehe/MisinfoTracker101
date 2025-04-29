@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Publish Narrative - Decentralized Publishing - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('decentralized.index') }}">Decentralized Publishing</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Publish Narrative</li>
+                </ol>
+            </nav>
+            <h1>Publish Narrative to Decentralized Networks</h1>
+            <p class="lead">Publish the narrative and its analysis to IPFS for permanent, immutable storage.</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Narrative Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h3>{{ narrative.title }}</h3>
+                        <p><strong>ID:</strong> {{ narrative.id }}</p>
+                        <p><strong>Description:</strong> {{ narrative.description }}</p>
+                        <p><strong>Confidence Score:</strong> {{ narrative.confidence_score }}</p>
+                        <p><strong>First Detected:</strong> {{ narrative.first_detected.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p><strong>Last Updated:</strong> {{ narrative.last_updated.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p><strong>Status:</strong> {{ narrative.status }}</p>
+                        <p><strong>Language:</strong> {{ narrative.language }}</p>
+                        
+                        {% set meta_data = narrative.get_meta_data() %}
+                        {% if meta_data %}
+                            <h5 class="mt-4">Metadata</h5>
+                            <div class="row">
+                                {% if meta_data.get('complexity_score') is not none %}
+                                <div class="col-md-3">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">Complexity</h6>
+                                            <h3>{{ "%.2f"|format(meta_data.get('complexity_score')) }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if meta_data.get('propagation_score') is not none %}
+                                <div class="col-md-3">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">Propagation</h6>
+                                            <h3>{{ "%.2f"|format(meta_data.get('propagation_score')) }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if meta_data.get('threat_score') is not none %}
+                                <div class="col-md-3">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">Threat Level</h6>
+                                            <h3>{{ meta_data.get('threat_score') }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if meta_data.get('source_count') is not none %}
+                                <div class="col-md-3">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">Sources</h6>
+                                            <h3>{{ meta_data.get('source_count') }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="row">
+                                {% if meta_data.get('stream_cluster') is not none %}
+                                <div class="col-md-4">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">Stream Cluster</h6>
+                                            <h3>{{ meta_data.get('stream_cluster') }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if meta_data.get('temporal_cluster') is not none %}
+                                <div class="col-md-4">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">Temporal Cluster</h6>
+                                            <h3>{{ meta_data.get('temporal_cluster') }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if meta_data.get('sequence_cluster') is not none %}
+                                <div class="col-md-4">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">Sequence Cluster</h6>
+                                            <h3>{{ meta_data.get('sequence_cluster') }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <h5 class="mt-4">Instances ({{ narrative.instances|length }})</h5>
+                    {% if narrative.instances %}
+                        <ul class="list-group mt-2">
+                            {% for instance in narrative.instances %}
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="mb-1">
+                                            {% if instance.source %}{{ instance.source.name }}{% else %}Unknown Source{% endif %}
+                                        </h6>
+                                        <small>{{ instance.detected_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                    </div>
+                                    <p class="mb-1">{{ instance.content|truncate(100) }}</p>
+                                    {% if instance.url %}
+                                        <small><a href="{{ instance.url }}" target="_blank">{{ instance.url }}</a></small>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">No instances found for this narrative.</p>
+                    {% endif %}
+                    
+                    <h5 class="mt-4">Counter-Narratives ({{ narrative.counter_messages|length }})</h5>
+                    {% if narrative.counter_messages %}
+                        <ul class="list-group mt-2">
+                            {% for counter in narrative.counter_messages %}
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="mb-1">{{ counter.dimension }} - {{ counter.strategy }}</h6>
+                                        <span class="badge {% if counter.status == 'draft' %}bg-secondary{% elif counter.status == 'approved' %}bg-success{% else %}bg-primary{% endif %}">
+                                            {{ counter.status }}
+                                        </span>
+                                    </div>
+                                    <p class="mb-1">{{ counter.content }}</p>
+                                    <small>
+                                        Created: {{ counter.created_at.strftime('%Y-%m-%d') }}
+                                        {% if counter.created_by %}
+                                        by {{ counter.creator.username }}
+                                        {% endif %}
+                                    </small>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">No counter-narratives found for this narrative.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Publication Options</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('decentralized.publish_narrative', narrative_id=narrative.id) }}">
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="include_related" name="include_related" value="yes" checked>
+                                <label class="form-check-label" for="include_related">
+                                    Include related narratives from the same cluster
+                                </label>
+                                <div class="form-text">
+                                    This will include narratives from the same stream, temporal, or sequence clusters in the published data.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <strong>Note:</strong> Published content will be publicly accessible on the IPFS network and cannot be deleted or altered.
+                            Only publish content that is appropriate for public distribution.
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('decentralized.index') }}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Publish Narrative</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
