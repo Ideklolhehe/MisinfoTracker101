@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Publish Source Reliability Analysis - Decentralized Publishing - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('decentralized.index') }}">Decentralized Publishing</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Publish Source Reliability Analysis</li>
+                </ol>
+            </nav>
+            <h1>Publish Source Reliability Analysis to Decentralized Networks</h1>
+            <p class="lead">Publish source reliability analysis to IPFS for permanent, immutable storage.</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Source Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h3>{{ source.name }}</h3>
+                        <p><strong>ID:</strong> {{ source.id }}</p>
+                        <p><strong>Source Type:</strong> {{ source.source_type }}</p>
+                        <p><strong>URL:</strong> <a href="{{ source.url }}" target="_blank">{{ source.url }}</a></p>
+                        <p><strong>Status:</strong> {% if source.is_active %}Active{% else %}Inactive{% endif %}</p>
+                        <p><strong>Created At:</strong> {{ source.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p><strong>Last Checked:</strong> {% if source.last_checked %}{{ source.last_checked.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}</p>
+                        
+                        {% if source.meta_data %}
+                            <h5 class="mt-4">Metadata</h5>
+                            <div class="bg-light p-3 rounded border">
+                                <pre class="mb-0"><code>{{ source.meta_data|tojson(indent=2) }}</code></pre>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <h5 class="mt-4">Reliability Analysis</h5>
+                    {% set reliability_score = source.get_reliability_score() %}
+                    <div class="row mt-3">
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Reliability Score</h6>
+                                    <h3>
+                                        {% if reliability_score is not none %}
+                                            {{ "%.2f"|format(reliability_score * 100) }}%
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </h3>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Misinformation Events</h6>
+                                    <h3>{{ source.misinformation_events|length }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Narratives Produced</h6>
+                                    <h3>{{ source.narratives|length }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h5 class="mt-4">Misinformation Events</h5>
+                    {% if source.misinformation_events %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Narrative</th>
+                                        <th>Timestamp</th>
+                                        <th>Confidence</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for event in source.misinformation_events %}
+                                        <tr>
+                                            <td>{{ event.id }}</td>
+                                            <td>
+                                                {% if event.narrative %}
+                                                    {{ event.narrative.title|truncate(50) }}
+                                                {% else %}
+                                                    <em>Deleted narrative</em>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ event.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                            <td>{{ "%.2f"|format(event.confidence) }}</td>
+                                            <td>
+                                                {% if event.correct_detection == true %}
+                                                    <span class="badge bg-success">Correct</span>
+                                                {% elif event.correct_detection == false %}
+                                                    <span class="badge bg-danger">Incorrect</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Unverified</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No misinformation events recorded for this source.</p>
+                    {% endif %}
+                    
+                    <h5 class="mt-4">Related Narratives</h5>
+                    {% if source.narratives %}
+                        <div class="list-group mt-2">
+                            {% for narrative in source.narratives %}
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="mb-1">{{ narrative.title }}</h6>
+                                        <small>{{ narrative.first_detected.strftime('%Y-%m-%d') }}</small>
+                                    </div>
+                                    <p class="mb-1">{{ narrative.description|truncate(100) }}</p>
+                                    <div>
+                                        <span class="badge bg-primary">{{ narrative.confidence_score }}</span>
+                                        <span class="badge bg-secondary">{{ narrative.status }}</span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No related narratives found for this source.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Publication Options</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('decentralized.publish_source_reliability', source_id=source.id) }}">                        
+                        <div class="alert alert-info">
+                            <strong>Note:</strong> Published content will be publicly accessible on the IPFS network and cannot be deleted or altered.
+                            Only publish content that is appropriate for public distribution.
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('decentralized.index') }}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Publish Source Reliability Analysis</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Publication Detail - {{ publication.title }} - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('decentralized.index') }}">Decentralized Publishing</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('decentralized.publications') }}">Publications</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Publication Detail</li>
+                </ol>
+            </nav>
+            <h1>{{ publication.title }}</h1>
+            <p class="lead">{{ publication.description }}</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Publication Information</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Type:</span>
+                            <span class="badge 
+                                {% if publication.content_type == 'narrative_analysis' %}bg-primary
+                                {% elif publication.content_type == 'counter_narrative' %}bg-success
+                                {% elif publication.content_type == 'evidence_record' %}bg-info
+                                {% elif publication.content_type == 'source_reliability_analysis' %}bg-warning
+                                {% else %}bg-secondary{% endif %}
+                            ">
+                                {{ publication.content_type|replace('_', ' ')|title }}
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Status:</span>
+                            <span class="badge 
+                                {% if publication.status == 'published' %}bg-success
+                                {% elif publication.status == 'revoked' %}bg-danger
+                                {% elif publication.status == 'updated' %}bg-info
+                                {% else %}bg-secondary{% endif %}
+                            ">
+                                {{ publication.status }}
+                            </span>
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Published:</strong> {{ publication.publication_date.strftime('%Y-%m-%d %H:%M') }}
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Reference ID:</strong> {{ publication.reference_id }}
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Publisher:</strong> 
+                            {% if publication.publisher %}
+                                {{ publication.publisher.username }}
+                            {% else %}
+                                System
+                            {% endif %}
+                        </li>
+                        <li class="list-group-item">
+                            <strong>IPFS Hash:</strong>
+                            <div class="mt-1">
+                                <code class="text-break">{{ publication.ipfs_hash }}</code>
+                            </div>
+                            <div class="mt-2">
+                                <a href="https://ipfs.io/ipfs/{{ publication.ipfs_hash }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                    <i class="fas fa-external-link-alt"></i> View on IPFS Gateway
+                                </a>
+                            </div>
+                        </li>
+                        {% if publication.ipns_name %}
+                        <li class="list-group-item">
+                            <strong>IPNS Name:</strong>
+                            <div class="mt-1">
+                                <code class="text-break">{{ publication.ipns_name }}</code>
+                            </div>
+                            <div class="mt-2">
+                                <a href="https://ipfs.io/ipns/{{ publication.ipns_name }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                    <i class="fas fa-external-link-alt"></i> View on IPNS Gateway
+                                </a>
+                            </div>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Published Content</h5>
+                </div>
+                <div class="card-body">
+                    {% if ipfs_available and ipfs_content %}
+                        <div class="bg-light p-3 rounded border mb-3">
+                            <pre class="overflow-auto" style="max-height: 500px;"><code>{{ ipfs_content|tojson(indent=2) }}</code></pre>
+                        </div>
+                        
+                        {% if publication.content_type == 'narrative_analysis' %}
+                            <h5>Narrative Information</h5>
+                            <div class="mb-3">
+                                <strong>Title:</strong> {{ ipfs_content.title }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Description:</strong> {{ ipfs_content.description }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Confidence Score:</strong> {{ ipfs_content.confidence_score }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>First Detected:</strong> {{ ipfs_content.first_detected }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Status:</strong> {{ ipfs_content.status }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Language:</strong> {{ ipfs_content.language }}
+                            </div>
+                            
+                            {% if ipfs_content.instances %}
+                                <h5>Instances ({{ ipfs_content.instances|length }})</h5>
+                                <div class="list-group mb-3">
+                                    {% for instance in ipfs_content.instances %}
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between">
+                                                <h6 class="mb-1">Instance {{ instance.id }}</h6>
+                                                <small>{{ instance.detected_at }}</small>
+                                            </div>
+                                            <p class="mb-1">{{ instance.content|truncate(150) }}</p>
+                                            <small class="text-muted">
+                                                Source: {{ instance.source or 'Unknown' }}
+                                                {% if instance.url %}
+                                                | <a href="{{ instance.url }}" target="_blank">{{ instance.url|truncate(30) }}</a>
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            
+                            {% if ipfs_content.counter_narratives %}
+                                <h5>Counter Narratives ({{ ipfs_content.counter_narratives|length }})</h5>
+                                <div class="list-group mb-3">
+                                    {% for counter in ipfs_content.counter_narratives %}
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between">
+                                                <h6 class="mb-1">{{ counter.dimension }} Counter-Narrative</h6>
+                                                <span class="badge bg-info">{{ counter.strategy }}</span>
+                                            </div>
+                                            <p class="mb-1">{{ counter.content }}</p>
+                                            <small class="text-muted">
+                                                Status: {{ counter.status }}
+                                                | Created: {{ counter.created_at }}
+                                            </small>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            
+                        {% elif publication.content_type == 'counter_narrative' %}
+                            <h5>Counter-Narrative Information</h5>
+                            <div class="mb-3">
+                                <strong>Content:</strong> {{ ipfs_content.content }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Dimension:</strong> {{ ipfs_content.dimension }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Strategy:</strong> {{ ipfs_content.strategy }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Created At:</strong> {{ ipfs_content.created_at }}
+                            </div>
+                            
+                            <h5>Parent Narrative</h5>
+                            <div class="mb-3">
+                                <strong>ID:</strong> {{ ipfs_content.parent_narrative.id }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Title:</strong> {{ ipfs_content.parent_narrative.title }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Description:</strong> {{ ipfs_content.parent_narrative.description }}
+                            </div>
+                        
+                        {% elif publication.content_type == 'evidence_record' %}
+                            <h5>Evidence Record Information</h5>
+                            <div class="mb-3">
+                                <strong>Source URL:</strong> <a href="{{ ipfs_content.source_url }}" target="_blank">{{ ipfs_content.source_url }}</a>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Content Hash:</strong> {{ ipfs_content.hash }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Capture Date:</strong> {{ ipfs_content.capture_date }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Content Type:</strong> {{ ipfs_content.content_type }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Verified:</strong> {{ ipfs_content.verified }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Verification Method:</strong> {{ ipfs_content.verification_method or 'N/A' }}
+                            </div>
+                            
+                            {% if ipfs_content.content_data %}
+                                <h5>Content Data</h5>
+                                <div class="bg-light p-3 rounded border mb-3">
+                                    <pre class="overflow-auto" style="max-height: 300px;"><code>{{ ipfs_content.content_data }}</code></pre>
+                                </div>
+                            {% endif %}
+                            
+                        {% elif publication.content_type == 'source_reliability_analysis' %}
+                            <h5>Source Reliability Analysis</h5>
+                            <div class="mb-3">
+                                <strong>Source Name:</strong> {{ ipfs_content.source_name }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Source Type:</strong> {{ ipfs_content.source_type }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Event Count:</strong> {{ ipfs_content.event_count }}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Reliability Score:</strong>
+                                {% if ipfs_content.reliability_score is not none %}
+                                    {{ "%.2f"|format(ipfs_content.reliability_score * 100) }}%
+                                {% else %}
+                                    Not available
+                                {% endif %}
+                            </div>
+                            
+                            {% if ipfs_content.events %}
+                                <h5>Misinformation Events ({{ ipfs_content.events|length }})</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Narrative</th>
+                                                <th>Timestamp</th>
+                                                <th>Confidence</th>
+                                                <th>Correct</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for event in ipfs_content.events %}
+                                                <tr>
+                                                    <td>{{ event.id }}</td>
+                                                    <td>{{ event.narrative_title }}</td>
+                                                    <td>{{ event.timestamp }}</td>
+                                                    <td>{{ "%.2f"|format(event.confidence) }}</td>
+                                                    <td>
+                                                        {% if event.correct_detection == true %}
+                                                            <span class="badge bg-success">Correct</span>
+                                                        {% elif event.correct_detection == false %}
+                                                            <span class="badge bg-danger">Incorrect</span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary">Unknown</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% elif not ipfs_available %}
+                        <div class="alert alert-warning">
+                            <strong>IPFS Not Available:</strong> Cannot retrieve content from IPFS because the service is not available.
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <strong>Content Not Available:</strong> The content could not be retrieved from IPFS.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('decentralized.publications') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Publications
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

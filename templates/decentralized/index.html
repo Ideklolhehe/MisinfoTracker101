@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Decentralized Publishing - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>Decentralized Publishing</h1>
+                <div>
+                    <span class="badge {% if ipfs_status.available %}bg-success{% else %}bg-danger{% endif %} p-2">
+                        IPFS Status: {% if ipfs_status.available %}Connected{% else %}Not Available{% endif %}
+                    </span>
+                </div>
+            </div>
+            <p class="lead">Publish CIVILIAN content to decentralized networks for immutable storage and public availability.</p>
+        </div>
+    </div>
+
+    {% if not ipfs_status.available %}
+    <div class="alert alert-warning">
+        <strong>Warning:</strong> IPFS service is not available. Decentralized publishing capabilities are limited.
+        Please check the IPFS configuration or connection.
+    </div>
+    {% endif %}
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Recent Publications</h5>
+                </div>
+                <div class="card-body">
+                    {% if publications %}
+                    <ul class="list-group list-group-flush">
+                        {% for pub in publications %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ pub.title }}</h6>
+                                    <p class="mb-1 text-muted small">{{ pub.content_type }} • 
+                                        Published: {{ pub.publication_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                                </div>
+                                <a href="{{ url_for('decentralized.publication_detail', publication_id=pub.id) }}" 
+                                   class="btn btn-sm btn-outline-primary">View</a>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted">No publications yet.</p>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        <a href="{{ url_for('decentralized.publications') }}" class="btn btn-primary">View All Publications</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">Publish Content</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <div class="list-group-item">
+                            <h6 class="mb-2">Narratives</h6>
+                            <p class="small text-muted mb-2">Publish detected narratives with analysis to decentralized networks.</p>
+                            <select class="form-select mb-2" id="narrative-select">
+                                <option value="">Select a narrative to publish...</option>
+                                {% for narrative in narratives %}
+                                <option value="{{ narrative.id }}">{{ narrative.title }}</option>
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-sm btn-primary" id="narrative-publish-btn" disabled>Publish Selected Narrative</button>
+                        </div>
+                        
+                        <div class="list-group-item">
+                            <h6 class="mb-2">Counter-Narratives</h6>
+                            <p class="small text-muted mb-2">Publish approved counter-narratives to decentralized networks.</p>
+                            <select class="form-select mb-2" id="counter-select">
+                                <option value="">Select a counter-narrative to publish...</option>
+                                {% for counter in counter_messages %}
+                                {% if counter.status == 'approved' %}
+                                <option value="{{ counter.id }}">{{ counter.content|truncate(50) }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-sm btn-primary" id="counter-publish-btn" disabled>Publish Selected Counter-Narrative</button>
+                        </div>
+                        
+                        <div class="list-group-item">
+                            <h6 class="mb-2">Source Reliability Analysis</h6>
+                            <p class="small text-muted mb-2">Publish source reliability analysis to decentralized networks.</p>
+                            <select class="form-select mb-2" id="source-select">
+                                <option value="">Select a source to publish analysis for...</option>
+                                {% for source in sources %}
+                                <option value="{{ source.id }}">{{ source.name }} ({{ source.source_type }})</option>
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-sm btn-primary" id="source-publish-btn" disabled>Publish Selected Source Analysis</button>
+                        </div>
+                        
+                        <div class="list-group-item">
+                            <h6 class="mb-2">Evidence Records</h6>
+                            <p class="small text-muted mb-2">Publish verified evidence records to decentralized networks.</p>
+                            <select class="form-select mb-2" id="evidence-select">
+                                <option value="">Select an evidence record to publish...</option>
+                                {% for evidence in evidence_records %}
+                                {% if evidence.verified %}
+                                <option value="{{ evidence.id }}">{{ evidence.source_url|truncate(50) }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-sm btn-primary" id="evidence-publish-btn" disabled>Publish Selected Evidence</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">About Decentralized Publishing</h5>
+                </div>
+                <div class="card-body">
+                    <p>Decentralized publishing uses the InterPlanetary File System (IPFS) to store content in a distributed, 
+                       immutable manner. This ensures that published narratives, counter-narratives, and evidence cannot be 
+                       censored or altered once published.</p>
+                    
+                    <h6>Benefits:</h6>
+                    <ul>
+                        <li><strong>Immutability:</strong> Published content cannot be altered or deleted.</li>
+                        <li><strong>Censorship Resistance:</strong> Content is distributed across the network, making it difficult to censor.</li>
+                        <li><strong>Verifiable Integrity:</strong> Content is cryptographically secured and verifiable.</li>
+                        <li><strong>Permanent Record:</strong> Creates a permanent, public record of misinformation analysis.</li>
+                    </ul>
+                    
+                    <div class="alert alert-info">
+                        <strong>Note:</strong> Published content will be publicly accessible on the IPFS network. Only publish
+                        content that is appropriate for public distribution.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Narrative selection
+    const narrativeSelect = document.getElementById('narrative-select');
+    const narrativeBtn = document.getElementById('narrative-publish-btn');
+    
+    narrativeSelect.addEventListener('change', function() {
+        narrativeBtn.disabled = !this.value;
+    });
+    
+    narrativeBtn.addEventListener('click', function() {
+        const narrativeId = narrativeSelect.value;
+        if (narrativeId) {
+            window.location.href = "{{ url_for('decentralized.publish_narrative', narrative_id=0) }}".replace('0', narrativeId);
+        }
+    });
+    
+    // Counter-narrative selection
+    const counterSelect = document.getElementById('counter-select');
+    const counterBtn = document.getElementById('counter-publish-btn');
+    
+    counterSelect.addEventListener('change', function() {
+        counterBtn.disabled = !this.value;
+    });
+    
+    counterBtn.addEventListener('click', function() {
+        const counterId = counterSelect.value;
+        if (counterId) {
+            window.location.href = "{{ url_for('decentralized.publish_counter', counter_id=0) }}".replace('0', counterId);
+        }
+    });
+    
+    // Source selection
+    const sourceSelect = document.getElementById('source-select');
+    const sourceBtn = document.getElementById('source-publish-btn');
+    
+    sourceSelect.addEventListener('change', function() {
+        sourceBtn.disabled = !this.value;
+    });
+    
+    sourceBtn.addEventListener('click', function() {
+        const sourceId = sourceSelect.value;
+        if (sourceId) {
+            window.location.href = "{{ url_for('decentralized.publish_source_reliability', source_id=0) }}".replace('0', sourceId);
+        }
+    });
+    
+    // Evidence selection
+    const evidenceSelect = document.getElementById('evidence-select');
+    const evidenceBtn = document.getElementById('evidence-publish-btn');
+    
+    evidenceSelect.addEventListener('change', function() {
+        evidenceBtn.disabled = !this.value;
+    });
+    
+    evidenceBtn.addEventListener('click', function() {
+        const evidenceId = evidenceSelect.value;
+        if (evidenceId) {
+            window.location.href = "{{ url_for('decentralized.publish_evidence', evidence_id=0) }}".replace('0', evidenceId);
+        }
+    });
+});
+</script>
+{% endblock %}
