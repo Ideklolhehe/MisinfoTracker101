@@ -335,6 +335,234 @@ class VerificationStatus(enum.Enum):
     FAILED = "failed"
 
 
+class ModelType(enum.Enum):
+    """Enum for types of prediction models."""
+    ARIMA = "arima"
+    PROPHET = "prophet"
+    LSTM = "lstm"
+    TRANSFORMER = "transformer"
+    ENSEMBLE = "ensemble"
+    LINEAR = "linear"
+    RANDOM_FOREST = "random_forest"
+    GRADIENT_BOOSTING = "gradient_boosting"
+    SVM = "svm"
+    NEURAL_NETWORK = "neural_network"
+
+
+class InformationSource(db.Model):
+    """Model for tracking and rating information sources."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    url = db.Column(db.String(1024))
+    source_type = db.Column(db.String(50))  # news, social, blog, etc.
+    reliability_score = db.Column(db.Float, default=0.5)  # 0-1 scale
+    status = db.Column(db.String(20), default='active')  # active, suspended, removed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    meta_data = db.Column(db.Text)  # JSON with source-specific metadata
+    
+    # Relationships
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_sources')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class NarrativeCategory(db.Model):
+    """Model for categorizing narratives into themes and topics."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    parent_id = db.Column(db.Integer, db.ForeignKey('narrative_category.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    meta_data = db.Column(db.Text)  # JSON with category-specific metadata
+    
+    # Relationships
+    subcategories = db.relationship('NarrativeCategory', 
+                                   backref=db.backref('parent', remote_side=[id]),
+                                   lazy='dynamic')
+    narratives = db.relationship('DetectedNarrative', 
+                                secondary='narrative_category_association',
+                                backref='categories')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+# Association table for many-to-many relationship between narratives and categories
+narrative_category_association = db.Table('narrative_category_association',
+    db.Column('narrative_id', db.Integer, db.ForeignKey('detected_narrative.id'), primary_key=True),
+    db.Column('category_id', db.Integer, db.ForeignKey('narrative_category.id'), primary_key=True)
+)
+
+
+class PredictionModel(db.Model):
+    """Model for tracking prediction models and their configurations."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    model_type = db.Column(db.String(50), nullable=False)  # arima, prophet, lstm, etc.
+    category_id = db.Column(db.Integer, db.ForeignKey('narrative_category.id'), nullable=True)
+    parameters = db.Column(db.Text)  # JSON with model parameters
+    accuracy = db.Column(db.Float)  # Model accuracy metric
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    status = db.Column(db.String(20), default='active')  # active, training, archived
+    is_training = db.Column(db.Boolean, default=False)
+    meta_data = db.Column(db.Text)  # JSON with model-specific metadata
+    
+    # Relationships
+    category = db.relationship('NarrativeCategory', backref='models')
+    creator = db.relationship('User', backref='created_models')
+    runs = db.relationship('PredictionModelRun', backref='model', lazy='dynamic')
+    predictions = db.relationship('NarrativePrediction', backref='model', lazy='dynamic')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def set_parameters(self, params):
+        self.parameters = json.dumps(params)
+    
+    def get_parameters(self):
+        return json.loads(self.parameters) if self.parameters else {}
+
+
+class PredictionModelRun(db.Model):
+    """Model for tracking individual runs of prediction models."""
+    id = db.Column(db.Integer, primary_key=True)
+    model_id = db.Column(db.Integer, db.ForeignKey('prediction_model.id'), nullable=False)
+    run_date = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='running')  # running, completed, failed
+    duration_seconds = db.Column(db.Integer)
+    error_message = db.Column(db.Text)
+    narrative_count = db.Column(db.Integer)
+    prediction_count = db.Column(db.Integer)
+    run_parameters = db.Column(db.Text)  # JSON with run-specific parameters
+    results_summary = db.Column(db.Text)  # JSON with run results summary
+    meta_data = db.Column(db.Text)  # JSON with additional metadata
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def set_parameters(self, params):
+        self.run_parameters = json.dumps(params)
+    
+    def get_parameters(self):
+        return json.loads(self.run_parameters) if self.run_parameters else {}
+    
+    def set_results(self, results):
+        self.results_summary = json.dumps(results)
+    
+    def get_results(self):
+        return json.loads(self.results_summary) if self.results_summary else {}
+
+
+class NarrativePrediction(db.Model):
+    """Model for storing predictions about narratives."""
+    id = db.Column(db.Integer, primary_key=True)
+    narrative_id = db.Column(db.Integer, db.ForeignKey('detected_narrative.id'), nullable=False)
+    model_id = db.Column(db.Integer, db.ForeignKey('prediction_model.id'), nullable=False)
+    run_id = db.Column(db.Integer, db.ForeignKey('prediction_model_run.id'), nullable=True)
+    prediction_type = db.Column(db.String(50))  # trajectory, anomaly, threshold, etc.
+    target_metric = db.Column(db.String(50))  # complexity, threat, propagation, etc.
+    prediction_horizon = db.Column(db.Integer)  # Days in the future
+    confidence = db.Column(db.Float)
+    predicted_values = db.Column(db.Text)  # JSON array of predicted values
+    upper_bound = db.Column(db.Text)  # JSON array of upper bound values
+    lower_bound = db.Column(db.Text)  # JSON array of lower bound values
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    prediction_dates = db.Column(db.Text)  # JSON array of prediction dates
+    meta_data = db.Column(db.Text)  # JSON with additional prediction metadata
+    
+    # Relationships
+    narrative = db.relationship('DetectedNarrative', backref='predictions')
+    run = db.relationship('PredictionModelRun', backref='predictions')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def set_values(self, values):
+        self.predicted_values = json.dumps(values)
+    
+    def get_values(self):
+        return json.loads(self.predicted_values) if self.predicted_values else []
+    
+    def set_bounds(self, upper, lower):
+        self.upper_bound = json.dumps(upper)
+        self.lower_bound = json.dumps(lower)
+    
+    def get_bounds(self):
+        upper = json.loads(self.upper_bound) if self.upper_bound else []
+        lower = json.loads(self.lower_bound) if self.lower_bound else []
+        return upper, lower
+    
+    def set_dates(self, dates):
+        # Convert datetime objects to strings
+        date_strings = [d.isoformat() if hasattr(d, 'isoformat') else str(d) for d in dates]
+        self.prediction_dates = json.dumps(date_strings)
+    
+    def get_dates(self):
+        return json.loads(self.prediction_dates) if self.prediction_dates else []
+
+
+class NarrativePattern(db.Model):
+    """Model for storing detected patterns in narrative propagation."""
+    id = db.Column(db.Integer, primary_key=True)
+    pattern_type = db.Column(db.String(50))  # cyclic, seasonal, growth, decay, spike, etc.
+    duration = db.Column(db.Integer)  # Pattern duration in days
+    confidence = db.Column(db.Float)
+    first_detected = db.Column(db.DateTime, default=datetime.utcnow)
+    last_observed = db.Column(db.DateTime, default=datetime.utcnow)
+    occurrences = db.Column(db.Integer, default=1)
+    avg_interval = db.Column(db.Integer)  # Average days between occurrences
+    pattern_data = db.Column(db.Text)  # JSON with pattern-specific data
+    meta_data = db.Column(db.Text)  # JSON with additional pattern metadata
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    narratives = db.relationship('DetectedNarrative',
+                               secondary='narrative_pattern_association',
+                               backref='patterns')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+    
+    def set_pattern_data(self, data):
+        self.pattern_data = json.dumps(data)
+    
+    def get_pattern_data(self):
+        return json.loads(self.pattern_data) if self.pattern_data else {}
+
+
+# Association table for many-to-many relationship between narratives and patterns
+narrative_pattern_association = db.Table('narrative_pattern_association',
+    db.Column('narrative_id', db.Integer, db.ForeignKey('detected_narrative.id'), primary_key=True),
+    db.Column('pattern_id', db.Integer, db.ForeignKey('narrative_pattern.id'), primary_key=True)
+)
+
+
 class UserSubmission(db.Model):
     """Model for storing user-submitted content for verification."""
     id = db.Column(db.Integer, primary_key=True)

@@ -1,0 +1,451 @@
+{% extends "layout.html" %}
+
+{% block title %}Category-Based Prediction Models{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('prediction.dashboard') }}">Prediction</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Category-Based Models</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <h1>Category-Based Prediction Models</h1>
+            <p class="lead">Specialized prediction models trained for specific narrative categories</p>
+        </div>
+        <div class="col-lg-3 text-end">
+            <a href="{{ url_for('prediction.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            {% if current_user.role in ['admin', 'researcher'] %}
+            <a href="{{ url_for('prediction.create_category_model') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> New Model
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% include "includes/alert.html" %}
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <ul class="nav nav-tabs card-header-tabs" id="modelTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" 
+                                   type="button" role="tab" aria-controls="active" aria-selected="true">
+                                Active Models ({{ active_models|length }})
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="archived-tab" data-bs-toggle="tab" data-bs-target="#archived" 
+                                   type="button" role="tab" aria-controls="archived" aria-selected="false">
+                                Archived Models ({{ archived_models|length }})
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="modelTabsContent">
+                        <div class="tab-pane fade show active" id="active" role="tabpanel" aria-labelledby="active-tab">
+                            {% if active_models %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Model Name</th>
+                                            <th>Category</th>
+                                            <th>Type</th>
+                                            <th>Accuracy</th>
+                                            <th>Last Updated</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for model in active_models %}
+                                        <tr>
+                                            <td>
+                                                <a href="{{ url_for('prediction.view_category_model', model_id=model.id) }}">
+                                                    {{ model.name }}
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary rounded-pill">{{ model.category_name }}</span>
+                                            </td>
+                                            <td>{{ model.model_type }}</td>
+                                            <td>
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar {{ 'bg-success' if model.accuracy >= 0.8 else ('bg-warning' if model.accuracy >= 0.6 else 'bg-danger') }}" 
+                                                         role="progressbar" style="width: {{ (model.accuracy * 100)|int }}%" 
+                                                         aria-valuenow="{{ (model.accuracy * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                                                        {{ (model.accuracy * 100)|round|int }}%
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>{{ model.updated_at.strftime('%Y-%m-%d') }}</td>
+                                            <td>
+                                                {% if model.is_training %}
+                                                <span class="badge bg-info">Training</span>
+                                                {% else %}
+                                                <span class="badge bg-success">Ready</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group">
+                                                    <a href="{{ url_for('prediction.view_category_model', model_id=model.id) }}" 
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-eye"></i> View
+                                                    </a>
+                                                    <a href="{{ url_for('prediction.run_category_model', model_id=model.id) }}" 
+                                                       class="btn btn-sm btn-outline-secondary">
+                                                        <i class="bi bi-play"></i> Run
+                                                    </a>
+                                                    {% if current_user.role in ['admin', 'researcher'] %}
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            onclick="archiveModel({{ model.id }})">
+                                                        <i class="bi bi-archive"></i> Archive
+                                                    </button>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i> No active category-based models found.
+                                {% if current_user.role in ['admin', 'researcher'] %}
+                                <a href="{{ url_for('prediction.create_category_model') }}" class="alert-link">Create a new model</a>.
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="tab-pane fade" id="archived" role="tabpanel" aria-labelledby="archived-tab">
+                            {% if archived_models %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Model Name</th>
+                                            <th>Category</th>
+                                            <th>Type</th>
+                                            <th>Accuracy</th>
+                                            <th>Last Updated</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for model in archived_models %}
+                                        <tr>
+                                            <td>
+                                                <a href="{{ url_for('prediction.view_category_model', model_id=model.id) }}">
+                                                    {{ model.name }}
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary rounded-pill">{{ model.category_name }}</span>
+                                            </td>
+                                            <td>{{ model.model_type }}</td>
+                                            <td>
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar {{ 'bg-success' if model.accuracy >= 0.8 else ('bg-warning' if model.accuracy >= 0.6 else 'bg-danger') }}" 
+                                                         role="progressbar" style="width: {{ (model.accuracy * 100)|int }}%" 
+                                                         aria-valuenow="{{ (model.accuracy * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                                                        {{ (model.accuracy * 100)|round|int }}%
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>{{ model.updated_at.strftime('%Y-%m-%d') }}</td>
+                                            <td>
+                                                <div class="btn-group">
+                                                    <a href="{{ url_for('prediction.view_category_model', model_id=model.id) }}" 
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-eye"></i> View
+                                                    </a>
+                                                    {% if current_user.role in ['admin', 'researcher'] %}
+                                                    <button type="button" class="btn btn-sm btn-outline-success"
+                                                            onclick="restoreModel({{ model.id }})">
+                                                        <i class="bi bi-arrow-clockwise"></i> Restore
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            onclick="deleteModel({{ model.id }})">
+                                                        <i class="bi bi-trash"></i> Delete
+                                                    </button>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i> No archived category-based models found.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Model Performance by Category</h5>
+                </div>
+                <div class="card-body">
+                    <div id="categoryPerformanceChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Model Performance by Type</h5>
+                </div>
+                <div class="card-body">
+                    <div id="modelTypePerformanceChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Recent Model Runs</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_runs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Run Date</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Predictions</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for run in recent_runs %}
+                                <tr>
+                                    <td>{{ run.model_name }}</td>
+                                    <td>{{ run.run_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>{{ run.duration_seconds }} seconds</td>
+                                    <td>
+                                        {% if run.status == 'completed' %}
+                                        <span class="badge bg-success">Completed</span>
+                                        {% elif run.status == 'failed' %}
+                                        <span class="badge bg-danger">Failed</span>
+                                        {% elif run.status == 'running' %}
+                                        <span class="badge bg-info">Running</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ run.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ run.prediction_count }}</td>
+                                    <td>
+                                        <a href="{{ url_for('prediction.view_model_run', run_id=run.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> View Results
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i> No recent model runs found.
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('prediction.model_runs') }}" class="btn btn-sm btn-outline-secondary">
+                        View All Runs
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Archive Model Modal -->
+<div class="modal fade" id="archiveModelModal" tabindex="-1" aria-labelledby="archiveModelModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="archiveModelModalLabel">Archive Model</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to archive this model? Archived models won't be used for predictions but can be restored later.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="archiveModelForm" method="post" action="{{ url_for('prediction.archive_category_model') }}">
+                    <input type="hidden" id="archiveModelId" name="model_id">
+                    <button type="submit" class="btn btn-danger">Archive Model</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Restore Model Modal -->
+<div class="modal fade" id="restoreModelModal" tabindex="-1" aria-labelledby="restoreModelModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="restoreModelModalLabel">Restore Model</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to restore this model? The model will be active and used for predictions.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="restoreModelForm" method="post" action="{{ url_for('prediction.restore_category_model') }}">
+                    <input type="hidden" id="restoreModelId" name="model_id">
+                    <button type="submit" class="btn btn-success">Restore Model</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Delete Model Modal -->
+<div class="modal fade" id="deleteModelModal" tabindex="-1" aria-labelledby="deleteModelModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModelModalLabel">Delete Model</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Warning: This action cannot be undone!
+                </div>
+                <p>Are you sure you want to permanently delete this model? All associated data and predictions will be lost.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteModelForm" method="post" action="{{ url_for('prediction.delete_category_model') }}">
+                    <input type="hidden" id="deleteModelId" name="model_id">
+                    <button type="submit" class="btn btn-danger">Delete Permanently</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Model performance by category chart
+    const categories = {{ categories|tojson }};
+    const categoryAccuracy = {{ category_accuracy|tojson }};
+    
+    const categoryData = [{
+        x: categories,
+        y: categoryAccuracy,
+        type: 'bar',
+        marker: {
+            color: '#4285F4'
+        }
+    }];
+    
+    const categoryLayout = {
+        yaxis: {
+            title: 'Accuracy',
+            tickformat: '.0%',
+            range: [0, 1]
+        },
+        margin: {
+            l: 50,
+            r: 20,
+            t: 20,
+            b: 80
+        },
+        plot_bgcolor: '#f8f9fa',
+        paper_bgcolor: '#ffffff'
+    };
+    
+    const config = {
+        responsive: true,
+        displayModeBar: false
+    };
+    
+    Plotly.newPlot('categoryPerformanceChart', categoryData, categoryLayout, config);
+    
+    // Model performance by type chart
+    const modelTypes = {{ model_types|tojson }};
+    const typeAccuracy = {{ type_accuracy|tojson }};
+    
+    const typeData = [{
+        x: modelTypes,
+        y: typeAccuracy,
+        type: 'bar',
+        marker: {
+            color: '#34A853'
+        }
+    }];
+    
+    const typeLayout = {
+        yaxis: {
+            title: 'Accuracy',
+            tickformat: '.0%',
+            range: [0, 1]
+        },
+        margin: {
+            l: 50,
+            r: 20,
+            t: 20,
+            b: 80
+        },
+        plot_bgcolor: '#f8f9fa',
+        paper_bgcolor: '#ffffff'
+    };
+    
+    Plotly.newPlot('modelTypePerformanceChart', typeData, typeLayout, config);
+});
+
+function archiveModel(modelId) {
+    document.getElementById('archiveModelId').value = modelId;
+    var modal = new bootstrap.Modal(document.getElementById('archiveModelModal'));
+    modal.show();
+}
+
+function restoreModel(modelId) {
+    document.getElementById('restoreModelId').value = modelId;
+    var modal = new bootstrap.Modal(document.getElementById('restoreModelModal'));
+    modal.show();
+}
+
+function deleteModel(modelId) {
+    document.getElementById('deleteModelId').value = modelId;
+    var modal = new bootstrap.Modal(document.getElementById('deleteModelModal'));
+    modal.show();
+}
+</script>
+{% endblock %}
