@@ -19,6 +19,7 @@ from river import cluster
 
 from app import db
 from models import DetectedNarrative, NarrativeInstance, BeliefNode, BeliefEdge
+from utils.secleds import SECLEDS
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +48,20 @@ class NarrativeNetworkAnalyzer:
         
         # Initialize CluStream for temporal analysis
         self.clustream = cluster.CluStream(
-            n_macro_clusters=5,    # Number of macro clusters
-            time_window=1000,      # Time window
-            n_micro_clusters=50,   # Number of micro clusters
+            n_macro_clusters=5,     # Number of macro clusters
+            time_window=1000,       # Time window
+            n_micro_clusters=50,    # Number of micro clusters
             max_micro_clusters=100, # Maximum micro clusters
-            seed=42                # Random seed for reproducibility
+            seed=42                 # Random seed for reproducibility
+        )
+        
+        # Initialize SECLEDS for sequence-based clustering and concept drift adaptation
+        self.secleds = SECLEDS(
+            k=5,                    # Number of clusters to maintain
+            p=3,                    # Number of medoids per cluster
+            distance_threshold=0.3, # Threshold for cluster membership
+            decay=0.01,             # Decay factor for medoid weights
+            drift=True              # Enable concept drift adaptation
         )
         
         # Narrative cluster mapping
@@ -622,6 +632,134 @@ class NarrativeNetworkAnalyzer:
                 'generated_at': datetime.utcnow().isoformat()
             }
             
+    def process_narrative_with_secleds(self, narrative_id: int, embedding: np.ndarray, 
+                                      timestamp: Optional[datetime] = None) -> Tuple[int, float]:
+        """
+        Process a narrative with SECLEDS for sequence-based clustering with concept drift adaptation.
+        
+        Args:
+            narrative_id: ID of the narrative
+            embedding: Vector embedding of the narrative content
+            timestamp: Optional timestamp for the narrative (if None, current time is used)
+            
+        Returns:
+            Tuple of (assigned_cluster_id, confidence)
+        """
+        with data_lock:
+            try:
+                if timestamp is None:
+                    # Use narrative's timestamp if available
+                    narrative = DetectedNarrative.query.get(narrative_id)
+                    if narrative and narrative.first_detected:
+                        timestamp = narrative.first_detected
+                    else:
+                        timestamp = datetime.utcnow()
+                
+                # Process with SECLEDS
+                sequence_id = f"narrative_{narrative_id}"
+                
+                # First update the model
+                self.secleds.partial_fit(embedding, sequence_id, timestamp)
+                
+                # Then predict to get cluster assignment
+                cluster_id, confidence = self.secleds.predict(embedding)
+                
+                # Store the assignment
+                if not hasattr(self, 'secleds_assignments'):
+                    self.secleds_assignments = {}
+                self.secleds_assignments[narrative_id] = cluster_id
+                
+                logger.info(f"Narrative {narrative_id} assigned to sequence cluster {cluster_id} with confidence {confidence:.2f}")
+                return cluster_id, confidence
+                
+            except Exception as e:
+                logger.error(f"Error processing narrative with SECLEDS: {e}")
+                return -1, 0.0  # Return noise cluster with zero confidence
+    
+    def get_secleds_clusters(self) -> Dict[str, Any]:
+        """
+        Get the current SECLEDS clustering results.
+        
+        Returns:
+            Dictionary with cluster information
+        """
+        try:
+            with data_lock:
+                if not hasattr(self, 'secleds_assignments'):
+                    self.secleds_assignments = {}
+                    
+                clusters = {}
+                # Get cluster stats from SECLEDS
+                cluster_stats = self.secleds.get_cluster_stats()
+                
+                for cluster_id, stats in cluster_stats.items():
+                    # Skip noise cluster
+                    if cluster_id < 0:
+                        continue
+                        
+                    # Get narratives in this cluster
+                    narratives = []
+                    for narrative_id, assigned_cluster in self.secleds_assignments.items():
+                        if assigned_cluster == cluster_id:
+                            narrative = DetectedNarrative.query.get(narrative_id)
+                            if narrative:
+                                narratives.append({
+                                    'id': narrative.id,
+                                    'title': narrative.title,
+                                    'status': narrative.status,
+                                    'detected': narrative.first_detected.isoformat()
+                                })
+                    
+                    # Cluster info
+                    clusters[cluster_id] = {
+                        'id': cluster_id,
+                        'medoid_count': stats.get('medoid_count', 0),
+                        'member_count': stats.get('member_count', 0),
+                        'narrative_count': len(narratives),
+                        'last_updated': stats.get('last_updated', 0),
+                        'narratives': narratives
+                    }
+                
+                # Add special cluster for noise points
+                noise_narratives = []
+                for narrative_id, assigned_cluster in self.secleds_assignments.items():
+                    if assigned_cluster == -1:  # Noise cluster
+                        narrative = DetectedNarrative.query.get(narrative_id)
+                        if narrative:
+                            noise_narratives.append({
+                                'id': narrative.id,
+                                'title': narrative.title,
+                                'status': narrative.status,
+                                'detected': narrative.first_detected.isoformat()
+                            })
+                
+                if noise_narratives:
+                    clusters[-1] = {
+                        'id': -1,
+                        'medoid_count': 0,
+                        'member_count': len(noise_narratives),
+                        'narrative_count': len(noise_narratives),
+                        'last_updated': 0,
+                        'narratives': noise_narratives,
+                        'is_noise': True
+                    }
+                
+                return {
+                    'clusters': list(clusters.values()),
+                    'noise_points': noise_narratives,
+                    'total_processed': len(self.secleds_assignments),
+                    'generated_at': datetime.utcnow().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting SECLEDS clusters: {e}")
+            return {
+                'clusters': [], 
+                'noise_points': [], 
+                'total_processed': 0,
+                'generated_at': datetime.utcnow().isoformat()
+            }
+    
     def export_network_json(self) -> Dict[str, Any]:
         """
         Export the narrative network as a JSON object for visualization.

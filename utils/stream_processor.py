@@ -5,7 +5,7 @@ Connects the analyzer agents with streaming clustering algorithms.
 
 import logging
 import numpy as np
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -138,4 +138,46 @@ def process_narrative_with_clustream(narrative_id: int, timestamp: Optional[date
         
     except Exception as e:
         logger.error(f"Error processing narrative with CluStream: {e}")
+        return {"narrative_id": narrative_id, "status": "error", "message": str(e)}
+
+
+def process_narrative_with_secleds(narrative_id: int, timestamp: Optional[datetime] = None) -> Dict[str, Any]:
+    """
+    Process a narrative with the SECLEDS algorithm for sequence-based clustering with concept drift adaptation.
+    
+    Args:
+        narrative_id: ID of the narrative to process
+        timestamp: Optional timestamp for the narrative (if None, current time is used)
+        
+    Returns:
+        Dictionary containing the processing results
+    """
+    try:
+        # Get narrative embedding
+        embedding = get_narrative_embedding(narrative_id)
+        if embedding is None:
+            return {"narrative_id": narrative_id, "status": "error", "message": "Failed to create embedding"}
+        
+        # Use provided timestamp or narrative's first_detected timestamp or current time
+        if timestamp is None:
+            narrative = DetectedNarrative.query.get(narrative_id)
+            if narrative and narrative.first_detected:
+                timestamp = narrative.first_detected
+            else:
+                timestamp = datetime.utcnow()
+        
+        # Process with SECLEDS
+        cluster_id, confidence = network_analyzer.process_narrative_with_secleds(narrative_id, embedding, timestamp)
+        
+        return {
+            "narrative_id": narrative_id,
+            "status": "success",
+            "cluster_id": cluster_id,
+            "confidence": float(confidence),
+            "is_noise": cluster_id == -1,
+            "timestamp": timestamp.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing narrative with SECLEDS: {e}")
         return {"narrative_id": narrative_id, "status": "error", "message": str(e)}
