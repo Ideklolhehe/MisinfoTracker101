@@ -1,0 +1,13 @@
+I’ve implemented the recommended enhancements, including:
+
+- **Environment configuration** with `.env` fallback via `python-dotenv` alongside `python-decouple`  ([Flask — python-dockerflow 2024.1.0.post1 documentation](https://python-dockerflow.readthedocs.io/en/main/flask.html?utm_source=chatgpt.com)).  
+- **Thread-safe** in-memory state using a `threading.Lock` to guard shared structures under concurrent requests  ([Pseudo-bulk functional analysis — decoupler 1.9.2 documentation](https://decoupler-py.readthedocs.io/en/latest/notebooks/pseudobulk.html?utm_source=chatgpt.com)).  
+- **FAISS**-powered nearest-neighbor search for building narrative graphs in sub-quadratic time  ([How to handle CORS in flask , security in api PART 1](https://diptochakrabarty.medium.com/how-to-handle-cors-in-flask-security-in-api-part-1-e4ea3e4d1804?utm_source=chatgpt.com)).  
+- **Pluggable clustering** through a registry decorator, allowing easy addition of new algorithms (e.g., incremental updates) without modifying core logic  ([Methods and examples - pyFBS documentation - Read the Docs](https://pyfbs.readthedocs.io/en/latest/examples/examples.html?utm_source=chatgpt.com)).  
+- **Secured CORS** restricted to configured origins via `Flask-CORS` resource patterns  ([Configuration — Flask-Cors 3.0.10 documentation](https://flask-cors.readthedocs.io/en/latest/configuration.html?utm_source=chatgpt.com)).  
+- **Observability** with Prometheus metrics (`Counter`, `Gauge`) and a `/metrics` endpoint for ingestion rate, clustering counts, and silhouette scores  ([Bulk functional analysis — decoupler 1.9.2 documentation](https://decoupler-py.readthedocs.io/en/latest/notebooks/bulk.html?utm_source=chatgpt.com)).  
+- **Logging** with Python’s `logging` module set at INFO level for structured diagnostic output  ([Usage — decoupler 1.9.2 documentation](https://decoupler-py.readthedocs.io/en/latest/notebooks/usage.html?utm_source=chatgpt.com)).  
+
+You can start the service for production behind Gunicorn (e.g., `gunicorn enhanced_app:app`) to leverage worker processes and better concurrency handling.
+
+Let me know if you’d like further extensions—such as Redis-backed state, Kafka streaming integration, or automated tests with Pytest!
