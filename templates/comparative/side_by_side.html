@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Side-by-Side Comparison{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Side-by-Side Narrative Comparison</h1>
+        <a href="{{ url_for('comparative.dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Comparative Dashboard
+        </a>
+    </div>
+    
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        <i class="fas fa-exclamation-triangle mr-2"></i> {{ error }}
+    </div>
+    {% endif %}
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Select Narratives and Dimensions</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('comparative.side_by_side') }}">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="narrative_ids" class="form-label">Narratives to Compare:</label>
+                            <select name="narrative_ids" id="narrative_ids" class="form-select" multiple size="8" required>
+                                {% for narrative in narratives %}
+                                <option value="{{ narrative.id }}" {% if selected_narratives and narrative.id in [n.id for n in selected_narratives] %}selected{% endif %}>
+                                    {{ narrative.title }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple narratives (minimum 2).</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="dimensions" class="form-label">Dimensions to Compare:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dimensions" value="threat_level" id="threatLevel" {% if not selected_dimensions or 'threat_level' in selected_dimensions %}checked{% endif %}>
+                                <label class="form-check-label" for="threatLevel">
+                                    Threat Level
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dimensions" value="propagation_rate" id="propagationRate" {% if not selected_dimensions or 'propagation_rate' in selected_dimensions %}checked{% endif %}>
+                                <label class="form-check-label" for="propagationRate">
+                                    Propagation Rate
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dimensions" value="complexity_score" id="complexityScore" {% if not selected_dimensions or 'complexity_score' in selected_dimensions %}checked{% endif %}>
+                                <label class="form-check-label" for="complexityScore">
+                                    Complexity Score
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dimensions" value="instance_count" id="instanceCount" {% if selected_dimensions and 'instance_count' in selected_dimensions %}checked{% endif %}>
+                                <label class="form-check-label" for="instanceCount">
+                                    Instance Count
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dimensions" value="source_diversity" id="sourceDiversity" {% if selected_dimensions and 'source_diversity' in selected_dimensions %}checked{% endif %}>
+                                <label class="form-check-label" for="sourceDiversity">
+                                    Source Diversity
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sync-alt mr-2"></i> Compare Narratives
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    {% if comparison_data %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Comparison Results</h5>
+        </div>
+        <div class="card-body">
+            <div id="chart-container" class="mb-4">
+                {{ comparison_data.chart_html|safe }}
+            </div>
+            
+            <h5>Detailed Comparison</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Narrative</th>
+                            {% for dimension in comparison_data.dimensions %}
+                            <th>{{ dimension|title|replace('_', ' ') }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for narrative in comparison_data.narratives %}
+                        <tr>
+                            <td>
+                                <strong>{{ narrative.title }}</strong>
+                                <div class="small text-muted">
+                                    First detected: {{ narrative.first_detected }}
+                                </div>
+                            </td>
+                            {% for dimension in comparison_data.dimensions %}
+                            <td>
+                                {% if dimension == 'propagation_rate' %}
+                                {{ "%.2f"|format(narrative.dimensions[dimension]) }}
+                                {% elif dimension == 'complexity_score' %}
+                                {{ "%.2f"|format(narrative.dimensions[dimension]) }}
+                                {% else %}
+                                {{ narrative.dimensions[dimension] }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <h5 class="mt-4">Narrative Details</h5>
+            <div class="accordion" id="narrativeAccordion">
+                {% for narrative in comparison_data.narratives %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading{{ narrative.id }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ narrative.id }}" aria-expanded="false" aria-controls="collapse{{ narrative.id }}">
+                            {{ narrative.title }}
+                        </button>
+                    </h2>
+                    <div id="collapse{{ narrative.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ narrative.id }}" data-bs-parent="#narrativeAccordion">
+                        <div class="accordion-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Description</h6>
+                                    <p>{{ narrative.description }}</p>
+                                    <p>
+                                        <strong>Status:</strong> <span class="badge {% if narrative.status == 'active' %}bg-success{% elif narrative.status == 'archived' %}bg-secondary{% else %}bg-danger{% endif %}">
+                                            {{ narrative.status }}
+                                        </span>
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Actions</h6>
+                                    <div class="d-grid gap-2">
+                                        <a href="{{ url_for('comparative.growth_rate', narrative_id=narrative.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-chart-line mr-1"></i> Growth Rate Analysis
+                                        </a>
+                                        <a href="{{ url_for('counter_narrative.generate_counter', narrative_id=narrative.id) }}" class="btn btn-sm btn-outline-success">
+                                            <i class="fas fa-reply mr-1"></i> Generate Counter-Narrative
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-print mr-2"></i> Print Comparison
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Validate that at least 2 narratives are selected
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const select = document.getElementById('narrative_ids');
+            const selected = Array.from(select.selectedOptions).length;
+            
+            if (selected < 2) {
+                e.preventDefault();
+                alert('Please select at least 2 narratives for comparison.');
+            }
+        });
+        
+        // Ensure at least one dimension is checked
+        const dimensionCheckboxes = document.querySelectorAll('input[name="dimensions"]');
+        for (const checkbox of dimensionCheckboxes) {
+            checkbox.addEventListener('change', function() {
+                const anyChecked = Array.from(dimensionCheckboxes).some(cb => cb.checked);
+                if (!anyChecked) {
+                    this.checked = true;
+                    alert('At least one dimension must be selected.');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
