@@ -265,25 +265,49 @@ class MisinformationEvent(db.Model):
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
-        
-    def to_dict(self):
-        """Return a dictionary representation of the misinformation event."""
-        meta_data = self.get_meta_data()
-        return {
-            'id': self.id,
-            'source_id': self.source_id,
-            'source_name': self.source.name if self.source else None,
-            'narrative_id': self.narrative_id,
-            'narrative_title': self.narrative.title if self.narrative else None,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'reporter_id': self.reporter_id,
-            'confidence': self.confidence,
-            'correct_detection': self.correct_detection,
-            'evaluation_date': self.evaluation_date.isoformat() if self.evaluation_date else None,
-            'impact': meta_data.get('impact'),
-            'reach': meta_data.get('reach'),
-            'platform': meta_data.get('platform')
-        }
+
+
+class EvidenceRecord(db.Model):
+    """Model for storing immutable evidence records."""
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    content_hash = db.Column(db.String(256), nullable=False)  # Hash of the content
+    source_url = db.Column(db.String(1024))  # Original source URL
+    capture_date = db.Column(db.DateTime, default=datetime.utcnow)
+    content_type = db.Column(db.String(100))  # MIME type
+    content_data = db.Column(db.Text, nullable=True)  # Actual content data (if text)
+    verified = db.Column(db.Boolean, default=False)
+    verification_method = db.Column(db.String(50), nullable=True)  # Method used for verification
+    meta_data = db.Column(db.Text)  # JSON with additional metadata
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
+
+
+class PublishedContent(db.Model):
+    """Model for tracking content published to decentralized networks."""
+    id = db.Column(db.Integer, primary_key=True)
+    content_type = db.Column(db.String(50), nullable=False)  # narrative_analysis, counter_narrative, evidence_record, etc.
+    reference_id = db.Column(db.String(36), nullable=False)  # ID of the referenced content in the respective table
+    ipfs_hash = db.Column(db.String(256), nullable=False)  # IPFS content identifier
+    ipns_name = db.Column(db.String(256), nullable=True)  # IPNS name (if published to IPNS)
+    publisher_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    status = db.Column(db.String(50), default='published')  # published, revoked, updated
+    title = db.Column(db.String(256))
+    description = db.Column(db.Text)
+    publication_date = db.Column(db.DateTime, default=datetime.utcnow)
+    meta_data = db.Column(db.Text)  # JSON with additional metadata
+    
+    # Relationships
+    publisher = db.relationship('User', backref='published_content')
+    
+    def set_meta_data(self, data):
+        self.meta_data = json.dumps(data)
+    
+    def get_meta_data(self):
+        return json.loads(self.meta_data) if self.meta_data else {}
 
 
 class ContentType(enum.Enum):

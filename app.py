@@ -96,6 +96,9 @@ with app.app_context():
     # Import web scraping blueprint
     from routes.web_scraping import web_scraping_bp
     
+    # Import decentralized publishing blueprint
+    from routes.decentralized_publishing import decentralized_bp
+    
     # Register route blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(api_bp, url_prefix='/api')
@@ -124,6 +127,9 @@ with app.app_context():
     
     # Register web scraping blueprint
     app.register_blueprint(web_scraping_bp)  # Routes include '/web-scraping'
+    
+    # Register decentralized publishing blueprint
+    app.register_blueprint(decentralized_bp)  # Routes include '/decentralized'
     
     # Initialize external API clients
     from services.api_credential_manager import APICredentialManager
