@@ -238,21 +238,52 @@ class AdversarialEvaluation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content_id = db.Column(db.Integer, db.ForeignKey('adversarial_content.id'), nullable=False)
     detector_version = db.Column(db.String(50))  # Version of detector used
-    correct_detection = db.Column(db.Boolean)  # Whether system correctly identified it as misinfo
-    confidence_score = db.Column(db.Float)  # Detection confidence score
-    evaluation_date = db.Column(db.DateTime, default=datetime.utcnow)
-    evaluated_by = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
-    notes = db.Column(db.Text)
-    meta_data = db.Column(db.Text)  # JSON with additional evaluation data
+
+
+class MisinformationEvent(db.Model):
+    """Model for tracking misinformation events for source reliability analysis."""
+    id = db.Column(db.Integer, primary_key=True)
+    source_id = db.Column(db.Integer, db.ForeignKey('data_source.id'), nullable=False)
+    narrative_id = db.Column(db.Integer, db.ForeignKey('detected_narrative.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    reporter_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    evaluator_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=True)
+    confidence = db.Column(db.Float, default=1.0)  # Confidence in the misinformation assessment
+    correct_detection = db.Column(db.Boolean, nullable=True)  # Whether system correctly identified it as misinfo
+    evaluation_date = db.Column(db.DateTime, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    meta_data = db.Column(db.Text)  # JSON with additional context about the event
     
-    # Relationship
-    evaluator = db.relationship('User', foreign_keys=[evaluated_by])
+    # Relationships
+    source = db.relationship('DataSource', backref='misinfo_events')
+    narrative = db.relationship('DetectedNarrative', backref='misinfo_events')
+    reporter = db.relationship('User', foreign_keys=[reporter_id], backref='reported_misinfo_events')
+    evaluator = db.relationship('User', foreign_keys=[evaluator_id], backref='evaluated_misinfo_events')
     
     def set_meta_data(self, data):
         self.meta_data = json.dumps(data)
     
     def get_meta_data(self):
         return json.loads(self.meta_data) if self.meta_data else {}
+        
+    def to_dict(self):
+        """Return a dictionary representation of the misinformation event."""
+        meta_data = self.get_meta_data()
+        return {
+            'id': self.id,
+            'source_id': self.source_id,
+            'source_name': self.source.name if self.source else None,
+            'narrative_id': self.narrative_id,
+            'narrative_title': self.narrative.title if self.narrative else None,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'reporter_id': self.reporter_id,
+            'confidence': self.confidence,
+            'correct_detection': self.correct_detection,
+            'evaluation_date': self.evaluation_date.isoformat() if self.evaluation_date else None,
+            'impact': meta_data.get('impact'),
+            'reach': meta_data.get('reach'),
+            'platform': meta_data.get('platform')
+        }
 
 
 class ContentType(enum.Enum):
