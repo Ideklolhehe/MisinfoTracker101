@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Report Misinformation - CIVILIAN{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.source_reliability') }}">Source Reliability</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Report Misinformation</li>
+                </ol>
+            </nav>
+            <h1 class="mb-3">Report Misinformation Event</h1>
+            <p class="lead">Log a new misinformation event for tracking and analysis.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Misinformation Report</h5>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <form method="POST" action="{{ url_for('dashboard.report_misinfo') }}">
+                        <div class="mb-3">
+                            <label for="source_id" class="form-label">Source <span class="text-danger">*</span></label>
+                            <select class="form-select" id="source_id" name="source_id" required>
+                                <option value="" disabled selected>Select a source</option>
+                                {% for source in sources %}
+                                    <option value="{{ source.id }}" {% if request.args.get('source_id')|int == source.id %}selected{% endif %}>
+                                        {{ source.name }} ({{ source.source_type }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Select the source that published the misinformation.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="narrative_id" class="form-label">Narrative <span class="text-danger">*</span></label>
+                            <select class="form-select" id="narrative_id" name="narrative_id" required>
+                                <option value="" disabled selected>Select a narrative</option>
+                                {% for narrative in narratives %}
+                                    <option value="{{ narrative.id }}" {% if request.args.get('narrative_id')|int == narrative.id %}selected{% endif %}>
+                                        {{ narrative.title }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Select the narrative this misinformation is related to.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="confidence" class="form-label">Confidence Level</label>
+                            <div class="range-wrap">
+                                <input type="range" class="form-range" min="0.1" max="1.0" step="0.1" id="confidence" name="confidence" value="1.0">
+                                <output class="bubble"></output>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <small>Low confidence</small>
+                                <small>High confidence</small>
+                            </div>
+                            <div class="form-text">How confident are you that this is misinformation?</div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="impact" class="form-label">Impact Level</label>
+                                    <select class="form-select" id="impact" name="impact">
+                                        <option value="" selected>Not specified</option>
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="critical">Critical</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="reach" class="form-label">Estimated Reach</label>
+                                    <select class="form-select" id="reach" name="reach">
+                                        <option value="" selected>Not specified</option>
+                                        <option value="local">Local</option>
+                                        <option value="regional">Regional</option>
+                                        <option value="national">National</option>
+                                        <option value="global">Global</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="platform" class="form-label">Platform</label>
+                                    <select class="form-select" id="platform" name="platform">
+                                        <option value="" selected>Not specified</option>
+                                        <option value="website">Website</option>
+                                        <option value="social_media">Social Media</option>
+                                        <option value="messaging">Messaging App</option>
+                                        <option value="tv">Television</option>
+                                        <option value="print">Print Media</option>
+                                        <option value="radio">Radio</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                            <a href="{{ url_for('dashboard.source_reliability') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                            <button type="submit" class="btn btn-danger">Submit Report</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.range-wrap {
+    position: relative;
+    margin: 0 auto;
+}
+.bubble {
+    background: var(--bs-primary);
+    color: white;
+    padding: 4px 8px;
+    position: absolute;
+    border-radius: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -30px;
+    font-size: 0.8rem;
+}
+.bubble::after {
+    content: "";
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid var(--bs-primary);
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const allRanges = document.querySelectorAll(".range-wrap");
+        allRanges.forEach(wrap => {
+            const range = wrap.querySelector(".form-range");
+            const bubble = wrap.querySelector(".bubble");
+            
+            range.addEventListener("input", () => {
+                setBubble(range, bubble);
+            });
+            
+            // Initialize
+            setBubble(range, bubble);
+        });
+
+        function setBubble(range, bubble) {
+            const val = range.value;
+            const min = range.min || 0;
+            const max = range.max || 1;
+            const newVal = Number(((val - min) * 100) / (max - min));
+            
+            // Display the value
+            bubble.innerHTML = parseFloat(val).toFixed(1);
+            
+            // Set position
+            bubble.style.left = `calc(${newVal}% + (${8 - newVal * 0.15}px))`;
+        }
+    });
+</script>
+{% endblock %}
