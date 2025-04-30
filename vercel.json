@@ -2,24 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "vercel_app.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb",
-        "runtime": "python3.9",
-        "includeFiles": ["templates/**/*", "static/**/*"],
-        "excludeFiles": ["**/*.py", "!vercel_app.py", "!wsgi.py", "__pycache__/**"],
-        "installCommand": "pip install -r requirements-vercel.txt"
-      }
+      "src": "api/index.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "vercel_app.py"
+      "dest": "api/index.py"
     }
-  ],
-  "env": {
-    "PYTHONUNBUFFERED": "1"
-  }
+  ]
 }
