@@ -503,5 +503,9 @@ with app.app_context():
 # Import the test route
 import test_route  # noqa: F401
 
+# For Vercel serverless deployment, we need to expose the app
+# variable for the @vercel/python runtime to find it
+app.config['SERVER_NAME'] = os.environ.get('VERCEL_URL', None)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
