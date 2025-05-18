@@ -1,8 +1,10 @@
 from app import app  # noqa: F401
 from utils.app_context import set_current_app
+from utils.app_context_fix import set_global_app
 
-# Set the global app instance for thread context
+# Set the global app instance for thread context - use both methods for backward compatibility
 set_current_app(app)
+set_global_app(app)
 import logging
 import os
 from utils.text_processor import TextProcessor
