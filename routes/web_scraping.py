@@ -690,29 +690,8 @@ def api_search():
             'message': 'Search job created and queued for processing'
         })
         
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-        
-        # Set job metadata
-        job_meta = {
-            'query': query,
-            'search_engine': search_engine,
-            'limit': limit
-        }
-        job.set_meta_data(job_meta)
-        
-        db.session.add(job)
-        db.session.commit()
-        
-        # Process the job (this can be asynchronous)
-        web_scraping_service.queue_job(job.id)
-        
-        return jsonify({
-            'job_id': job.id,
-            'status': job.status,
-            'message': 'Search job created and queued for processing'
-        })
-        
+    except KeyError as ke:
+        return jsonify({'error': f'Missing required parameter: {str(ke)}'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

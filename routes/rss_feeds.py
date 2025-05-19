@@ -282,14 +282,19 @@ def batch_find_alternatives():
         updates = update_feed_urls(broken_feeds)
         elapsed_time = time.time() - start_time
         
-        # Log the operation
-        log = SystemLog(
-            log_type='info',
-            component='rss_feed_manager',
-            message=f"Found alternatives for {len(updates)} out of {len(broken_feeds)} broken feeds in {elapsed_time:.2f} seconds"
-        )
-        db.session.add(log)
-        db.session.commit()
+        try:
+            # Log the operation
+            log = SystemLog(
+                log_type='info',
+                component='rss_feed_manager',
+                message=f"Found alternatives for {len(updates)} out of {len(broken_feeds)} broken feeds in {elapsed_time:.2f} seconds"
+            )
+            db.session.add(log)
+            db.session.commit()
+        except Exception as log_error:
+            db.session.rollback()  # Rollback on error
+            # We can still return success for the feed updates even if logging fails
+            current_app.logger.error(f"Error logging feed updates: {str(log_error)}")
         
         return jsonify({
             'success': True,
