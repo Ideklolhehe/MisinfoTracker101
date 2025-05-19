@@ -422,13 +422,12 @@ def sources():
                     pass
                 
                 # Create a new web source
-                web_source = WebSource(
-                    name=name,
-                    url=url,
-                    source_type=source_type,
-                    created_by=current_user.id if current_user.is_authenticated else None,
-                    is_active=True
-                )
+                web_source = WebSource()
+                web_source.name = name
+                web_source.url = url
+                web_source.source_type = source_type
+                # WebSource doesn't have a created_by field
+                web_source.is_active = True
                 
                 # Set the configuration
                 web_source.set_config(config)
@@ -506,14 +505,13 @@ def sources():
                     return redirect(url_for('web_scraping.sources'))
                 
                 # Create a job for this source
-                job = WebSourceJob(
-                    source_id=source.id,
-                    job_type=source.source_type,
-                    status=WebSourceJobStatus.PENDING.value,
-                    created_by=current_user.id if current_user.is_authenticated else None,
-                    created_at=datetime.datetime.utcnow(),
-                    job_id=str(uuid.uuid4())
-                )
+                job = WebSourceJob()
+                job.source_id = source.id
+                job.job_type = source.source_type
+                job.status = WebSourceJobStatus.PENDING.value
+                job.created_by = current_user.id if current_user.is_authenticated else None
+                job.created_at = datetime.datetime.utcnow()
+                job.job_id = str(uuid.uuid4())
                 
                 db.session.add(job)
                 db.session.commit()
