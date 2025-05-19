@@ -76,18 +76,33 @@ def coordinated_campaigns():
         # Initialize network analyzer
         analyzer = NarrativeNetworkAnalyzer()
         
+        # Default empty campaigns list
+        campaigns = []
+        
         # Build the network
         include_archived = request.args.get('include_archived', 'false').lower() == 'true'
         analyzer.build_narrative_network(include_archived=include_archived)
         
-        # Identify campaigns
+        # Only proceed if network was built successfully
+        if not hasattr(analyzer, 'graph') or not analyzer.graph or analyzer.graph.number_of_nodes() == 0:
+            logger.warning("Network graph is empty or not properly initialized")
+            flash("No valid network data available for campaign analysis.", "warning")
+        else:
+            # Identify campaigns
+            min_narratives = request.args.get('min_narratives', 3, type=int)
+            min_similarity = request.args.get('min_similarity', 0.5, type=float)
+            
+            campaigns = analyzer.identify_coordinated_campaigns(
+                min_narratives=min_narratives,
+                min_similarity=min_similarity
+            )
+            
+            if not campaigns:
+                flash("No coordinated campaigns found with the current parameters.", "info")
+        
+        # Get parameter values for the template
         min_narratives = request.args.get('min_narratives', 3, type=int)
         min_similarity = request.args.get('min_similarity', 0.5, type=float)
-        
-        campaigns = analyzer.identify_coordinated_campaigns(
-            min_narratives=min_narratives,
-            min_similarity=min_similarity
-        )
         
         return render_template(
             'network/campaigns.html',
@@ -214,9 +229,22 @@ def api_coordinated_campaigns():
         # Initialize network analyzer
         analyzer = NarrativeNetworkAnalyzer()
         
+        # Default empty campaigns list
+        campaigns = []
+        
         # Build the network
         include_archived = request.args.get('include_archived', 'false').lower() == 'true'
         analyzer.build_narrative_network(include_archived=include_archived)
+        
+        # Only proceed if network was built successfully
+        if not hasattr(analyzer, 'graph') or not analyzer.graph or analyzer.graph.number_of_nodes() == 0:
+            logger.warning("Network graph is empty or not properly initialized")
+            return jsonify({
+                "error": "No valid network data available for campaign analysis",
+                "campaigns": [],
+                "campaign_count": 0,
+                "generated_at": None
+            }), 200  # Return 200 with empty data instead of an error
         
         # Identify campaigns
         min_narratives = request.args.get('min_narratives', 3, type=int)
@@ -230,12 +258,19 @@ def api_coordinated_campaigns():
         return jsonify({
             "campaigns": campaigns,
             "campaign_count": len(campaigns),
-            "generated_at": campaigns[0]["first_narrative_date"] if campaigns else None
+            "generated_at": campaigns[0]["first_narrative_date"] if campaigns else None,
+            "status": "success"
         })
         
     except Exception as e:
         logger.error(f"Error in campaigns API endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": str(e),
+            "campaigns": [],
+            "campaign_count": 0,
+            "generated_at": None,
+            "status": "error"
+        }), 500
 
 @network_bp.route('/network/communities', methods=['GET'])
 @login_required

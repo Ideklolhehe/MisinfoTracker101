@@ -42,7 +42,7 @@ def parse_feed_with_retry(url, max_retries=3):
 class FeedParser:
     """Enhanced feed parser with error handling and rate limiting."""
     
-    def __init__(self, timeout=10, retries=2, backoff_factor=0.5):
+    def __init__(self, timeout=30, retries=2, backoff_factor=0.5):
         """
         Initialize the feed parser.
         
@@ -58,8 +58,25 @@ class FeedParser:
         # Common headers to avoid being blocked
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*'
+            'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+            'Connection': 'keep-alive'
         }
+        
+        # List of known problematic feeds that need alternative URLs
+        self.feed_redirects = {
+            'https://www.who.int/feeds/entity/news/en/rss2_archive.xml': 'https://www.who.int/news/rss-feeds',
+            'https://www.data.gov/feed/': 'https://catalog.data.gov/dataset.atom',
+            'https://www.politifact.com/rss/': 'https://www.politifact.com/rss/thetruth-o-meter/articles/',
+            'https://apnews.com/hub/ap-fact-check/rss': 'https://apnews.com/hub/fact-check/rss',
+            'https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best': 'https://www.reuters.com/arc/outboundfeeds/feed/?outputType=xml'
+        }
+        
+        # URLs that are known to have SSL issues and need verify=False
+        self.ssl_verification_exceptions = [
+            'feeds.ap.org',
+            'apnews.com',
+            'feeds.bbci.co.uk'
+        ]
     
     def parse(self, url):
         """
@@ -71,6 +88,11 @@ class FeedParser:
         Returns:
             Parsed feed object or None if parsing failed
         """
+        # Check if this is a known problematic feed that needs redirection
+        if url in self.feed_redirects:
+            logger.info(f"Using alternative URL for {url}")
+            url = self.feed_redirects[url]
+            
         parsed_url = urlparse(url)
         if not parsed_url.scheme or not parsed_url.netloc:
             logger.error(f"Invalid feed URL: {url}")
@@ -86,10 +108,22 @@ class FeedParser:
         # If direct parsing failed, try with requests
         for attempt in range(self.retries + 1):
             try:
+                # Check if this domain should skip SSL verification
+                parsed_url = urlparse(url)
+                verify_ssl = True
+                for domain in self.ssl_verification_exceptions:
+                    if domain in parsed_url.netloc:
+                        verify_ssl = False
+                        logger.info(f"Skipping SSL verification for {parsed_url.netloc}")
+                        break
+                
+                # Make request with appropriate SSL settings
                 response = requests.get(
                     url, 
                     headers=self.headers,
-                    timeout=self.timeout
+                    timeout=self.timeout,
+                    allow_redirects=True,
+                    verify=verify_ssl
                 )
                 
                 if response.status_code == 200:
