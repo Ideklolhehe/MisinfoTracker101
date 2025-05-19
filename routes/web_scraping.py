@@ -80,12 +80,11 @@ def scan():
         
         try:
             # Create a web source job
-            job = WebSourceJob(
-                job_type='scan',
-                status=WebSourceJobStatus.PENDING.value,
-                created_by=current_user.id if current_user.is_authenticated else None,
-                created_at=datetime.datetime.utcnow()
-            )
+            job = WebSourceJob()
+            job.job_type = 'scan'
+            job.status = WebSourceJobStatus.PENDING.value
+            job.created_by = current_user.id if current_user.is_authenticated else None
+            job.created_at = datetime.datetime.utcnow()
             
             # Set job metadata
             job_meta = {
@@ -148,12 +147,11 @@ def search():
         
         try:
             # Create a web source job
-            job = WebSourceJob(
-                job_type='search',
-                status=WebSourceJobStatus.PENDING.value,
-                created_by=current_user.id if current_user.is_authenticated else None,
-                created_at=datetime.datetime.utcnow()
-            )
+            job = WebSourceJob()
+            job.job_type = 'search'
+            job.status = WebSourceJobStatus.PENDING.value
+            job.created_by = current_user.id if current_user.is_authenticated else None
+            job.created_at = datetime.datetime.utcnow()
             
             # Set job metadata
             job_meta = {
@@ -224,13 +222,12 @@ def monitoring():
             
             try:
                 # Create a new focused domain
-                focused_domain = FocusedDomain(
-                    domain=domain,
-                    category=category,
-                    priority=priority,
-                    created_by=current_user.id if current_user.is_authenticated else None,
-                    is_active=True
-                )
+                focused_domain = FocusedDomain()
+                focused_domain.domain = domain
+                focused_domain.category = category
+                focused_domain.priority = priority
+                focused_domain.created_by = current_user.id if current_user.is_authenticated else None
+                focused_domain.is_active = True
                 
                 db.session.add(focused_domain)
                 db.session.commit()
@@ -258,12 +255,11 @@ def monitoring():
             
             try:
                 # Create a new search term
-                search_term = SearchTerm(
-                    term=term,
-                    category=category,
-                    created_by=current_user.id if current_user.is_authenticated else None,
-                    is_active=True
-                )
+                search_term = SearchTerm()
+                search_term.term = term
+                search_term.category = category
+                search_term.created_by = current_user.id if current_user.is_authenticated else None
+                search_term.is_active = True
                 
                 db.session.add(search_term)
                 db.session.commit()
@@ -670,13 +666,12 @@ def api_search():
         limit = data.get('limit', 10)
         
         # Create a web source job
-        job = WebSourceJob(
-            job_type='search',
-            status=WebSourceJobStatus.PENDING.value,
-            created_by=current_user.id if current_user.is_authenticated else None,
-            created_at=datetime.datetime.utcnow(),
-            job_id=str(uuid.uuid4())
-        )
+        job = WebSourceJob()
+        job.job_type = 'search'
+        job.status = WebSourceJobStatus.PENDING.value
+        job.created_by = current_user.id if current_user.is_authenticated else None
+        job.created_at = datetime.datetime.utcnow()
+        job.job_id = str(uuid.uuid4())
         
         # Set job metadata
         job_meta = {
