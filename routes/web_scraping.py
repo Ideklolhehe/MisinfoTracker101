@@ -663,7 +663,7 @@ def api_search():
     
     if not data or 'query' not in data:
         return jsonify({'error': 'Query is required'}), 400
-    
+        
     try:
         query = data['query']
         search_engine = data.get('search_engine', 'bing')
@@ -677,6 +677,29 @@ def api_search():
             created_at=datetime.datetime.utcnow(),
             job_id=str(uuid.uuid4())
         )
+        
+        # Set job metadata
+        job_meta = {
+            'query': query,
+            'search_engine': search_engine,
+            'limit': limit
+        }
+        job.set_meta_data(job_meta)
+        
+        db.session.add(job)
+        db.session.commit()
+        
+        # Queue the job (asynchronous processing)
+        web_scraping_service.queue_job(job.id)
+        
+        return jsonify({
+            'job_id': job.id,
+            'status': job.status,
+            'message': 'Search job created and queued for processing'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
         
         # Set job metadata
         job_meta = {

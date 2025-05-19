@@ -246,7 +246,7 @@ class AdversarialEvaluation(db.Model):
     meta_data = db.Column(db.Text)  # JSON with additional evaluation metadata
     
     # Relationships
-    content = db.relationship('AdversarialContent')
+    # Don't define backref here since AdversarialContent already defines 'content' backref
     evaluator = db.relationship('User', foreign_keys=[evaluated_by])
     
     def set_meta_data(self, data):
