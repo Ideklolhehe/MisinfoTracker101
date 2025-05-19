@@ -617,13 +617,12 @@ def api_scan():
         analyze_credibility = data.get('analyze_credibility', False)
         
         # Create a web source job
-        job = WebSourceJob(
-            job_type='scan',
-            status=WebSourceJobStatus.PENDING.value,
-            created_by=current_user.id if current_user.is_authenticated else None,
-            created_at=datetime.datetime.utcnow(),
-            job_id=str(uuid.uuid4())
-        )
+        job = WebSourceJob()
+        job.job_type = 'scan'
+        job.status = WebSourceJobStatus.PENDING.value
+        job.created_by = current_user.id if current_user.is_authenticated else None
+        job.created_at = datetime.datetime.utcnow()
+        job.job_id = str(uuid.uuid4())
         
         # Set job metadata
         job_meta = {
