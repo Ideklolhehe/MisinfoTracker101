@@ -90,10 +90,6 @@ def report_misinfo():
     if request.method == 'POST':
         source_id = request.form.get('source_id')
         narrative_id = request.form.get('narrative_id')
-        confidence = float(request.form.get('confidence', 1.0))
-        impact = request.form.get('impact')
-        reach = request.form.get('reach')
-        platform = request.form.get('platform')
         
         # Validate required fields
         if not source_id or not narrative_id:
@@ -103,6 +99,40 @@ def report_misinfo():
                 sources=sources,
                 narratives=narratives
             )
+            
+        # Safely parse confidence
+        try:
+            confidence = float(request.form.get('confidence', 1.0))
+            if not (0.0 <= confidence <= 1.0):
+                raise ValueError("Confidence must be between 0 and 1")
+        except ValueError:
+            flash('Confidence must be a number between 0 and 1.', 'danger')
+            return render_template(
+                'dashboard/report_misinfo.html',
+                sources=sources,
+                narratives=narratives
+            )
+        
+        # Validate and process optional fields
+        impact = request.form.get('impact')
+        if impact and not impact.isdigit():
+            flash('Impact must be a numeric value.', 'danger')
+            return render_template(
+                'dashboard/report_misinfo.html',
+                sources=sources,
+                narratives=narratives
+            )
+            
+        reach = request.form.get('reach')
+        if reach and not reach.isdigit():
+            flash('Reach must be a numeric value.', 'danger')
+            return render_template(
+                'dashboard/report_misinfo.html',
+                sources=sources, 
+                narratives=narratives
+            )
+            
+        platform = request.form.get('platform')
         
         # Create misinformation event
         event = MisinformationEvent(
